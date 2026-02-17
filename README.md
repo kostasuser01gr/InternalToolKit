@@ -55,7 +55,7 @@ Premium, cross-device internal tool template as a pnpm monorepo.
 - `GET /health` -> `{ ok: true, version, timestamp }`
 - `GET /v1/me` -> demo authenticated user
 - `POST /v1/audit` -> append audit event (in-memory repository)
-- `POST /v1/assistant/draft-automation` -> returns draft automation JSON
+- `POST /v1/assistant/draft-automation` -> accepts `{ text }` (or `{ prompt }` for compatibility) and returns a draft automation JSON
 
 ## Environment Files
 
@@ -63,6 +63,11 @@ Premium, cross-device internal tool template as a pnpm monorepo.
 - API example: `apps/api/.dev.vars.example`
 
 Never commit real secrets. `.gitignore` covers `.env*` and `.dev.vars*` while allowing `*.example`.
+
+Runtime validation:
+
+- Web fails fast on startup when required env vars are invalid (`SESSION_SECRET`/`NEXTAUTH_SECRET`).
+- API validates `CORS_ORIGIN` shape and returns a clear runtime error if malformed.
 
 ## Setup
 
@@ -91,6 +96,15 @@ pnpm --filter @internal-toolkit/web prisma:generate
 pnpm --filter @internal-toolkit/web db:reset
 ```
 
+5. Demo login credentials (dev only):
+
+- Admin:
+  - email: `admin@internal.local`
+  - password: `Admin123!`
+- Viewer:
+  - email: `viewer@internal.local`
+  - password: `Viewer123!`
+
 ## Development
 
 Run web:
@@ -115,6 +129,7 @@ If using Playwright smoke tests, web test server runs on `http://127.0.0.1:4173`
 ## Quality Gates
 
 ```bash
+pnpm install
 pnpm lint
 pnpm typecheck
 pnpm test:e2e
@@ -172,7 +187,7 @@ Vercel will deploy automatically on push by default.
 ## CI/CD
 
 - CI workflow: `.github/workflows/ci.yml`
-  - install, lint, typecheck, prisma reset, playwright smoke
+  - install, lint, typecheck, prisma reset, playwright smoke, build
 - Worker deploy workflow: `.github/workflows/deploy-worker.yml`
   - deploys on push to `main`
   - requires secrets:
@@ -209,3 +224,14 @@ Vercel will deploy automatically on push by default.
 
 - No real auth provider is required for the template baseline; web includes a secure cookie session gate and RBAC patterns ready for extension.
 - Worker audit storage is in-memory by design for v1; code is structured around a repository interface so KV/D1 can replace it cleanly.
+
+## Troubleshooting
+
+- `Invalid environment configuration` on web startup:
+  - `cp apps/web/.env.example apps/web/.env.local`
+  - set `SESSION_SECRET` to at least 16 characters.
+- CI badge red:
+  - open `.github/workflows/ci.yml` run details in GitHub Actions to see failing step.
+  - re-run locally with: `pnpm install && pnpm lint && pnpm typecheck && pnpm test:e2e && pnpm build`.
+- Worker CORS error:
+  - verify `CORS_ORIGIN` in `apps/api/.dev.vars` is a comma-separated list of valid `http(s)` origins.

@@ -36,9 +36,20 @@ export const auditEventSchema = auditEventInputSchema.extend({
 
 export type AuditEvent = z.infer<typeof auditEventSchema>;
 
-export const assistantDraftRequestSchema = z.object({
-  prompt: z.string().trim().min(3).max(3000),
-});
+const assistantDraftRequestInputSchema = z
+  .object({
+    text: z.string().trim().min(3).max(3000).optional(),
+    prompt: z.string().trim().min(3).max(3000).optional(),
+  })
+  .refine((value) => Boolean(value.text || value.prompt), {
+    message: "Provide either text or prompt.",
+  });
+
+export const assistantDraftRequestSchema = assistantDraftRequestInputSchema.transform(
+  (value) => ({
+    prompt: value.prompt ?? value.text ?? "",
+  }),
+);
 
 export type AssistantDraftRequest = z.infer<typeof assistantDraftRequestSchema>;
 

@@ -9,6 +9,7 @@ import {
   SESSION_COOKIE_SECURE,
   SESSION_TTL_SECONDS,
 } from "@/lib/auth/constants";
+import { getServerEnv } from "@/lib/env";
 import type { SessionUser } from "@/lib/auth/types";
 import { db } from "@/lib/db";
 import { logSecurityEvent } from "@/lib/security";
@@ -28,15 +29,7 @@ function fromBase64Url(value: string) {
 }
 
 function getSessionSecret() {
-  const secret = process.env.SESSION_SECRET ?? process.env.NEXTAUTH_SECRET;
-
-  if (!secret || secret.length < 16) {
-    throw new Error(
-      "SESSION_SECRET (or NEXTAUTH_SECRET) must be set to at least 16 characters.",
-    );
-  }
-
-  return secret;
+  return getServerEnv().SESSION_SECRET;
 }
 
 function sign(body: string) {
