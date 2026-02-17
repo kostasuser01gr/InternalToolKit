@@ -195,6 +195,7 @@ Vercel will deploy automatically on push by default.
   - requires secrets:
     - `CLOUDFLARE_API_TOKEN`
     - `CLOUDFLARE_ACCOUNT_ID`
+  - if secrets are missing, workflow exits successfully with a clear "skipped" message
 
 ## Extension Guide
 
