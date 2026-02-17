@@ -1,5 +1,19 @@
-import "dotenv/config";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { config as loadEnv } from "dotenv";
 import { defineConfig, env } from "prisma/config";
+
+const envFiles = [".env.local", ".env"];
+
+for (const envFile of envFiles) {
+  const envPath = resolve(process.cwd(), envFile);
+
+  if (existsSync(envPath)) {
+    loadEnv({ path: envPath, override: false });
+  }
+}
+
+process.env.DATABASE_URL ??= "file:./dev.db";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
