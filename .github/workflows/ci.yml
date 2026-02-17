@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "codex/**"
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: file:./dev.db
+      SESSION_SECRET: ci-session-secret-please-change
+      SESSION_COOKIE_SECURE: "0"
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8787
+      APP_VERSION: 1.0.0
+      ASSISTANT_PROVIDER: mock
+      NEXT_PUBLIC_FEATURE_COMMAND_PALETTE: "1"
+      NEXT_PUBLIC_FEATURE_COMPONENTS_SHOWROOM: "1"
+      NEXT_PUBLIC_FEATURE_REPORTS_PDF: "1"
+      NEXT_PUBLIC_FEATURE_WINDOW_CONTROLS_OVERLAY: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Generate Prisma client
+        run: pnpm --filter @internal-toolkit/web prisma:generate
+
+      - name: Reset database
+        run: pnpm --filter @internal-toolkit/web db:reset
+
+      - name: Install Playwright browser
+        run: pnpm --filter @internal-toolkit/web exec playwright install --with-deps chromium
+
+      - name: E2E smoke tests
+        run: pnpm test:e2e

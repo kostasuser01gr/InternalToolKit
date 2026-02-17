@@ -1,36 +1,211 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# InternalToolKit
 
-## Getting Started
+Premium, cross-device internal tool template as a pnpm monorepo.
 
-First, run the development server:
+## Monorepo
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```text
+/
+  apps/
+    web/                 # Next.js App Router frontend
+    api/                 # Cloudflare Worker API
+  packages/
+    shared/              # shared zod schemas/types/constants
+  docs/
+    architecture.md
+    tokens.md
+    scorecard.md
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Frontend (`apps/web`)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Next.js App Router + TypeScript strict
+- Tailwind CSS + shadcn-style + Radix primitives
+- lucide-react icons
+- framer-motion micro-interactions (reduced-motion aware)
+- Recharts placeholders
+- Prisma + SQLite (template local data layer)
 
-## Learn More
+### Backend (`apps/api`)
 
-To learn more about Next.js, take a look at the following resources:
+- Cloudflare Worker (TypeScript, ES modules)
+- Native fetch router + proper CORS
+- Shared request/response contracts from `@internal-toolkit/shared`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Shared (`packages/shared`)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- zod schemas and types used by web + api
 
-## Deploy on Vercel
+## Features Included
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Premium dark glass UI with neon purple active states
+- Universal app shell:
+  - Mobile: sticky header + bottom nav (5 items, center create action)
+  - Tablet: icon side-rail
+  - Desktop: sidebar + topbar
+- Command palette (`Cmd/Ctrl+K`) + keyboard shortcuts
+- Data module with table/field/record flows and CSV export
+- Admin gate and role-safe actions
+- PWA baseline (`manifest`, icons, safe-area handling, viewport-fit cover)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API Routes (`apps/api`)
+
+- `GET /health` -> `{ ok: true, version, timestamp }`
+- `GET /v1/me` -> demo authenticated user
+- `POST /v1/audit` -> append audit event (in-memory repository)
+- `POST /v1/assistant/draft-automation` -> returns draft automation JSON
+
+## Environment Files
+
+- Web example: `apps/web/.env.example`
+- API example: `apps/api/.dev.vars.example`
+
+Never commit real secrets. `.gitignore` covers `.env*` and `.dev.vars*` while allowing `*.example`.
+
+## Setup
+
+1. Install dependencies:
+
+```bash
+pnpm install
+```
+
+2. Configure web env:
+
+```bash
+cp apps/web/.env.example apps/web/.env.local
+```
+
+3. (Optional) Configure Worker local vars:
+
+```bash
+cp apps/api/.dev.vars.example apps/api/.dev.vars
+```
+
+4. Prepare local web DB:
+
+```bash
+pnpm --filter @internal-toolkit/web prisma:generate
+pnpm --filter @internal-toolkit/web db:reset
+```
+
+## Development
+
+Run web:
+
+```bash
+pnpm dev:web
+```
+
+Run API worker:
+
+```bash
+pnpm dev:api
+```
+
+Default local URLs:
+
+- Web: `http://127.0.0.1:3000`
+- API: `http://127.0.0.1:8787`
+
+If using Playwright smoke tests, web test server runs on `http://127.0.0.1:4173`.
+
+## Quality Gates
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test:e2e
+pnpm build
+```
+
+Playwright smoke coverage:
+
+- Mobile: shell + bottom nav + no overflow
+- Desktop: sidebar/topbar + navigation
+- Data flow: create table -> add field -> add record -> export CSV
+- Admin gate: viewer blocked, admin allowed
+
+## Deployment
+
+## 1) Cloudflare Workers (Backend)
+
+From repo root:
+
+```bash
+pnpm --filter @internal-toolkit/api dev
+pnpm --filter @internal-toolkit/api deploy
+```
+
+Or directly in `apps/api`:
+
+```bash
+npx wrangler dev
+npx wrangler deploy
+```
+
+Set secrets:
+
+```bash
+npx wrangler secret put <KEY>
+```
+
+Recommended variables:
+
+- `APP_VERSION`
+- `CORS_ORIGIN` (your frontend domain)
+
+After deploy, note worker URL (for example `https://internaltoolkit-api.<subdomain>.workers.dev`).
+
+## 2) Vercel (Frontend)
+
+1. Import this GitHub repo in Vercel.
+2. Set **Root Directory** to: `apps/web`
+3. Set environment variable:
+   - `NEXT_PUBLIC_API_URL=<your-worker-url>`
+4. Deploy.
+
+Vercel will deploy automatically on push by default.
+
+## CI/CD
+
+- CI workflow: `.github/workflows/ci.yml`
+  - install, lint, typecheck, prisma reset, playwright smoke
+- Worker deploy workflow: `.github/workflows/deploy-worker.yml`
+  - deploys on push to `main`
+  - requires secrets:
+    - `CLOUDFLARE_API_TOKEN`
+    - `CLOUDFLARE_ACCOUNT_ID`
+
+## Extension Guide
+
+### Add a new web page
+
+1. Create `apps/web/app/(app)/<page>/page.tsx`
+2. Register item in `apps/web/lib/constants/navigation.ts`
+3. Add RBAC checks if needed in server actions/routes
+
+### Add a new API route
+
+1. Add handler in `apps/api/src/index.ts`
+2. Define/extend zod schema in `packages/shared/src/index.ts`
+3. Parse/validate input in worker and return typed envelope
+
+### Add a new design token
+
+1. Add token in `apps/web/styles/tokens.css`
+2. Consume token in components/pages
+3. Update `docs/tokens.md` contract if the token is part of public design system
+
+### Add a new card/component type
+
+1. Add component in `apps/web/components/kit`
+2. Export from `apps/web/components/kit/index.ts`
+3. Add state coverage on `/components` showroom
+
+## Notes
+
+- No real auth provider is required for the template baseline; web includes a secure cookie session gate and RBAC patterns ready for extension.
+- Worker audit storage is in-memory by design for v1; code is structured around a repository interface so KV/D1 can replace it cleanly.

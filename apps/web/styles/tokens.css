@@ -1,0 +1,45 @@
+:root {
+  --background: #f3f5fc;
+  --surface: rgb(255 255 255 / 0.84);
+  --surface-2: rgb(245 248 255 / 0.88);
+  --border: rgb(127 138 172 / 0.24);
+  --text: #141728;
+  --text-muted: #536182;
+
+  --accent-purple-gradient: linear-gradient(135deg, #7e4dff 0%, #b87dff 100%);
+  --glow-shadow: 0 14px 42px rgb(126 77 255 / 0.28);
+
+  --radius-xs: 10px;
+  --radius-sm: 14px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+
+  --space-1: 0.5rem;
+  --space-2: 1rem;
+  --space-3: 1.5rem;
+  --space-4: 2rem;
+  --space-5: 2.5rem;
+  --space-6: 3rem;
+
+  --density-card-padding: 1.5rem;
+  --density-table-cell-padding: 0.75rem;
+  --density-row-height: 3rem;
+  --density-page-gap: 1.5rem;
+}
+
+.dark {
+  --background: #05060c;
+  --surface: rgb(20 23 35 / 0.75);
+  --surface-2: rgb(28 32 48 / 0.74);
+  --border: rgb(150 167 208 / 0.2);
+  --text: #f5f7ff;
+  --text-muted: #9da8c8;
+}
+
+:root[data-density="compact"] {
+  --density-card-padding: 1rem;
+  --density-table-cell-padding: 0.5rem;
+  --density-row-height: 2.5rem;
+  --density-page-gap: 1rem;
+}

@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum GlobalRole {
+  USER
+  ADMIN
+}
+
+enum WorkspaceRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  BOOLEAN
+  DATE
+  SELECT
+  MULTISELECT
+}
+
+enum ViewType {
+  GRID
+  KANBAN
+  CALENDAR
+  LIST
+}
+
+enum AutomationRunStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum ThemePreference {
+  DARK
+  LIGHT
+}
+
+model User {
+  id                   String            @id @default(cuid())
+  email                String            @unique
+  name                 String
+  passwordHash         String
+  roleGlobal           GlobalRole        @default(USER)
+  themePreference      ThemePreference   @default(DARK)
+  notificationsEnabled Boolean           @default(true)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  ownedWorkspaces      Workspace[]       @relation("WorkspaceOwner")
+  workspaceMemberships WorkspaceMember[]
+  notifications        Notification[]
+  auditActorLogs       AuditLog[]        @relation("AuditActor")
+  createdThreads       ChatThread[]      @relation("ChatThreadCreator")
+  authoredMessages     ChatMessage[]     @relation("ChatMessageAuthor")
+}
+
+model Workspace {
+  id          String            @id @default(cuid())
+  name        String
+  ownerId     String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  owner       User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     WorkspaceMember[]
+  tables      Table[]
+  automations Automation[]
+  auditLogs   AuditLog[]
+  chatThreads ChatThread[]
+
+  @@index([ownerId])
+}
+
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  role        WorkspaceRole
+  createdAt   DateTime   @default(now())
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+}
+
+model Table {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fields      Field[]
+  records     Record[]
+  views       View[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model Field {
+  id          String    @id @default(cuid())
+  tableId     String
+  name        String
+  type        FieldType
+  optionsJson Json?
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  table       Table     @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@unique([tableId, name])
+  @@index([tableId])
+}
+
+model Record {
+  id        String   @id @default(cuid())
+  tableId   String
+  dataJson  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  table     Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@index([tableId])
+}
+
+model View {
+  id         String   @id @default(cuid())
+  tableId    String
+  name       String
+  type       ViewType
+  configJson Json
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  table      Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@index([tableId])
+}
+
+model Automation {
+  id          String          @id @default(cuid())
+  workspaceId String
+  name        String
+  enabled     Boolean         @default(true)
+  triggerJson Json
+  actionsJson Json
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs        AutomationRun[]
+
+  @@index([workspaceId])
+}
+
+model AutomationRun {
+  id           String              @id @default(cuid())
+  automationId String
+  status       AutomationRunStatus @default(QUEUED)
+  startedAt    DateTime            @default(now())
+  finishedAt   DateTime?
+  logsJson     Json
+  automation   Automation          @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  metaJson    Json
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor       User?     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([actorUserId])
+}
+
+model ChatThread {
+  id          String        @id @default(cuid())
+  workspaceId String
+  title       String
+  createdBy   String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator     User          @relation("ChatThreadCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  messages    ChatMessage[]
+
+  @@index([workspaceId])
+}
+
+model ChatMessage {
+  id           String     @id @default(cuid())
+  threadId      String
+  authorUserId  String?
+  role          ChatRole
+  content       String
+  createdAt     DateTime  @default(now())
+  thread        ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author        User?     @relation("ChatMessageAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([threadId, createdAt])
+}

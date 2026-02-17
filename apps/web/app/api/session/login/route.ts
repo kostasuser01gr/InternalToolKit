@@ -1,0 +1,75 @@
+import { z } from "zod";
+
+import { appendAuditLog } from "@/lib/audit";
+import { createSessionForUser, verifyCredentials } from "@/lib/auth/session";
+import { isSameOriginRequest } from "@/lib/security";
+import { getDefaultWorkspaceForUser } from "@/lib/workspace";
+
+const loginSchema = z.object({
+  email: z.string().trim().email().max(200),
+  password: z.string().min(8).max(200),
+});
+
+export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) {
+    return Response.json({ ok: false, message: "Cross-origin request blocked." }, { status: 403 });
+  }
+
+  let payload: unknown;
+
+  try {
+    payload = await request.json();
+  } catch {
+    return Response.json({ ok: false, message: "Invalid JSON payload." }, { status: 400 });
+  }
+
+  const parsed = loginSchema.safeParse(payload);
+
+  if (!parsed.success) {
+    return Response.json(
+      {
+        ok: false,
+        message: parsed.error.issues[0]?.message ?? "Invalid credentials payload.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const ip = request.headers.get("x-forwarded-for") ?? undefined;
+  const result = await verifyCredentials({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    ...(ip ? { ip } : {}),
+  });
+
+  if (!result.ok) {
+    return Response.json({ ok: false, message: result.message }, { status: 401 });
+  }
+
+  await createSessionForUser(result.user.id);
+
+  const membership = await getDefaultWorkspaceForUser(result.user.id);
+  if (membership) {
+    await appendAuditLog({
+      workspaceId: membership.workspaceId,
+      actorUserId: result.user.id,
+      action: "auth.login",
+      entityType: "session",
+      entityId: result.user.id,
+      metaJson: {
+        ip,
+      },
+      source: "api",
+    });
+  }
+
+  return Response.json({
+    ok: true,
+    user: {
+      id: result.user.id,
+      email: result.user.email,
+      name: result.user.name,
+      roleGlobal: result.user.roleGlobal,
+    },
+  });
+}

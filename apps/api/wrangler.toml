@@ -1,0 +1,8 @@
+name = "internaltoolkit-api"
+main = "src/index.ts"
+compatibility_date = "2025-11-01"
+workers_dev = true
+
+[vars]
+APP_VERSION = "1.0.0"
+CORS_ORIGIN = "http://127.0.0.1:3000"
