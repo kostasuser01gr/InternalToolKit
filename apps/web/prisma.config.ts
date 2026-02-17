@@ -9,7 +9,7 @@ for (const envFile of envFiles) {
   const envPath = resolve(process.cwd(), envFile);
 
   if (existsSync(envPath)) {
-    loadEnv({ path: envPath, override: false });
+    loadEnv({ path: envPath, override: false, quiet: true });
   }
 }
 
