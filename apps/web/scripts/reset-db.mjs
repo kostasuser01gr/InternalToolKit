@@ -5,5 +5,7 @@ if (existsSync("dev.db")) {
   unlinkSync("dev.db");
 }
 
-execSync("npx prisma db execute --file prisma/init.sql", { stdio: "inherit" });
-execSync("npx prisma db seed", { stdio: "inherit" });
+execSync("pnpm exec prisma db execute --file prisma/init.sql", {
+  stdio: "inherit",
+});
+execSync("pnpm exec prisma db seed", { stdio: "inherit" });

@@ -143,6 +143,8 @@ Playwright smoke coverage:
 - Data flow: create table -> add field -> add record -> export CSV
 - Admin gate: viewer blocked, admin allowed
 
+`pnpm test:e2e` automatically resets and seeds the local SQLite database before running tests.
+
 ## Deployment
 
 ## 1) Cloudflare Workers (Backend)
