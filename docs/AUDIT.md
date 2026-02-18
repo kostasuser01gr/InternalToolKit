@@ -82,6 +82,11 @@
   - clear invalid session cookie on response (`Set-Cookie` expires in past)
 - Added Playwright regression: `invalid session cookie does not loop between login and overview` in `apps/web/tests/smoke.spec.ts`.
 
+10. Clean-room smoke test stabilization
+- Clean-room verification surfaced strict-selector collisions in responsive nav smoke flow when multiple nav shells are present in DOM.
+- Updated `apps/web/tests/smoke.spec.ts` to scope mobile nav clicks to `data-testid="bottom-nav"` and tablet nav clicks to `data-testid="side-rail"`.
+- Re-ran failing command (`pnpm test`) until unit + e2e smoke fully passed.
+
 ## Verification Evidence (Phase C)
 
 ### Clean Room Verification
@@ -105,11 +110,10 @@ Note:
 
 ### GitHub Checks
 - CI workflow file includes install -> lint -> typecheck -> unit tests -> e2e -> build.
-- Latest CI run for release commit `62c00a2` -> PASS:
-  - `CI` run `22141293627`: `completed success`
-  - `Deploy Worker` run `22141293610`: `completed success`
-- Latest CI run on current `main` head also PASS:
-  - `CI` run `22141418051`: `completed success`
+- Latest CI run on current `main` head (`f876613`) -> PASS:
+  - `CI` run `22144463368`: `completed success`
+- Prior redirect-loop fix run (`50fa49b`) -> PASS:
+  - `CI` run `22144168192`: `completed success`
 
 ## Final Acceptance Checklist (DONE ✅)
 - [x] Fresh clone install path works
