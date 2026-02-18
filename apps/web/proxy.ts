@@ -112,7 +112,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  if (pathname === "/login" && hasSessionCookie) {
+  if ((pathname === "/login" || pathname === "/signup") && hasSessionCookie) {
     response = NextResponse.redirect(new URL("/overview", request.url));
     setSecurityHeaders(response, nonce, requestId);
     return response;
@@ -126,4 +126,3 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image).*)"],
 };
-

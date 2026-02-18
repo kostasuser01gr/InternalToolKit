@@ -8,9 +8,39 @@ async function login(page: Page, email: string, password: string) {
   await expect(page).toHaveURL(/\/(overview|home)$/);
 }
 
+async function signup(page: Page, name: string, email: string, password: string) {
+  await page.goto("/signup");
+  await page.getByLabel("Name").fill(name);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByLabel("Confirm password").fill(password);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page).toHaveURL(/\/(overview|home)$/);
+}
+
 test("login gate protects app routes", async ({ page }) => {
   await page.goto("/analytics");
   await expect(page).toHaveURL(/\/login\?callbackUrl=%2Fanalytics$/);
+});
+
+test("signup creates an account and can sign in", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+
+  const nonce = Date.now();
+  const email = `signup.${nonce}@internal.local`;
+  const password = "Signup123!";
+
+  await signup(page, "Signup Tester", email, password);
+  await expect(page.getByTestId("home-page")).toBeVisible();
+
+  await page.request.post("/api/session/logout", {
+    headers: {
+      Origin: "http://127.0.0.1:4173",
+    },
+  });
+
+  await login(page, email, password);
+  await expect(page.getByTestId("home-page")).toBeVisible();
 });
 
 test("responsive shell renders and navigation works without overflow", async ({

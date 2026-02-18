@@ -1,5 +1,5 @@
-const CACHE_NAME = "internal-toolkit-shell-v1";
-const CORE_ROUTES = ["/login", "/manifest.json"];
+const CACHE_NAME = "internal-toolkit-shell-v2";
+const CORE_ROUTES = ["/login", "/signup", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -40,4 +40,3 @@ self.addEventListener("fetch", (event) => {
     }),
   );
 });
-
