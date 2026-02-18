@@ -1,168 +1,137 @@
 # InternalToolKit
 
-Monorepo for an internal dashboard frontend (Next.js on Vercel) and API backend (Cloudflare Workers via Wrangler/GitHub Actions).
+Production-ready monorepo template for an internal operations dashboard:
+- `apps/web`: Next.js App Router frontend (Vercel target)
+- `apps/api`: Cloudflare Worker backend (Wrangler/GitHub Actions target)
+- `packages/shared`: shared TypeScript + Zod schemas/contracts
 
-## Monorepo Structure
+## Monorepo Layout
 
 ```text
 /
   apps/
-    web/   (Next.js App Router + TS + Tailwind + shadcn/ui + Radix + lucide-react + framer-motion)
-    api/   (Cloudflare Worker + TS + Wrangler)
+    web/
+    api/
   packages/
-    shared/ (types + zod schemas)
+    shared/
+  docs/
   .github/workflows/
-    ci.yml
-    deploy-worker.yml
-  README.md
-  pnpm-workspace.yaml
-  package.json
 ```
 
-## Root Scripts
+## Requirements
 
-- `pnpm dev` -> runs `apps/api` + `apps/web` in parallel
-- `pnpm build`
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm test:e2e`
+- Node.js 22+ (CI uses Node 22)
+- pnpm 10.x
 
-## API Surface (`apps/api`)
-
-- `GET /health` -> `{ ok: true, version, timestamp }`
-- `POST /v1/audit` -> validates payload and returns `{ ok: true, id }`
-- `POST /v1/assistant/draft-automation` -> accepts `{ prompt }`, returns `{ ok: true, triggerJson, actionsJson }` (mock provider by default)
-
-Worker env vars:
-
-- `ENVIRONMENT` (`dev|prod`)
-- `ALLOWED_ORIGINS` (comma-separated; for Vercel/web origins)
-- `APP_VERSION` (optional override)
-- `OPENAI_API_KEY` (optional, reserved for adapter extension)
-
-Local dev vars file:
-
-- `apps/api/.dev.vars` (ignored by git)
-- template: `apps/api/.dev.vars.example`
-
-## Web/API Wiring (`apps/web`)
-
-- Browser-safe API base URL uses `NEXT_PUBLIC_API_URL`
-- API client lives at `apps/web/lib/api/client.ts`
-- Dashboard includes an `API Status` widget that calls `/health` and renders `ok` / `not ok`
-
-## Local Development
+## Quickstart (Under 15 Minutes)
 
 1. Install dependencies:
-
 ```bash
-pnpm i
+pnpm install
 ```
 
-2. Start both apps:
+2. Create local env files (optional but recommended):
+```bash
+cp apps/web/.env.example apps/web/.env.local
+cp apps/api/.dev.vars.example apps/api/.dev.vars
+```
 
+3. Start both apps:
 ```bash
 pnpm dev
 ```
 
-Optional local web env file (recommended):
-
-```bash
-cp apps/web/.env.example apps/web/.env.local
-```
-
-Notes:
-
-- Local development has a safe fallback session secret for quick start.
-- Hosted production (CI/Vercel/GitHub Actions) requires `SESSION_SECRET` (or `NEXTAUTH_SECRET`) to be set explicitly.
-
-Default local URLs:
-
+Default local endpoints:
 - Web: `http://127.0.0.1:3000`
 - API: `http://127.0.0.1:8787`
 
-## Cloudflare SOP (Backend)
+## Scripts
 
-From repo root:
+From repository root:
+- `pnpm dev` -> run web + api in parallel
+- `pnpm lint` -> lint shared + api + web
+- `pnpm typecheck` -> typecheck shared + api + web
+- `pnpm test:unit` -> unit tests (Vitest, web package)
+- `pnpm test:e2e` -> Playwright smoke suite
+- `pnpm test` -> unit + e2e
+- `pnpm build` -> shared build + api dry-run deploy + web production build
 
-```bash
-npx wrangler login
-npx wrangler dev
-npx wrangler deploy
-npx wrangler secret put <KEY>
-```
+## Environment Variables
 
-Or run package scripts:
+### Web (`apps/web`)
+See `apps/web/.env.example`.
 
-```bash
-pnpm --filter @internal-toolkit/api dev
-pnpm --filter @internal-toolkit/api deploy
-```
+Required in hosted production:
+- `SESSION_SECRET` (or `NEXTAUTH_SECRET`) with at least 16 chars
 
-## GitHub Actions SOP
+Common vars:
+- `NEXT_PUBLIC_API_URL`
+- `DATABASE_URL`
+- `ASSISTANT_PROVIDER` (`mock` default)
+- `OPENAI_API_KEY` (required only when provider is `openai`)
 
-### CI (`.github/workflows/ci.yml`)
+### API Worker (`apps/api`)
+See `apps/api/.dev.vars.example`.
 
-- Triggers on `push` and `pull_request`
-- Runs:
-  - `pnpm install`
-  - `pnpm lint`
-  - `pnpm typecheck`
-  - Playwright smoke tests for web (`pnpm test:e2e`)
-  - `pnpm build`
-- Uses pnpm cache via `actions/setup-node`
+- `APP_VERSION`
+- `ENVIRONMENT` (`dev`/`prod`)
+- `ALLOWED_ORIGINS` (strict comma-separated allowlist, wildcard `*` rejected)
+- `OPENAI_API_KEY` (optional)
 
-### Worker Deploy (`.github/workflows/deploy-worker.yml`)
+## Security Defaults
 
-- Triggers on:
-  - `push` to `main` (with API/shared path filters)
-  - `workflow_dispatch` (manual deploy)
-- Uses `cloudflare/wrangler-action@v3`
-- Deploy command runs in `apps/api` (`workingDirectory: apps/api`)
+- Strict CORS allowlist in worker with correct `OPTIONS` handling and `Vary: Origin`
+- API security headers (`nosniff`, frame deny, referrer policy, permissions policy, HTTPS HSTS)
+- CSP nonce strategy in web proxy (`apps/web/proxy.ts`)
+- Hardened session cookies (HttpOnly + SameSite + Secure in production)
+- Same-origin checks for unsafe web route handlers
+- Login abuse control (in-memory rate limiting)
+- Request-id propagation (`X-Request-Id`) and structured API request logs
+- Append-only audit log pattern via `AuditLog` model and `appendAuditLog()`
 
-Required repo secrets:
+## Testing
 
-- `CLOUDFLARE_API_TOKEN` (required)
-- `CLOUDFLARE_ACCOUNT_ID` (optional; only if your setup/action path needs explicit account)
+- Unit tests: `pnpm test:unit`
+- E2E smoke tests: `pnpm test:e2e`
+- Full test gate: `pnpm test`
 
-## Vercel SOP (Frontend)
+Playwright smoke suite covers auth gate, responsive shell, nav flows, command palette, data workflow, and admin access behavior.
 
-1. Import this GitHub repository in Vercel.
-2. Set **Root Directory** to `apps/web`.
+## CI
+
+Workflow: `.github/workflows/ci.yml`
+- install
+- lint
+- typecheck
+- unit tests
+- Playwright e2e smoke
+- build
+
+## Deployment
+
+### Web (Vercel)
+1. Import repo in Vercel
+2. Set Root Directory to `apps/web`
 3. Add env vars:
    - `NEXT_PUBLIC_API_URL=https://<your-worker>.<subdomain>.workers.dev`
    - `SESSION_SECRET=<strong-random-secret-at-least-16-chars>`
-4. Push to GitHub to trigger automatic deployments.
+4. Deploy
 
-Important:
-
-- Vercel env var updates are applied only to new deployments.
-
-## Git Remote and Push Sanity Checks
-
+### API (Cloudflare Worker)
 ```bash
-git remote -v
-git status
+pnpm --filter @internal-toolkit/api deploy
 ```
 
-Expected:
+GitHub deploy workflow requires repository secret:
+- `CLOUDFLARE_API_TOKEN`
+Optional:
+- `CLOUDFLARE_ACCOUNT_ID`
 
-- `origin` should be `https://github.com/kostasuser01gr/InternalToolKit.git`
-- working tree should be clean before/after pushing
+## Documentation Index
 
-## Troubleshooting
-
-- CORS errors from web to Worker:
-  - confirm `ALLOWED_ORIGINS` includes your Vercel domain and local origins
-  - update secret/vars and redeploy Worker
-- Wrong Vercel root directory:
-  - ensure project Root Directory is exactly `apps/web`
-- Missing frontend env vars:
-  - set `NEXT_PUBLIC_API_URL` in Vercel and redeploy
-- Missing session secret in hosted production:
-  - set `SESSION_SECRET` (or `NEXTAUTH_SECRET`) in your deployment environment
-  - redeploy after saving env vars
-- Worker deploy failing in Actions:
-  - confirm `CLOUDFLARE_API_TOKEN` exists in repo secrets
-  - if required by account config, add `CLOUDFLARE_ACCOUNT_ID`
-  - review workflow logs in GitHub Actions for Wrangler errors
+- `docs/AUDIT.md` -> baseline + fix log + final verification checklist
+- `docs/DEPLOY.md` -> Vercel + Cloudflare deployment runbook
+- `docs/SECURITY.md` -> headers/CSP/cookies/CORS/rate-limit/audit policy
+- `docs/TROUBLESHOOTING.md` -> common failures and fixes
+- `docs/ADR-0001-storage.md` -> storage decision record
+- `CHANGELOG.md` -> release notes
