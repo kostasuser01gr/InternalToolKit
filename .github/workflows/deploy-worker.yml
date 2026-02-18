@@ -15,11 +15,18 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -28,37 +35,28 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Activate pnpm
-        run: corepack prepare pnpm@10.17.1 --activate
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Skip deploy when Cloudflare token is missing
+        if: ${{ env.CLOUDFLARE_API_TOKEN == '' }}
+        run: |
+          echo "Skipping Worker deploy."
+          echo "Add CLOUDFLARE_API_TOKEN in repository secrets to enable deployment."
+
       - name: Deploy Worker (with account ID)
-        if: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' }}
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/api
           command: deploy
 
       - name: Deploy Worker (without account ID)
-        if: ${{ secrets.CLOUDFLARE_ACCOUNT_ID == '' }}
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID == '' }}
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
           workingDirectory: apps/api
           command: deploy
-
-  missing-token:
-    runs-on: ubuntu-latest
-    if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' }}
-    steps:
-      - name: Missing Cloudflare token
-        run: |
-          echo "Skipping Worker deploy."
-          echo "Add CLOUDFLARE_API_TOKEN in repository secrets to enable deployment."
