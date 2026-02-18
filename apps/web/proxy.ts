@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { SESSION_COOKIE_NAME } from "@/lib/auth/constants";
+import {
+  SESSION_COOKIE_NAME,
+  SESSION_COOKIE_SAME_SITE,
+  SESSION_COOKIE_SECURE,
+} from "@/lib/auth/constants";
 
 const appRoutes = [
   "/home",
@@ -30,6 +34,102 @@ function createNonce() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return btoa(String.fromCharCode(...bytes));
+}
+
+type SessionPayload = {
+  uid: string;
+  iat: number;
+  exp: number;
+};
+
+function toBase64(value: string) {
+  const paddingLength = (4 - (value.length % 4)) % 4;
+  const padding = "=".repeat(paddingLength);
+  return `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+}
+
+function toBase64Url(value: Uint8Array) {
+  let output = "";
+  for (const byte of value) {
+    output += String.fromCharCode(byte);
+  }
+
+  return btoa(output).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function safeStringCompare(left: string, right: string) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  let mismatch = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+
+  return mismatch === 0;
+}
+
+async function isValidSessionCookie(token: string) {
+  const [body, signature, extraPart] = token.split(".");
+
+  if (!body || !signature || extraPart) {
+    return false;
+  }
+
+  const secret = process.env.SESSION_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (!secret || secret.length < 16) {
+    return false;
+  }
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+
+  const expectedSignatureBuffer = await crypto.subtle.sign(
+    "HMAC",
+    cryptoKey,
+    new TextEncoder().encode(body),
+  );
+  const expectedSignature = toBase64Url(new Uint8Array(expectedSignatureBuffer));
+  if (!safeStringCompare(signature, expectedSignature)) {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(atob(toBase64(body))) as SessionPayload;
+    if (
+      typeof payload.uid !== "string" ||
+      typeof payload.iat !== "number" ||
+      typeof payload.exp !== "number"
+    ) {
+      return false;
+    }
+
+    if (payload.exp * 1000 <= Date.now()) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearSessionCookie(response: NextResponse) {
+  response.cookies.set({
+    name: SESSION_COOKIE_NAME,
+    value: "",
+    httpOnly: true,
+    sameSite: SESSION_COOKIE_SAME_SITE,
+    secure: SESSION_COOKIE_SECURE,
+    path: "/",
+    expires: new Date(0),
+  });
 }
 
 function buildCsp(nonce: string, isDevelopment: boolean) {
@@ -100,25 +200,33 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  const hasSessionCookie = Boolean(
-    request.cookies.get(SESSION_COOKIE_NAME)?.value,
-  );
+  const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const hasValidSessionCookie = sessionCookie
+    ? await isValidSessionCookie(sessionCookie)
+    : false;
+  const hasInvalidSessionCookie = Boolean(sessionCookie) && !hasValidSessionCookie;
 
-  if (isAppRoute(pathname) && !hasSessionCookie) {
+  if (isAppRoute(pathname) && !hasValidSessionCookie) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     response = NextResponse.redirect(loginUrl);
+    if (hasInvalidSessionCookie) {
+      clearSessionCookie(response);
+    }
     setSecurityHeaders(response, nonce, requestId);
     return response;
   }
 
-  if ((pathname === "/login" || pathname === "/signup") && hasSessionCookie) {
+  if ((pathname === "/login" || pathname === "/signup") && hasValidSessionCookie) {
     response = NextResponse.redirect(new URL("/overview", request.url));
     setSecurityHeaders(response, nonce, requestId);
     return response;
   }
 
   response = NextResponse.next({ request: { headers: requestHeaders } });
+  if (hasInvalidSessionCookie) {
+    clearSessionCookie(response);
+  }
   setSecurityHeaders(response, nonce, requestId);
   return response;
 }

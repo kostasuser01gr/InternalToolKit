@@ -73,6 +73,15 @@
   - fail-fast error if bundled sqlite source is missing
 - Updated docs (`README`, `docs/DEPLOY.md`, `docs/TROUBLESHOOTING.md`, `apps/web/.env.example`) to document persistent `DATABASE_URL` recommendation and fallback behavior.
 
+9. Redirect-loop production hotfix (post-release)
+- Reproduced user-facing `ERR_TOO_MANY_REDIRECTS` with stale/invalid session cookie.
+- Root cause: `apps/web/proxy.ts` treated any `uit_session` cookie as authenticated and forced `/login` -> `/overview`, while app layout rejected invalid session and redirected back to `/login`.
+- Updated `apps/web/proxy.ts` to:
+  - validate session cookie HMAC signature + expiry before auth redirects
+  - treat invalid cookie as unauthenticated
+  - clear invalid session cookie on response (`Set-Cookie` expires in past)
+- Added Playwright regression: `invalid session cookie does not loop between login and overview` in `apps/web/tests/smoke.spec.ts`.
+
 ## Verification Evidence (Phase C)
 
 ### Clean Room Verification
@@ -92,6 +101,7 @@ Note:
 - Strict CORS verification -> unknown Origin returns 403 (`{"ok":false,"error":"Origin not allowed."}`).
 - Web production-like runtime (`next start`) -> `/login` returns 200 with CSP + nonce + security headers.
 - Login form route same-origin POST behavior -> 303 redirect on invalid credentials.
+- Invalid session-cookie path (`/login` with forged `uit_session`) -> `200` and cookie cleared, no redirect loop.
 
 ### GitHub Checks
 - CI workflow file includes install -> lint -> typecheck -> unit tests -> e2e -> build.

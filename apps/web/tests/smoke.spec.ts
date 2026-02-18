@@ -23,6 +23,36 @@ test("login gate protects app routes", async ({ page }) => {
   await expect(page).toHaveURL(/\/login\?callbackUrl=%2Fanalytics$/);
 });
 
+test("invalid session cookie does not loop between login and overview", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+
+  const baseURL = testInfo.project.use.baseURL;
+  if (!baseURL) {
+    throw new Error("baseURL is required for this smoke test.");
+  }
+
+  const host = new URL(baseURL).hostname;
+  await context.addCookies([
+    {
+      name: "uit_session",
+      value: "stale.invalid.token",
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: false,
+    },
+  ]);
+
+  const response = await page.goto("/login");
+  expect(response?.status()).toBe(200);
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByTestId("login-page")).toBeVisible();
+});
+
 test("signup creates an account and can sign in", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.toLowerCase() !== "desktop");
 

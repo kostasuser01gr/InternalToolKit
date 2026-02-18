@@ -4,6 +4,7 @@
 
 ### fix
 - Unblocked Vercel `next build` when runtime session secret is injected after build phase.
+- Fixed stale-cookie redirect loop (`/login` <-> `/overview`) by validating session cookie signature/expiry in `proxy` and clearing invalid cookies.
 - Hardened API CORS to strict allowlist mode (wildcard rejected).
 - Added API security headers and request-id correlation.
 - Added auth endpoint abuse controls (in-memory login rate limiting).

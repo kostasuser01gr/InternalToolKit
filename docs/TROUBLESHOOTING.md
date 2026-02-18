@@ -34,6 +34,11 @@ This repository intentionally uses pnpm's default script restrictions.
 
 ## Auth/Security Issues
 
+### Browser shows `ERR_TOO_MANY_REDIRECTS` on login/signup
+- This was caused by stale/invalid `uit_session` cookies from older deploys.
+- Current build validates cookie signatures in proxy and auto-clears invalid cookies.
+- If your browser still loops, clear site cookies once and refresh.
+
 ### Login blocked with rate limit message
 - Wait for the limiter window to reset (default 60s).
 - In local development, restart server to clear in-memory limiter state.
