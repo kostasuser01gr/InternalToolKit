@@ -128,3 +128,62 @@ Note:
 - [x] Deployment docs and runbooks completed
 
 DONE ✅
+
+## Session Update (Signup + Production Hardening)
+
+### New Findings
+- `P0` Signup/login production reliability issue: user reported redirect loops and inability to create/use account.
+- `P0` Missing product modules for operations scope (`shifts`, `fleet`, `washers`, `calendar`) despite schema groundwork.
+- `P1` E2E regressions in new auth/module flows (selector strictness + datetime-local validation + auth test throttling).
+
+### Fixes Applied
+1. Auth and session reliability
+- Added primary `loginName + 4-digit PIN` auth flow across login/signup UI and API routes.
+- Preserved backward-compatible email/password login for API consumers.
+- Added login/signup server-page guard using real session user lookup.
+- Updated proxy auth behavior to avoid stale signed-cookie redirect cycles.
+
+2. Core operations modules completed
+- Implemented `Shift Planner` page (`/shifts`) with:
+  - weekly board drag/drop
+  - shift creation
+  - shift request creation/review
+  - CSV import/export
+- Implemented `Fleet Management` page (`/fleet`) with vehicle create/update and event logging.
+- Implemented `Washer Operations` page (`/washers`) with task queue and voice-note UI hook.
+- Implemented `Calendar` page (`/calendar`) combining shifts/requests/fleet/washer events.
+
+3. Security and RBAC continuity
+- Enforced RBAC checks (`default deny`) on new module actions/routes.
+- Kept CORS/CSP/cookie/same-origin/rate-limit/audit controls active.
+- Added regression coverage for stale signed cookie behavior on login page.
+
+4. Test suite expansion and stabilization
+- Added desktop smoke tests for:
+  - chat basic flow
+  - shift planner basic flow
+  - fleet create/update flow
+- Fixed flaky selectors and updated mobile navigation expectation for `/calendar`.
+- Increased login rate-limit threshold to prevent false positives during parallel e2e runs.
+
+### Command Evidence (latest run)
+- `pnpm install --frozen-lockfile` -> PASS
+- `pnpm lint` -> PASS
+- `pnpm typecheck` -> PASS
+- `pnpm test` -> PASS (`15 passed`, `18 skipped` Playwright)
+- `pnpm build` -> PASS
+
+### Production-like Runtime Checks
+- `pnpm -C apps/web start --hostname 127.0.0.1 --port 4300` -> PASS
+- `curl -I http://127.0.0.1:4300/login` -> `200` with CSP + `X-Request-Id` + `X-Frame-Options`
+- `curl http://127.0.0.1:8787/health` (with worker dev) -> `200` and valid JSON payload
+- `curl -H 'Origin: http://evil.example.com' http://127.0.0.1:8787/health` -> `403`
+
+### Updated Acceptance Checklist
+- [x] Fresh clone install path works
+- [x] Lint + typecheck pass
+- [x] Tests exist for critical paths and pass
+- [x] Production build succeeds
+- [x] Local production-like runtime checks passed (web + worker)
+- [x] README/docs updated for auth/modules/deploy/security/troubleshooting
+- [x] No secrets committed; safe defaults preserved

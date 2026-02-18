@@ -42,6 +42,16 @@ This repository intentionally uses pnpm's default script restrictions.
 ### Login blocked with rate limit message
 - Wait for the limiter window to reset (default 60s).
 - In local development, restart server to clear in-memory limiter state.
+- Automated browser tests can hit this limit if running many concurrent auth attempts from one IP; keep default suite settings.
+
+### Cannot sign in with old email/password form usage
+- Primary UI login is `loginName + 4-digit PIN`.
+- API routes still support email/password for compatibility.
+- If migrating old accounts, ensure `loginName` and `pinHash` are populated.
+
+### Shift creation fails with invalid datetime
+- Shift forms submit `datetime-local`; server action normalizes to ISO before validation.
+- If calling API/server actions manually, use ISO datetime values (with timezone) for `startsAt` / `endsAt`.
 
 ### Cross-origin request blocked on auth endpoints
 - Ensure browser requests come from same origin as web app host.

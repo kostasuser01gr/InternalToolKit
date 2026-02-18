@@ -22,6 +22,8 @@ Defined in `apps/web/lib/auth/cookie-adapter.ts` and `apps/web/lib/auth/constant
 - `SameSite: lax`
 - `Secure: true` in production (`NODE_ENV=production` or `SESSION_COOKIE_SECURE=1`)
 - Explicit set/delete in route handlers/server-side adapter only
+- Session token signature + expiry validation in `apps/web/proxy.ts` before route redirects
+- Auth pages (`/login`, `/signup`) perform server-side session/user checks to avoid stale-cookie redirect loops
 
 ### CSRF Mitigation
 - `isSameOriginRequest` validates unsafe requests using `Origin`/`Referer` against host.
@@ -32,6 +34,12 @@ Defined in `apps/web/lib/auth/cookie-adapter.ts` and `apps/web/lib/auth/constant
   - `POST /api/session/login`
   - `POST /api/session/login-form`
 - Returns `429` (JSON endpoint) or redirect error (form endpoint) after threshold.
+- Current thresholds: 40 requests / 60 seconds per client IP for login endpoints.
+
+### RBAC Policy
+- Default-deny permission matrix is implemented in `apps/web/lib/rbac.ts`.
+- New resources covered in matrix: `shifts`, `fleet`, `washers`, `calendar`.
+- Unit tests assert deny-by-default and role scoping in `apps/web/tests/unit/rbac-matrix.test.ts`.
 
 ## API Worker Security
 

@@ -5,6 +5,15 @@ Production-ready monorepo template for an internal operations dashboard:
 - `apps/api`: Cloudflare Worker backend (Wrangler/GitHub Actions target)
 - `packages/shared`: shared TypeScript + Zod schemas/contracts
 
+Core implemented modules:
+- Auth + sessions (`loginName + 4-digit PIN`, plus email/password compatibility)
+- RBAC-safe admin/users management
+- Team chat
+- Shift planner (weekly board + drag/drop move + request flow + CSV import/export)
+- Fleet management (vehicles + status/km/fuel + event logging)
+- Washer operations (task queue + optional voice notes)
+- Shared calendar timeline (shifts/requests/fleet/washer events)
+
 ## Monorepo Layout
 
 ```text
@@ -45,6 +54,12 @@ Default local endpoints:
 - Web: `http://127.0.0.1:3000`
 - API: `http://127.0.0.1:8787`
 
+Local seeded users after `pnpm test:e2e` or `pnpm -C apps/web db:reset`:
+- `admin` / PIN `1234`
+- `viewer` / PIN `2222`
+- `employee` / PIN `3456`
+- `washer` / PIN `7777`
+
 ## Scripts
 
 From repository root:
@@ -70,6 +85,7 @@ Common vars:
 - `DATABASE_URL`
 - `ASSISTANT_PROVIDER` (`mock` default)
 - `OPENAI_API_KEY` (required only when provider is `openai`)
+- `NEXT_PUBLIC_FEATURE_VOICE_INPUT` (`0` default, enables Web Speech API helpers)
 
 Runtime fallback:
 - If `DATABASE_URL` is not set in production, web runtime automatically uses a writable sqlite copy at `/tmp/internal-toolkit-runtime.db`.
@@ -89,6 +105,7 @@ See `apps/api/.dev.vars.example`.
 - API security headers (`nosniff`, frame deny, referrer policy, permissions policy, HTTPS HSTS)
 - CSP nonce strategy in web proxy (`apps/web/proxy.ts`)
 - Hardened session cookies (HttpOnly + SameSite + Secure in production)
+- Login/signup loop prevention with stale-cookie handling and server-side auth-page guard
 - Same-origin checks for unsafe web route handlers
 - Login abuse control (in-memory rate limiting)
 - Request-id propagation (`X-Request-Id`) and structured API request logs
@@ -101,6 +118,13 @@ See `apps/api/.dev.vars.example`.
 - Full test gate: `pnpm test`
 
 Playwright smoke suite covers auth gate, responsive shell, nav flows, command palette, data workflow, and admin access behavior.
+Desktop smoke coverage also includes signup + login, chat flow, shift planner flow, and fleet create/update flow.
+
+## Delivery Modes (Documented Trade-offs)
+
+- `Best` (default): full module set enabled (chat, shifts, fleet, washers, calendar), strict security controls, smoke/unit gates, PWA + optional voice input via flag.
+- `Cheap`: keep assistant provider in `mock`, voice input flag off, sqlite/local persistence, reduced cloud integration.
+- `Fast MVP`: prioritize auth + shell + core CRUD flows; advanced integrations remain behind feature flags until enabled.
 
 ## CI
 
