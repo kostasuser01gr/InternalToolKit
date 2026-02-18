@@ -11,6 +11,118 @@ export class AuthError extends Error {
   }
 }
 
+type ResourceActionMap = {
+  admin: "manage_members" | "read_audit";
+  chat: "read" | "write";
+  data: "read" | "write";
+  shifts: "read" | "write" | "approve_requests";
+  fleet: "read" | "write";
+  washers: "read" | "write";
+  calendar: "read" | "write";
+  notifications: "read";
+};
+
+export type WorkspaceResource = keyof ResourceActionMap;
+export type WorkspaceAction<R extends WorkspaceResource> = ResourceActionMap[R];
+export type WorkspacePermission = {
+  [R in WorkspaceResource]: Record<ResourceActionMap[R], WorkspaceRole[]>;
+};
+
+export const workspacePermissionMatrix: WorkspacePermission = {
+  admin: {
+    manage_members: [WorkspaceRole.ADMIN],
+    read_audit: [WorkspaceRole.ADMIN],
+  },
+  chat: {
+    read: [
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.EDITOR,
+      WorkspaceRole.EMPLOYEE,
+      WorkspaceRole.WASHER,
+      WorkspaceRole.VIEWER,
+    ],
+    write: [
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.EDITOR,
+      WorkspaceRole.EMPLOYEE,
+      WorkspaceRole.WASHER,
+    ],
+  },
+  data: {
+    read: [
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.EDITOR,
+      WorkspaceRole.EMPLOYEE,
+      WorkspaceRole.WASHER,
+      WorkspaceRole.VIEWER,
+    ],
+    write: [WorkspaceRole.ADMIN, WorkspaceRole.EDITOR, WorkspaceRole.EMPLOYEE],
+  },
+  shifts: {
+    read: [
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.EDITOR,
+      WorkspaceRole.EMPLOYEE,
+      WorkspaceRole.WASHER,
+      WorkspaceRole.VIEWER,
+    ],
+    write: [WorkspaceRole.ADMIN, WorkspaceRole.EDITOR, WorkspaceRole.EMPLOYEE],
+    approve_requests: [WorkspaceRole.ADMIN, WorkspaceRole.EDITOR],
+  },
+  fleet: {
+    read: [
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.EDITOR,
+      WorkspaceRole.EMPLOYEE,
+      WorkspaceRole.WASHER,
+      WorkspaceRole.VIEWER,
+    ],
+    write: [WorkspaceRole.ADMIN, WorkspaceRole.EDITOR, WorkspaceRole.EMPLOYEE],
+  },
+  washers: {
+    read: [
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.EDITOR,
+      WorkspaceRole.EMPLOYEE,
+      WorkspaceRole.WASHER,
+      WorkspaceRole.VIEWER,
+    ],
+    write: [WorkspaceRole.ADMIN, WorkspaceRole.EDITOR, WorkspaceRole.WASHER],
+  },
+  calendar: {
+    read: [
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.EDITOR,
+      WorkspaceRole.EMPLOYEE,
+      WorkspaceRole.WASHER,
+      WorkspaceRole.VIEWER,
+    ],
+    write: [WorkspaceRole.ADMIN, WorkspaceRole.EDITOR, WorkspaceRole.EMPLOYEE],
+  },
+  notifications: {
+    read: [
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.EDITOR,
+      WorkspaceRole.EMPLOYEE,
+      WorkspaceRole.WASHER,
+      WorkspaceRole.VIEWER,
+    ],
+  },
+};
+
+export function hasWorkspacePermission<R extends WorkspaceResource>(
+  role: WorkspaceRole | null,
+  resource: R,
+  action: WorkspaceAction<R>,
+) {
+  if (!role) {
+    return false;
+  }
+
+  const allowedRoles = workspacePermissionMatrix[resource][action];
+  return allowedRoles.includes(role);
+}
+
 export async function requireAuthUser() {
   const session = await requireSession();
 
@@ -56,6 +168,25 @@ export async function requireWorkspaceRole(
 
   if (!hasRole(membership.role, allowedRoles)) {
     throw new AuthError("Insufficient role for this workspace action.");
+  }
+
+  return {
+    user,
+    membership,
+  };
+}
+
+export async function requireWorkspacePermission<R extends WorkspaceResource>(
+  workspaceId: string,
+  resource: R,
+  action: WorkspaceAction<R>,
+) {
+  const { user, membership } = await requireWorkspaceMembership(workspaceId);
+
+  if (!hasWorkspacePermission(membership.role, resource, action)) {
+    throw new AuthError(
+      `Insufficient role for ${resource}.${action} in this workspace.`,
+    );
   }
 
   return {

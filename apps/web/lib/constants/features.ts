@@ -13,6 +13,7 @@ export const features = {
     true,
   ),
   reportsPdf: isEnabled(process.env.NEXT_PUBLIC_FEATURE_REPORTS_PDF, true),
+  voiceInput: isEnabled(process.env.NEXT_PUBLIC_FEATURE_VOICE_INPUT, false),
   windowControlsOverlay: isEnabled(
     process.env.NEXT_PUBLIC_FEATURE_WINDOW_CONTROLS_OVERLAY,
     false,

@@ -6,9 +6,19 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp, isSameOriginRequest, logSecurityEvent } from "@/lib/security";
 import { getDefaultWorkspaceForUser } from "@/lib/workspace";
 
-const formSchema = z.object({
+const passwordFormSchema = z.object({
   email: z.string().trim().email().max(200),
   password: z.string().min(8).max(200),
+});
+
+const pinFormSchema = z.object({
+  loginName: z
+    .string()
+    .trim()
+    .min(2)
+    .max(80)
+    .regex(/^[a-zA-Z0-9._-]+$/, "Login name can use letters, numbers, dot, dash and underscore."),
+  pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits."),
 });
 
 function getRequestOrigin(request: Request) {
@@ -49,7 +59,7 @@ export async function POST(request: Request) {
   const ip = getClientIp(request);
   const loginRateLimit = checkRateLimit({
     key: `auth.login-form:${ip}`,
-    limit: 10,
+    limit: 40,
     windowMs: 60_000,
   });
   if (!loginRateLimit.allowed) {
@@ -65,10 +75,22 @@ export async function POST(request: Request) {
   }
 
   const formData = await request.formData();
-  const parsed = formSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
+  const loginName = formData.get("loginName");
+  const pin = formData.get("pin");
+
+  const usesPinFlow =
+    typeof loginName === "string" ||
+    typeof pin === "string";
+
+  const parsed = usesPinFlow
+    ? pinFormSchema.safeParse({
+        loginName,
+        pin,
+      })
+    : passwordFormSchema.safeParse({
+        email: formData.get("email"),
+        password: formData.get("password"),
+      });
 
   if (!parsed.success) {
     return Response.redirect(
@@ -81,11 +103,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await verifyCredentials({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    ...(ip ? { ip } : {}),
-  });
+  const result = await verifyCredentials(
+    "pin" in parsed.data
+      ? {
+          loginName: parsed.data.loginName,
+          pin: parsed.data.pin,
+          ...(ip ? { ip } : {}),
+        }
+      : {
+          email: parsed.data.email,
+          password: parsed.data.password,
+          ...(ip ? { ip } : {}),
+        },
+  );
 
   if (!result.ok) {
     return Response.redirect(

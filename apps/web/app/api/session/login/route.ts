@@ -6,10 +6,22 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp, isSameOriginRequest, logSecurityEvent } from "@/lib/security";
 import { getDefaultWorkspaceForUser } from "@/lib/workspace";
 
-const loginSchema = z.object({
+const passwordLoginSchema = z.object({
   email: z.string().trim().email().max(200),
   password: z.string().min(8).max(200),
 });
+
+const pinLoginSchema = z.object({
+  loginName: z
+    .string()
+    .trim()
+    .min(2)
+    .max(80)
+    .regex(/^[a-zA-Z0-9._-]+$/, "Login name can use letters, numbers, dot, dash and underscore."),
+  pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits."),
+});
+
+const loginSchema = z.union([passwordLoginSchema, pinLoginSchema]);
 
 export async function POST(request: Request) {
   if (!isSameOriginRequest(request)) {
@@ -19,7 +31,7 @@ export async function POST(request: Request) {
   const ip = getClientIp(request);
   const loginRateLimit = checkRateLimit({
     key: `auth.login:${ip}`,
-    limit: 10,
+    limit: 40,
     windowMs: 60_000,
   });
   if (!loginRateLimit.allowed) {
@@ -58,11 +70,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await verifyCredentials({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    ...(ip ? { ip } : {}),
-  });
+  const result = await verifyCredentials(
+    "pin" in parsed.data
+      ? {
+          loginName: parsed.data.loginName,
+          pin: parsed.data.pin,
+          ...(ip ? { ip } : {}),
+        }
+      : {
+          email: parsed.data.email,
+          password: parsed.data.password,
+          ...(ip ? { ip } : {}),
+        },
+  );
 
   if (!result.ok) {
     return Response.json({ ok: false, message: result.message }, { status: 401 });

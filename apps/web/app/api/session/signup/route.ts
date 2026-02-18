@@ -7,6 +7,13 @@ import { getClientIp, isSameOriginRequest, logSecurityEvent } from "@/lib/securi
 
 const signupSchema = z.object({
   name: z.string().trim().min(2).max(80),
+  loginName: z
+    .string()
+    .trim()
+    .min(2)
+    .max(80)
+    .regex(/^[a-zA-Z0-9._-]+$/, "Login name can use letters, numbers, dot, dash and underscore."),
+  pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits."),
   email: z.string().trim().email().max(200),
   password: z.string().min(8).max(200),
 });
@@ -60,6 +67,8 @@ export async function POST(request: Request) {
 
   const result = await signupWithPassword({
     name: parsed.data.name,
+    loginName: parsed.data.loginName,
+    pin: parsed.data.pin,
     email: parsed.data.email,
     password: parsed.data.password,
     ...(ip ? { ip } : {}),

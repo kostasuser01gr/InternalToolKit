@@ -1,4 +1,4 @@
-import type { AuthAdapter } from "@/lib/auth/adapter";
+import type { AuthAdapter, AuthCredentials } from "@/lib/auth/adapter";
 import { cookieAuthAdapter } from "@/lib/auth/cookie-adapter";
 import type { AppSession } from "@/lib/auth/types";
 
@@ -32,10 +32,6 @@ export async function clearSession() {
   await authAdapter.clearSession();
 }
 
-export async function verifyCredentials(input: {
-  email: string;
-  password: string;
-  ip?: string;
-}) {
+export async function verifyCredentials(input: AuthCredentials) {
   return authAdapter.signInWithCredentials(input);
 }

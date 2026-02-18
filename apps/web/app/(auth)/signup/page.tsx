@@ -1,3 +1,7 @@
+import { redirect } from "next/navigation";
+
+import { requireSession } from "@/lib/auth/session";
+
 import { SignupForm } from "./signup-form";
 
 type SignupPageProps = {
@@ -9,6 +13,15 @@ type SignupPageProps = {
 
 export default async function SignupPage({ searchParams }: SignupPageProps) {
   const params = await searchParams;
+  const safeCallbackUrl =
+    params.callbackUrl && params.callbackUrl.startsWith("/")
+      ? params.callbackUrl
+      : "/overview";
+  const session = await requireSession();
 
-  return <SignupForm callbackUrl={params.callbackUrl} error={params.error} />;
+  if (session?.user?.id) {
+    redirect(safeCallbackUrl);
+  }
+
+  return <SignupForm callbackUrl={safeCallbackUrl} error={params.error} />;
 }

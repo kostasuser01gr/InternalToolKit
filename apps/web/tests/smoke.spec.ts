@@ -1,16 +1,36 @@
 import { expect, test, type Page } from "@playwright/test";
+import { createHmac } from "node:crypto";
 
-async function login(page: Page, email: string, password: string) {
+async function login(page: Page, loginName: string, pin: string) {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Login name").fill(loginName);
+  await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/(overview|home)$/);
 }
 
-async function signup(page: Page, name: string, email: string, password: string) {
+function createSessionToken(userId: string, secret: string) {
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const expiresAt = issuedAt + 60 * 60;
+  const body = Buffer.from(
+    JSON.stringify({ uid: userId, iat: issuedAt, exp: expiresAt }),
+  ).toString("base64url");
+  const signature = createHmac("sha256", secret).update(body).digest("base64url");
+  return `${body}.${signature}`;
+}
+
+async function signup(
+  page: Page,
+  name: string,
+  loginName: string,
+  email: string,
+  pin: string,
+  password: string,
+) {
   await page.goto("/signup");
-  await page.getByLabel("Name").fill(name);
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByLabel("Login name").fill(loginName);
+  await page.getByLabel("4-digit PIN").fill(pin);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm password").fill(password);
@@ -53,14 +73,52 @@ test("invalid session cookie does not loop between login and overview", async ({
   await expect(page.getByTestId("login-page")).toBeVisible();
 });
 
+test("valid signed cookie for unknown user does not loop on login", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+
+  const baseURL = testInfo.project.use.baseURL;
+  if (!baseURL) {
+    throw new Error("baseURL is required for this smoke test.");
+  }
+
+  const secret =
+    process.env.SESSION_SECRET ??
+    process.env.NEXTAUTH_SECRET ??
+    "dev-session-secret-change-before-production";
+  const token = createSessionToken("user-that-does-not-exist", secret);
+  const host = new URL(baseURL).hostname;
+
+  await context.addCookies([
+    {
+      name: "uit_session",
+      value: token,
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: false,
+    },
+  ]);
+
+  const response = await page.goto("/login");
+  expect(response?.status()).toBe(200);
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByTestId("login-page")).toBeVisible();
+});
+
 test("signup creates an account and can sign in", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.toLowerCase() !== "desktop");
 
   const nonce = Date.now();
+  const loginName = `signup${nonce}`;
   const email = `signup.${nonce}@internal.local`;
+  const pin = "5612";
   const password = "Signup123!";
 
-  await signup(page, "Signup Tester", email, password);
+  await signup(page, "Signup Tester", loginName, email, pin, password);
   await expect(page.getByTestId("home-page")).toBeVisible();
 
   await page.request.post("/api/session/logout", {
@@ -69,14 +127,14 @@ test("signup creates an account and can sign in", async ({ page }, testInfo) => 
     },
   });
 
-  await login(page, email, password);
+  await login(page, loginName, pin);
   await expect(page.getByTestId("home-page")).toBeVisible();
 });
 
 test("responsive shell renders and navigation works without overflow", async ({
   page,
 }, testInfo) => {
-  await login(page, "admin@internal.local", "Admin123!");
+  await login(page, "admin", "1234");
 
   const projectName = testInfo.project.name.toLowerCase();
   const isMobile = projectName === "mobile";
@@ -101,10 +159,10 @@ test("responsive shell renders and navigation works without overflow", async ({
   if (isMobile) {
     await page
       .getByTestId("bottom-nav")
-      .getByRole("link", { name: "Analytics" })
+      .getByRole("link", { name: "Calendar" })
       .click();
-    await expect(page).toHaveURL(/\/analytics/);
-    await expect(page.getByTestId("analytics-page")).toBeVisible();
+    await expect(page).toHaveURL(/\/calendar/);
+    await expect(page.getByTestId("calendar-page")).toBeVisible();
   }
 
   if (isTablet) {
@@ -131,7 +189,7 @@ test("responsive shell renders and navigation works without overflow", async ({
 test("command palette opens and navigates", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.toLowerCase() !== "desktop");
 
-  await login(page, "admin@internal.local", "Admin123!");
+  await login(page, "admin", "1234");
   await page.waitForLoadState("networkidle");
 
   const trigger = page.getByRole("button", { name: "Open command palette" });
@@ -159,7 +217,7 @@ test("data table: create table, add field, add record, export CSV", async ({
 }, testInfo) => {
   test.skip(testInfo.project.name.toLowerCase() !== "desktop");
 
-  await login(page, "admin@internal.local", "Admin123!");
+  await login(page, "admin", "1234");
   await page.goto("/data");
 
   const tableName = `Playwright_${Date.now()}`;
@@ -202,7 +260,7 @@ test("admin gate: viewer blocked, admin allowed", async ({
 }, testInfo) => {
   test.skip(testInfo.project.name.toLowerCase() !== "desktop");
 
-  await login(page, "viewer@internal.local", "Viewer123!");
+  await login(page, "viewer", "2222");
   await page.goto("/admin");
   await expect(page.getByTestId("admin-blocked")).toBeVisible();
 
@@ -213,9 +271,74 @@ test("admin gate: viewer blocked, admin allowed", async ({
   });
 
   await page.goto("/login");
-  await page.getByLabel("Email").fill("admin@internal.local");
-  await page.getByLabel("Password").fill("Admin123!");
+  await page.getByLabel("Login name").fill("admin");
+  await page.getByLabel("PIN").fill("1234");
   await page.getByRole("button", { name: "Continue" }).click();
   await page.goto("/admin");
   await expect(page.getByTestId("admin-page")).toBeVisible();
+});
+
+test("chat basic flow: create thread and send message", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+
+  await login(page, "admin", "1234");
+  await page.goto("/chat");
+
+  const threadTitle = `Playwright Chat ${Date.now()}`;
+  await page.getByLabel("New thread").fill(threadTitle);
+  await page.getByRole("button", { name: "Create thread" }).click();
+  await expect(page.getByText("Thread created.")).toBeVisible();
+
+  const message = `Hello from Playwright ${Date.now()}`;
+  await page.getByLabel("Message").fill(message);
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Message sent.")).toBeVisible();
+  await expect(page.getByText(message)).toBeVisible();
+});
+
+test("shift planner flow: create shift and show in board", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+
+  await login(page, "admin", "1234");
+  await page.goto("/shifts");
+
+  const title = `Shift ${Date.now()}`;
+  const now = Date.now();
+  const startsAt = new Date(now + 2 * 60 * 60 * 1000).toISOString().slice(0, 16);
+  const endsAt = new Date(now + 4 * 60 * 60 * 1000).toISOString().slice(0, 16);
+
+  await page.getByLabel("Title").fill(title);
+  await page.locator("#shift-startsAt").fill(startsAt);
+  await page.locator("#shift-endsAt").fill(endsAt);
+  await page.getByRole("button", { name: "Create shift" }).click();
+
+  await expect(page.getByText("Shift created.")).toBeVisible();
+  await expect(page.getByTestId("shifts-board")).toContainText(title);
+});
+
+test("fleet flow: create and update vehicle", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+
+  await login(page, "admin", "1234");
+  await page.goto("/fleet");
+
+  const plate = `PW-${Date.now()}`.slice(-10);
+  const model = "Playwright Test Car";
+
+  await page.getByLabel("Plate number").fill(plate);
+  await page.getByLabel("Model").fill(model);
+  await page.getByLabel("Mileage (km)").first().fill("1000");
+  await page.getByLabel("Fuel (%)").first().fill("80");
+  await page.getByRole("button", { name: "Add vehicle" }).click();
+
+  await expect(page.getByText("Vehicle added.")).toBeVisible();
+  await expect(page.getByText(plate)).toBeVisible();
+
+  await page.getByRole("link", { name: new RegExp(plate) }).first().click();
+  await page.getByLabel("Fuel (%)").nth(1).fill("73");
+  await page.getByRole("button", { name: "Save vehicle update" }).click();
+
+  await expect(page.getByText("Vehicle updated.")).toBeVisible();
 });

@@ -1,3 +1,7 @@
+import { redirect } from "next/navigation";
+
+import { requireSession } from "@/lib/auth/session";
+
 import { LoginForm } from "./login-form";
 
 type LoginPageProps = {
@@ -9,6 +13,15 @@ type LoginPageProps = {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
+  const safeCallbackUrl =
+    params.callbackUrl && params.callbackUrl.startsWith("/")
+      ? params.callbackUrl
+      : "/overview";
+  const session = await requireSession();
 
-  return <LoginForm callbackUrl={params.callbackUrl} error={params.error} />;
+  if (session?.user?.id) {
+    redirect(safeCallbackUrl);
+  }
+
+  return <LoginForm callbackUrl={safeCallbackUrl} error={params.error} />;
 }

@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
 import type { AuthAdapter } from "@/lib/auth/adapter";
+import type { AuthCredentials } from "@/lib/auth/adapter";
 import {
   SESSION_COOKIE_NAME,
   SESSION_COOKIE_SAME_SITE,
@@ -126,18 +127,52 @@ async function clearSessionCookie() {
   });
 }
 
-export const cookieAuthAdapter: AuthAdapter = {
-  async signInWithCredentials({ email, password, ip }) {
-    const normalizedEmail = email.trim().toLowerCase();
-    const user = await db.user.findUnique({
-      where: { email: normalizedEmail },
-    });
+function isPinCredentials(input: AuthCredentials): input is {
+  method?: "pin";
+  loginName: string;
+  pin: string;
+  ip?: string;
+} {
+  return "loginName" in input && "pin" in input;
+}
 
-    if (!user || !compareSync(password, user.passwordHash)) {
+export const cookieAuthAdapter: AuthAdapter = {
+  async signInWithCredentials(input) {
+    const ip = input.ip ?? "unknown";
+    const mode = isPinCredentials(input) ? "pin" : "password";
+    const user = isPinCredentials(input)
+      ? await db.user.findUnique({
+          where: { loginName: input.loginName.trim().toLowerCase() },
+        })
+      : await db.user.findUnique({
+          where: { email: input.email.trim().toLowerCase() },
+        });
+
+    if (!user) {
       logSecurityEvent("auth.login_failed", {
         reason: "bad_credentials",
-        email: normalizedEmail,
-        ip: ip ?? "unknown",
+        mode,
+        identifier: isPinCredentials(input)
+          ? input.loginName.trim().toLowerCase()
+          : input.email.trim().toLowerCase(),
+        ip,
+      });
+      return { ok: false, message: "Invalid credentials." };
+    }
+
+    const validCredentials = isPinCredentials(input)
+      ? Boolean(user.pinHash) && compareSync(input.pin, user.pinHash ?? "")
+      : Boolean(user.passwordHash) &&
+        compareSync(input.password, user.passwordHash ?? "");
+
+    if (!validCredentials) {
+      logSecurityEvent("auth.login_failed", {
+        reason: "bad_credentials",
+        mode,
+        identifier: isPinCredentials(input)
+          ? input.loginName.trim().toLowerCase()
+          : input.email.trim().toLowerCase(),
+        ip,
       });
       return { ok: false, message: "Invalid credentials." };
     }
@@ -145,7 +180,8 @@ export const cookieAuthAdapter: AuthAdapter = {
     logSecurityEvent("auth.login_success", {
       userId: user.id,
       email: user.email,
-      ip: ip ?? "unknown",
+      mode,
+      ip,
     });
 
     return {

@@ -2,8 +2,11 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   Bot,
+  CalendarDays,
   ChartNoAxesCombined,
   Database,
+  Droplets,
+  CarFront,
   FileText,
   Home,
   LayoutPanelTop,
@@ -28,6 +31,10 @@ export const sidebarNavItems: NavItem[] = [
   { href: "/automations", label: "Automations", icon: Workflow },
   { href: "/assistant", label: "Assistant", icon: Bot },
   { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/shifts", label: "Shifts", icon: CalendarDays },
+  { href: "/fleet", label: "Fleet", icon: CarFront },
+  { href: "/washers", label: "Washers", icon: Droplets },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/analytics", label: "Analytics", icon: ChartNoAxesCombined },
   { href: "/controls", label: "Controls", icon: SlidersHorizontal },
   { href: "/activity", label: "Activity", icon: Activity },
@@ -52,13 +59,13 @@ export type MobileNavItem =
 
 export const mobileNavItems: MobileNavItem[] = [
   { type: "route", href: "/home", label: "Home", icon: Home },
-  { type: "route", href: "/assistant", label: "AI Assistant", icon: Bot },
+  { type: "route", href: "/shifts", label: "Shifts", icon: CalendarDays },
   { type: "action", actionId: "create", label: "Create", icon: Plus },
   { type: "route", href: "/chat", label: "Chat", icon: MessageSquare },
   {
     type: "route",
-    href: "/analytics",
-    label: "Analytics",
-    icon: ChartNoAxesCombined,
+    href: "/calendar",
+    label: "Calendar",
+    icon: CalendarDays,
   },
 ];

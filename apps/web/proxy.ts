@@ -22,6 +22,10 @@ const appRoutes = [
   "/notifications",
   "/settings",
   "/admin",
+  "/shifts",
+  "/fleet",
+  "/washers",
+  "/calendar",
 ];
 
 function isAppRoute(pathname: string) {
@@ -213,12 +217,6 @@ export async function proxy(request: NextRequest) {
     if (hasInvalidSessionCookie) {
       clearSessionCookie(response);
     }
-    setSecurityHeaders(response, nonce, requestId);
-    return response;
-  }
-
-  if ((pathname === "/login" || pathname === "/signup") && hasValidSessionCookie) {
-    response = NextResponse.redirect(new URL("/overview", request.url));
     setSecurityHeaders(response, nonce, requestId);
     return response;
   }

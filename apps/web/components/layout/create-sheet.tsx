@@ -1,6 +1,14 @@
 "use client";
 
-import { Database, MessageSquare, Sparkles, Workflow } from "lucide-react";
+import {
+  CalendarDays,
+  CarFront,
+  Database,
+  Droplets,
+  MessageSquare,
+  Sparkles,
+  Workflow,
+} from "lucide-react";
 import Link from "next/link";
 
 import { PrimaryButton } from "@/components/kit/primary-button";
@@ -77,6 +85,36 @@ function CreateSheet({ triggerClassName, compact = false }: CreateSheetProps) {
               New chat thread
             </div>
             Open a team thread linked to this workspace.
+          </Link>
+          <Link
+            href="/shifts"
+            className="focus-ring glass-surface rounded-[var(--radius-sm)] p-4 text-sm text-[var(--text)]"
+          >
+            <div className="mb-2 flex items-center gap-2 text-[var(--text-muted)]">
+              <CalendarDays className="size-4" />
+              New shift
+            </div>
+            Plan or import shifts for the week.
+          </Link>
+          <Link
+            href="/fleet"
+            className="focus-ring glass-surface rounded-[var(--radius-sm)] p-4 text-sm text-[var(--text)]"
+          >
+            <div className="mb-2 flex items-center gap-2 text-[var(--text-muted)]">
+              <CarFront className="size-4" />
+              Fleet update
+            </div>
+            Register vehicle status, mileage, and fuel updates.
+          </Link>
+          <Link
+            href="/washers"
+            className="focus-ring glass-surface rounded-[var(--radius-sm)] p-4 text-sm text-[var(--text)]"
+          >
+            <div className="mb-2 flex items-center gap-2 text-[var(--text-muted)]">
+              <Droplets className="size-4" />
+              Washer task
+            </div>
+            Create and update wash operations with optional voice notes.
           </Link>
         </div>
       </DialogContent>

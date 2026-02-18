@@ -23,7 +23,7 @@ export function LoginForm({ callbackUrl, error }: LoginFormProps) {
         </div>
         <h1 className="kpi-font text-2xl font-semibold">Sign in</h1>
         <p className="text-sm text-[var(--text-muted)]">
-          Access the internal programmable dashboard.
+          Access the internal programmable dashboard with your login name and PIN.
         </p>
       </div>
 
@@ -33,26 +33,29 @@ export function LoginForm({ callbackUrl, error }: LoginFormProps) {
         className="space-y-4"
       >
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="loginName">Login name</Label>
           <Input
-            id="email"
-            name="email"
-            type="email"
+            id="loginName"
+            name="loginName"
             autoComplete="username"
             required
-            placeholder="admin@internal.local"
+            placeholder="admin"
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="pin">PIN</Label>
           <Input
-            id="password"
-            name="password"
+            id="pin"
+            name="pin"
             type="password"
-            autoComplete="current-password"
+            autoComplete="one-time-code"
             required
-            placeholder="••••••••"
+            inputMode="numeric"
+            pattern="\d{4}"
+            minLength={4}
+            maxLength={4}
+            placeholder="1234"
           />
         </div>
 

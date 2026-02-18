@@ -14,6 +14,8 @@ enum GlobalRole {
 enum WorkspaceRole {
   ADMIN
   EDITOR
+  EMPLOYEE
+  WASHER
   VIEWER
 }
 
@@ -51,13 +53,69 @@ enum ThemePreference {
   LIGHT
 }
 
+enum LocalePreference {
+  EN
+  EL
+}
+
+enum QuantumTheme {
+  VIOLET
+  CYAN
+  SUNSET
+}
+
+enum ShiftStatus {
+  DRAFT
+  PUBLISHED
+  COMPLETED
+  CANCELLED
+}
+
+enum ShiftRequestType {
+  TIME_OFF
+  SWAP
+  EXTRA_SHIFT
+}
+
+enum ShiftRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum VehicleStatus {
+  READY
+  NEEDS_CLEANING
+  IN_SERVICE
+  OUT_OF_SERVICE
+}
+
+enum VehicleEventType {
+  FUEL_UPDATE
+  DAMAGE_REPORT
+  MAINTENANCE_NOTE
+  CLEANING_NOTE
+  STATUS_CHANGE
+}
+
+enum WasherTaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
 model User {
   id                   String            @id @default(cuid())
   email                String            @unique
+  loginName            String?           @unique
   name                 String
   passwordHash         String
+  pinHash              String?
   roleGlobal           GlobalRole        @default(USER)
   themePreference      ThemePreference   @default(DARK)
+  localePreference     LocalePreference  @default(EN)
+  quantumTheme         QuantumTheme      @default(VIOLET)
   notificationsEnabled Boolean           @default(true)
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
@@ -67,6 +125,11 @@ model User {
   auditActorLogs       AuditLog[]        @relation("AuditActor")
   createdThreads       ChatThread[]      @relation("ChatThreadCreator")
   authoredMessages     ChatMessage[]     @relation("ChatMessageAuthor")
+  assignedShifts       Shift[]           @relation("ShiftAssignee")
+  createdShifts        Shift[]           @relation("ShiftCreator")
+  shiftRequests        ShiftRequest[]    @relation("ShiftRequester")
+  vehicleEvents        VehicleEvent[]    @relation("VehicleEventActor")
+  washerTasks          WasherTask[]      @relation("WasherTaskAssignee")
 }
 
 model Workspace {
@@ -81,6 +144,11 @@ model Workspace {
   automations Automation[]
   auditLogs   AuditLog[]
   chatThreads ChatThread[]
+  shifts      Shift[]
+  shiftRequests ShiftRequest[]
+  vehicles    Vehicle[]
+  vehicleEvents VehicleEvent[]
+  washerTasks WasherTask[]
 
   @@index([ownerId])
 }
@@ -229,9 +297,113 @@ model ChatMessage {
   authorUserId  String?
   role          ChatRole
   content       String
+  attachmentUrl String?
+  attachmentMime String?
   createdAt     DateTime  @default(now())
   thread        ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   author        User?     @relation("ChatMessageAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
 
   @@index([threadId, createdAt])
+}
+
+model Shift {
+  id             String      @id @default(cuid())
+  workspaceId    String
+  assignedUserId String?
+  createdBy      String
+  title          String
+  startsAt       DateTime
+  endsAt         DateTime
+  status         ShiftStatus @default(DRAFT)
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  workspace      Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee       User?       @relation("ShiftAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  creator        User        @relation("ShiftCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  requests       ShiftRequest[]
+
+  @@index([workspaceId, startsAt, endsAt])
+  @@index([assignedUserId, startsAt])
+}
+
+model ShiftRequest {
+  id          String             @id @default(cuid())
+  workspaceId String
+  requesterId String
+  shiftId     String?
+  type        ShiftRequestType
+  status      ShiftRequestStatus @default(PENDING)
+  startsAt    DateTime
+  endsAt      DateTime
+  reason      String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  requester   User               @relation("ShiftRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  shift       Shift?             @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status, createdAt])
+  @@index([requesterId, createdAt])
+}
+
+model Vehicle {
+  id            String        @id @default(cuid())
+  workspaceId   String
+  plateNumber   String
+  model         String
+  status        VehicleStatus @default(READY)
+  mileageKm     Int           @default(0)
+  fuelPercent   Int           @default(100)
+  lastServiceAt DateTime?
+  photoDataUrl  String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events        VehicleEvent[]
+  washerTasks   WasherTask[]
+
+  @@unique([workspaceId, plateNumber])
+  @@index([workspaceId, status])
+}
+
+model VehicleEvent {
+  id          String           @id @default(cuid())
+  workspaceId String
+  vehicleId   String
+  actorUserId String?
+  type        VehicleEventType
+  valueText   String?
+  valueNumber Float?
+  photoDataUrl String?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vehicle     Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  actor       User?            @relation("VehicleEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([vehicleId, createdAt])
+}
+
+model WasherTask {
+  id              String           @id @default(cuid())
+  workspaceId     String
+  vehicleId       String
+  washerUserId    String?
+  status          WasherTaskStatus @default(TODO)
+  exteriorDone    Boolean          @default(false)
+  interiorDone    Boolean          @default(false)
+  vacuumDone      Boolean          @default(false)
+  notes           String?
+  voiceTranscript String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vehicle         Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  washer          User?            @relation("WasherTaskAssignee", fields: [washerUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status, createdAt])
+  @@index([vehicleId, createdAt])
 }

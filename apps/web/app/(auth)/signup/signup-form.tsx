@@ -23,7 +23,7 @@ export function SignupForm({ callbackUrl, error }: SignupFormProps) {
         </div>
         <h1 className="kpi-font text-2xl font-semibold">Create account</h1>
         <p className="text-sm text-[var(--text-muted)]">
-          Create your workspace and start using the dashboard.
+          Create your workspace and start using the dashboard with name + PIN access.
         </p>
       </div>
 
@@ -42,6 +42,36 @@ export function SignupForm({ callbackUrl, error }: SignupFormProps) {
             minLength={2}
             maxLength={80}
             placeholder="Alex Operator"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="loginName">Login name</Label>
+          <Input
+            id="loginName"
+            name="loginName"
+            autoComplete="username"
+            required
+            minLength={2}
+            maxLength={80}
+            pattern="[A-Za-z0-9._-]+"
+            placeholder="alex.ops"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="pin">4-digit PIN</Label>
+          <Input
+            id="pin"
+            name="pin"
+            type="password"
+            autoComplete="one-time-code"
+            required
+            inputMode="numeric"
+            pattern="\d{4}"
+            minLength={4}
+            maxLength={4}
+            placeholder="1234"
           />
         </div>
 

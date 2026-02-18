@@ -6,7 +6,13 @@ import {
   FieldType,
   GlobalRole,
   PrismaClient,
+  ShiftRequestStatus,
+  ShiftRequestType,
+  ShiftStatus,
+  VehicleEventType,
+  VehicleStatus,
   ViewType,
+  WasherTaskStatus,
   WorkspaceRole,
 } from "@prisma/client";
 
@@ -18,35 +24,83 @@ const prisma = new PrismaClient({ adapter });
 
 const ADMIN_EMAIL = "admin@internal.local";
 const VIEWER_EMAIL = "viewer@internal.local";
+const EMPLOYEE_EMAIL = "employee@internal.local";
+const WASHER_EMAIL = "washer@internal.local";
 
 async function main() {
   const admin = await prisma.user.upsert({
     where: { email: ADMIN_EMAIL },
     update: {
+      loginName: "admin",
       name: "Admin Operator",
       roleGlobal: GlobalRole.ADMIN,
       passwordHash: hashSync("Admin123!", 12),
+      pinHash: hashSync("1234", 12),
     },
     create: {
       email: ADMIN_EMAIL,
+      loginName: "admin",
       name: "Admin Operator",
       roleGlobal: GlobalRole.ADMIN,
       passwordHash: hashSync("Admin123!", 12),
+      pinHash: hashSync("1234", 12),
     },
   });
 
   const viewer = await prisma.user.upsert({
     where: { email: VIEWER_EMAIL },
     update: {
+      loginName: "viewer",
       name: "Viewer Analyst",
       roleGlobal: GlobalRole.USER,
       passwordHash: hashSync("Viewer123!", 12),
+      pinHash: hashSync("2222", 12),
     },
     create: {
       email: VIEWER_EMAIL,
+      loginName: "viewer",
       name: "Viewer Analyst",
       roleGlobal: GlobalRole.USER,
       passwordHash: hashSync("Viewer123!", 12),
+      pinHash: hashSync("2222", 12),
+    },
+  });
+
+  const employee = await prisma.user.upsert({
+    where: { email: EMPLOYEE_EMAIL },
+    update: {
+      loginName: "employee",
+      name: "Employee Ops",
+      roleGlobal: GlobalRole.USER,
+      passwordHash: hashSync("Employee123!", 12),
+      pinHash: hashSync("3456", 12),
+    },
+    create: {
+      email: EMPLOYEE_EMAIL,
+      loginName: "employee",
+      name: "Employee Ops",
+      roleGlobal: GlobalRole.USER,
+      passwordHash: hashSync("Employee123!", 12),
+      pinHash: hashSync("3456", 12),
+    },
+  });
+
+  const washer = await prisma.user.upsert({
+    where: { email: WASHER_EMAIL },
+    update: {
+      loginName: "washer",
+      name: "Washer Crew",
+      roleGlobal: GlobalRole.USER,
+      passwordHash: hashSync("Washer123!", 12),
+      pinHash: hashSync("7777", 12),
+    },
+    create: {
+      email: WASHER_EMAIL,
+      loginName: "washer",
+      name: "Washer Crew",
+      roleGlobal: GlobalRole.USER,
+      passwordHash: hashSync("Washer123!", 12),
+      pinHash: hashSync("7777", 12),
     },
   });
 
@@ -84,6 +138,23 @@ async function main() {
     where: {
       workspaceId_userId: {
         workspaceId: workspace.id,
+        userId: employee.id,
+      },
+    },
+    update: {
+      role: WorkspaceRole.EMPLOYEE,
+    },
+    create: {
+      workspaceId: workspace.id,
+      userId: employee.id,
+      role: WorkspaceRole.EMPLOYEE,
+    },
+  });
+
+  await prisma.workspaceMember.upsert({
+    where: {
+      workspaceId_userId: {
+        workspaceId: workspace.id,
         userId: viewer.id,
       },
     },
@@ -94,6 +165,23 @@ async function main() {
       workspaceId: workspace.id,
       userId: viewer.id,
       role: WorkspaceRole.VIEWER,
+    },
+  });
+
+  await prisma.workspaceMember.upsert({
+    where: {
+      workspaceId_userId: {
+        workspaceId: workspace.id,
+        userId: washer.id,
+      },
+    },
+    update: {
+      role: WorkspaceRole.WASHER,
+    },
+    create: {
+      workspaceId: workspace.id,
+      userId: washer.id,
+      role: WorkspaceRole.WASHER,
     },
   });
 
@@ -319,9 +407,171 @@ async function main() {
     },
   });
 
+  const now = new Date();
+  const shiftOneStart = new Date(now);
+  shiftOneStart.setHours(8, 0, 0, 0);
+  const shiftOneEnd = new Date(now);
+  shiftOneEnd.setHours(16, 0, 0, 0);
+  const shiftTwoStart = new Date(now);
+  shiftTwoStart.setDate(shiftTwoStart.getDate() + 1);
+  shiftTwoStart.setHours(9, 0, 0, 0);
+  const shiftTwoEnd = new Date(now);
+  shiftTwoEnd.setDate(shiftTwoEnd.getDate() + 1);
+  shiftTwoEnd.setHours(17, 0, 0, 0);
+
+  const morningShift = await prisma.shift.upsert({
+    where: { id: "seed-shift-1" },
+    update: {
+      workspaceId: workspace.id,
+      assignedUserId: employee.id,
+      createdBy: admin.id,
+      title: "Morning counter operations",
+      startsAt: shiftOneStart,
+      endsAt: shiftOneEnd,
+      status: ShiftStatus.PUBLISHED,
+      notes: "Priority: arrivals and check-ins",
+    },
+    create: {
+      id: "seed-shift-1",
+      workspaceId: workspace.id,
+      assignedUserId: employee.id,
+      createdBy: admin.id,
+      title: "Morning counter operations",
+      startsAt: shiftOneStart,
+      endsAt: shiftOneEnd,
+      status: ShiftStatus.PUBLISHED,
+      notes: "Priority: arrivals and check-ins",
+    },
+  });
+
+  await prisma.shift.upsert({
+    where: { id: "seed-shift-2" },
+    update: {
+      workspaceId: workspace.id,
+      assignedUserId: washer.id,
+      createdBy: admin.id,
+      title: "Vehicle wash lane",
+      startsAt: shiftTwoStart,
+      endsAt: shiftTwoEnd,
+      status: ShiftStatus.PUBLISHED,
+      notes: "Deep cleaning queue",
+    },
+    create: {
+      id: "seed-shift-2",
+      workspaceId: workspace.id,
+      assignedUserId: washer.id,
+      createdBy: admin.id,
+      title: "Vehicle wash lane",
+      startsAt: shiftTwoStart,
+      endsAt: shiftTwoEnd,
+      status: ShiftStatus.PUBLISHED,
+      notes: "Deep cleaning queue",
+    },
+  });
+
+  await prisma.shiftRequest.upsert({
+    where: { id: "seed-shift-request-1" },
+    update: {
+      workspaceId: workspace.id,
+      requesterId: employee.id,
+      shiftId: morningShift.id,
+      type: ShiftRequestType.SWAP,
+      status: ShiftRequestStatus.PENDING,
+      startsAt: shiftOneStart,
+      endsAt: shiftOneEnd,
+      reason: "Need swap for medical appointment.",
+    },
+    create: {
+      id: "seed-shift-request-1",
+      workspaceId: workspace.id,
+      requesterId: employee.id,
+      shiftId: morningShift.id,
+      type: ShiftRequestType.SWAP,
+      status: ShiftRequestStatus.PENDING,
+      startsAt: shiftOneStart,
+      endsAt: shiftOneEnd,
+      reason: "Need swap for medical appointment.",
+    },
+  });
+
+  const vehicle = await prisma.vehicle.upsert({
+    where: {
+      workspaceId_plateNumber: {
+        workspaceId: workspace.id,
+        plateNumber: "KIN-2047",
+      },
+    },
+    update: {
+      model: "Toyota Yaris",
+      status: VehicleStatus.NEEDS_CLEANING,
+      mileageKm: 68450,
+      fuelPercent: 54,
+      notes: "Inspect rear bumper scratch.",
+    },
+    create: {
+      workspaceId: workspace.id,
+      plateNumber: "KIN-2047",
+      model: "Toyota Yaris",
+      status: VehicleStatus.NEEDS_CLEANING,
+      mileageKm: 68450,
+      fuelPercent: 54,
+      notes: "Inspect rear bumper scratch.",
+    },
+  });
+
+  await prisma.vehicleEvent.upsert({
+    where: { id: "seed-vehicle-event-1" },
+    update: {
+      workspaceId: workspace.id,
+      vehicleId: vehicle.id,
+      actorUserId: admin.id,
+      type: VehicleEventType.DAMAGE_REPORT,
+      notes: "Rear bumper scratch captured during return inspection.",
+      valueText: "minor",
+    },
+    create: {
+      id: "seed-vehicle-event-1",
+      workspaceId: workspace.id,
+      vehicleId: vehicle.id,
+      actorUserId: admin.id,
+      type: VehicleEventType.DAMAGE_REPORT,
+      notes: "Rear bumper scratch captured during return inspection.",
+      valueText: "minor",
+    },
+  });
+
+  await prisma.washerTask.upsert({
+    where: { id: "seed-washer-task-1" },
+    update: {
+      workspaceId: workspace.id,
+      vehicleId: vehicle.id,
+      washerUserId: washer.id,
+      status: WasherTaskStatus.IN_PROGRESS,
+      exteriorDone: true,
+      interiorDone: false,
+      vacuumDone: true,
+      notes: "Need stain treatment on rear seats.",
+      voiceTranscript: "rear seats need extra stain treatment",
+    },
+    create: {
+      id: "seed-washer-task-1",
+      workspaceId: workspace.id,
+      vehicleId: vehicle.id,
+      washerUserId: washer.id,
+      status: WasherTaskStatus.IN_PROGRESS,
+      exteriorDone: true,
+      interiorDone: false,
+      vacuumDone: true,
+      notes: "Need stain treatment on rear seats.",
+      voiceTranscript: "rear seats need extra stain treatment",
+    },
+  });
+
   console.log("Seed complete", {
     admin: ADMIN_EMAIL,
     viewer: VIEWER_EMAIL,
+    employee: EMPLOYEE_EMAIL,
+    washer: WASHER_EMAIL,
     workspaceId: workspace.id,
   });
 }
