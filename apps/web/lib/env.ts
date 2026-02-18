@@ -29,6 +29,16 @@ function isHostedProductionRuntime() {
     return false;
   }
 
+  // `next build` evaluates server modules to collect route metadata.
+  // During that phase we allow the local fallback secret so hosted builds
+  // can complete before runtime env injection takes effect.
+  if (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.npm_lifecycle_event === "build"
+  ) {
+    return false;
+  }
+
   return (
     process.env.CI === "true" ||
     process.env.GITHUB_ACTIONS === "true" ||

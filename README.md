@@ -129,8 +129,9 @@ Required repo secrets:
 
 1. Import this GitHub repository in Vercel.
 2. Set **Root Directory** to `apps/web`.
-3. Add env var:
+3. Add env vars:
    - `NEXT_PUBLIC_API_URL=https://<your-worker>.<subdomain>.workers.dev`
+   - `SESSION_SECRET=<strong-random-secret-at-least-16-chars>`
 4. Push to GitHub to trigger automatic deployments.
 
 Important:
