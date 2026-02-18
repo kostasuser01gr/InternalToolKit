@@ -13,6 +13,7 @@ This repository intentionally uses pnpm's default script restrictions.
 
 ### Signup fails with `Unable to create account right now`
 - Check runtime logs for sqlite open errors (for example `Unable to open connection to local database ./dev.db`).
+- If logs show schema drift (for example `The column loginName does not exist`), redeploy latest build; web build now runs `prisma db push` to align schema before `next build`.
 - Set `DATABASE_URL` in Vercel for persistent writes.
 - Without `DATABASE_URL`, the app uses `/tmp/internal-toolkit-runtime.db` fallback (ephemeral demo storage).
 

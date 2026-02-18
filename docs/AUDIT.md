@@ -187,3 +187,36 @@ DONE ✅
 - [x] Local production-like runtime checks passed (web + worker)
 - [x] README/docs updated for auth/modules/deploy/security/troubleshooting
 - [x] No secrets committed; safe defaults preserved
+
+## Session Update (Schema Sync Fix)
+
+### New P0 Finding
+- Signup could still fail in production-like runtime with:
+  - `The column loginName does not exist in the current database`
+- Root cause: schema drift between runtime sqlite copy and latest Prisma schema.
+
+### Fix Applied
+- Updated `apps/web/package.json` build script:
+  - `prisma db push && prisma generate && next build`
+- Updated `apps/web/lib/db.ts`:
+  - production sqlite fallback now refreshes `/tmp/internal-toolkit-runtime.db` on cold start to avoid stale schema copies.
+
+### Verification Commands (latest)
+- `pnpm install --frozen-lockfile` -> PASS
+- `pnpm -w lint` -> PASS
+- `pnpm -w typecheck` -> PASS
+- `pnpm -w test` -> PASS (`15 passed`, `18 skipped`)
+- `pnpm -w build` -> PASS
+- Local production check:
+  - `pnpm -C apps/web start --hostname 127.0.0.1 --port 4302`
+  - `POST /api/session/signup` -> `200`
+  - `POST /api/session/login` -> `200`
+- Worker check:
+  - `pnpm -C apps/api dev`
+  - `GET /health` -> `200`
+  - `OPTIONS /health` with disallowed origin -> `403`
+- GitHub CI:
+  - `gh run list --limit 5` latest `22153234014` -> `completed success`
+- Vercel production:
+  - `https://web-silk-three-98.vercel.app`
+  - `/login` -> `200`, live signup/login API -> `200`
