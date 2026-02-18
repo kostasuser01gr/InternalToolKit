@@ -11,7 +11,9 @@
     "typecheck": "prisma generate && tsc --noEmit",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
-    "test": "pnpm test:e2e",
+    "test": "pnpm test:unit && pnpm test:e2e",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
     "test:e2e": "pnpm db:reset && playwright test",
     "test:ui": "playwright test --ui",
     "prisma:generate": "prisma generate",
@@ -62,6 +64,7 @@
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "tailwindcss": "^4.1.14",
+    "vitest": "^3.2.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

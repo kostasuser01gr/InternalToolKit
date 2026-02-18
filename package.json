@@ -10,8 +10,9 @@
     "build": "pnpm --filter @internal-toolkit/shared build && pnpm --filter @internal-toolkit/api build && pnpm --filter @internal-toolkit/web build",
     "lint": "pnpm --filter @internal-toolkit/shared lint && pnpm --filter @internal-toolkit/api lint && pnpm --filter @internal-toolkit/web lint",
     "typecheck": "pnpm --filter @internal-toolkit/shared typecheck && pnpm --filter @internal-toolkit/api typecheck && pnpm --filter @internal-toolkit/web typecheck",
+    "test:unit": "pnpm --filter @internal-toolkit/web test:unit",
     "test:e2e": "pnpm --filter @internal-toolkit/web test:e2e",
-    "test": "pnpm --filter @internal-toolkit/web test:e2e",
+    "test": "pnpm test:unit && pnpm test:e2e",
     "format": "pnpm --filter @internal-toolkit/web format"
   }
 }
