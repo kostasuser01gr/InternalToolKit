@@ -82,7 +82,9 @@
 
 ### GitHub Checks
 - CI workflow file includes install -> lint -> typecheck -> unit tests -> e2e -> build.
-- Latest CI run is expected green for the release commit (see final Release Report section for run ID and URL).
+- Latest CI run for release commit `62c00a2` -> PASS:
+  - `CI` run `22141293627`: `completed success`
+  - `Deploy Worker` run `22141293610`: `completed success`
 
 ## Final Acceptance Checklist (DONE ✅)
 - [x] Fresh clone install path works
