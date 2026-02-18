@@ -11,6 +11,11 @@ This repository intentionally uses pnpm's default script restrictions.
 - Ensure hosted runtime has `SESSION_SECRET` (or `NEXTAUTH_SECRET`) set.
 - Local build can use safe fallback secret for fresh-clone developer experience.
 
+### Signup fails with `Unable to create account right now`
+- Check runtime logs for sqlite open errors (for example `Unable to open connection to local database ./dev.db`).
+- Set `DATABASE_URL` in Vercel for persistent writes.
+- Without `DATABASE_URL`, the app uses `/tmp/internal-toolkit-runtime.db` fallback (ephemeral demo storage).
+
 ### Playwright fails by running unit test files
 - Playwright is scoped to `*.spec.ts` in `apps/web/playwright.config.ts`.
 - Unit tests are executed separately via Vitest (`pnpm test:unit`).

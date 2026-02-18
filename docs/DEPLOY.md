@@ -14,9 +14,12 @@
 Set these in Vercel project settings for `apps/web`:
 - `NEXT_PUBLIC_API_URL=https://<your-worker>.<subdomain>.workers.dev`
 - `SESSION_SECRET=<strong-random-secret-at-least-16-chars>`
+- `DATABASE_URL=<your-prod-db-url>` (recommended for persistent writes)
 - Optional:
   - `ASSISTANT_PROVIDER` (`mock` default)
   - `OPENAI_API_KEY` (only when `ASSISTANT_PROVIDER=openai`)
+
+If `DATABASE_URL` is omitted, web runtime falls back to writable `/tmp/internal-toolkit-runtime.db` for demo continuity. This fallback is ephemeral and not durable across cold starts/redeploys.
 
 ### Cloudflare Worker Vars
 Set in Wrangler/Cloudflare:

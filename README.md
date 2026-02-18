@@ -63,12 +63,17 @@ See `apps/web/.env.example`.
 
 Required in hosted production:
 - `SESSION_SECRET` (or `NEXTAUTH_SECRET`) with at least 16 chars
+- `DATABASE_URL` (recommended for persistent data)
 
 Common vars:
 - `NEXT_PUBLIC_API_URL`
 - `DATABASE_URL`
 - `ASSISTANT_PROVIDER` (`mock` default)
 - `OPENAI_API_KEY` (required only when provider is `openai`)
+
+Runtime fallback:
+- If `DATABASE_URL` is not set in production, web runtime automatically uses a writable sqlite copy at `/tmp/internal-toolkit-runtime.db`.
+- This fallback is for demo continuity only and is not persistent across cold starts/redeploys.
 
 ### API Worker (`apps/api`)
 See `apps/api/.dev.vars.example`.

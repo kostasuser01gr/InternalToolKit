@@ -64,6 +64,15 @@
 7. Documentation and release artifacts
 - Added/updated required docs and release notes.
 
+8. Signup production hotfix (post-release)
+- Reproduced live signup failure on Vercel (`POST /api/session/signup` -> 500).
+- Root cause from Vercel logs: sqlite connection failed on read-only packaged `./dev.db`.
+- Updated `apps/web/lib/db.ts` runtime database resolution:
+  - in production, relative sqlite file URLs are copied to writable `/tmp/internal-toolkit-runtime.db`
+  - connection then uses writable `/tmp` fallback, preserving demo functionality without paid services
+  - fail-fast error if bundled sqlite source is missing
+- Updated docs (`README`, `docs/DEPLOY.md`, `docs/TROUBLESHOOTING.md`, `apps/web/.env.example`) to document persistent `DATABASE_URL` recommendation and fallback behavior.
+
 ## Verification Evidence (Phase C)
 
 ### Clean Room Verification
