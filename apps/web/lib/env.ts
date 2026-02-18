@@ -24,6 +24,18 @@ export type ServerEnv = {
 
 let cachedEnv: ServerEnv | null = null;
 
+function isHostedProductionRuntime() {
+  if (process.env.NODE_ENV !== "production") {
+    return false;
+  }
+
+  return (
+    process.env.CI === "true" ||
+    process.env.GITHUB_ACTIONS === "true" ||
+    process.env.VERCEL === "1"
+  );
+}
+
 function configError(details: string): never {
   throw new Error(
     [
@@ -49,10 +61,11 @@ function parseEnv(): ServerEnv {
   let secret = normalized.SESSION_SECRET ?? normalized.NEXTAUTH_SECRET;
 
   if (!secret) {
-    if (process.env.NODE_ENV === "production") {
+    if (isHostedProductionRuntime()) {
       configError("SESSION_SECRET (or NEXTAUTH_SECRET) is required.");
     }
 
+    // Local fallback to keep fresh clones runnable without paid/managed secrets.
     secret = "dev-session-secret-change-before-production";
   }
 

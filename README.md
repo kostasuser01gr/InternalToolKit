@@ -65,6 +65,17 @@ pnpm i
 pnpm dev
 ```
 
+Optional local web env file (recommended):
+
+```bash
+cp apps/web/.env.example apps/web/.env.local
+```
+
+Notes:
+
+- Local development has a safe fallback session secret for quick start.
+- Hosted production (CI/Vercel/GitHub Actions) requires `SESSION_SECRET` (or `NEXTAUTH_SECRET`) to be set explicitly.
+
 Default local URLs:
 
 - Web: `http://127.0.0.1:3000`
@@ -147,6 +158,9 @@ Expected:
   - ensure project Root Directory is exactly `apps/web`
 - Missing frontend env vars:
   - set `NEXT_PUBLIC_API_URL` in Vercel and redeploy
+- Missing session secret in hosted production:
+  - set `SESSION_SECRET` (or `NEXTAUTH_SECRET`) in your deployment environment
+  - redeploy after saving env vars
 - Worker deploy failing in Actions:
   - confirm `CLOUDFLARE_API_TOKEN` exists in repo secrets
   - if required by account config, add `CLOUDFLARE_ACCOUNT_ID`
