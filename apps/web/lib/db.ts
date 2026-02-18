@@ -29,18 +29,18 @@ function resolveFileDatabasePath(fileUrl: string) {
 }
 
 function ensureWritableRuntimeDatabase(sourceFilePath: string) {
-  if (!existsSync(FALLBACK_RUNTIME_DB)) {
-    if (!existsSync(sourceFilePath)) {
-      throw new Error(
-        [
-          "Database bootstrap failed: bundled sqlite file was not found.",
-          `Expected: ${sourceFilePath}`,
-          "Fix: set DATABASE_URL to a writable production database.",
-        ].join(" "),
-      );
-    }
-    copyFileSync(sourceFilePath, FALLBACK_RUNTIME_DB);
+  if (!existsSync(sourceFilePath)) {
+    throw new Error(
+      [
+        "Database bootstrap failed: bundled sqlite file was not found.",
+        `Expected: ${sourceFilePath}`,
+        "Fix: set DATABASE_URL to a writable production database.",
+      ].join(" "),
+    );
   }
+
+  // Always refresh the /tmp copy on cold start so schema updates are picked up.
+  copyFileSync(sourceFilePath, FALLBACK_RUNTIME_DB);
 
   return `file:${FALLBACK_RUNTIME_DB}`;
 }
