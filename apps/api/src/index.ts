@@ -20,7 +20,6 @@ type RuntimeConfig = {
   appVersion: string;
   environment: "dev" | "prod";
   allowedOrigins: string[];
-  allowAnyOrigin: boolean;
   openAiApiKey: string;
 };
 
@@ -46,10 +45,9 @@ function parseAllowedOrigins(rawOrigins: string | undefined) {
     rawOrigins?.trim() || "http://127.0.0.1:3000,http://localhost:3000";
 
   if (normalized === "*") {
-    return {
-      allowAnyOrigin: true,
-      allowedOrigins: ["*"],
-    };
+    throw new Error(
+      "Invalid ALLOWED_ORIGINS: wildcard '*' is not allowed in production-grade mode.",
+    );
   }
 
   const allowedOrigins = normalized
@@ -59,7 +57,7 @@ function parseAllowedOrigins(rawOrigins: string | undefined) {
 
   if (allowedOrigins.length === 0) {
     throw new Error(
-      "Invalid ALLOWED_ORIGINS: set at least one origin (or '*'). See apps/api/.dev.vars.example.",
+      "Invalid ALLOWED_ORIGINS: set at least one origin. See apps/api/.dev.vars.example.",
     );
   }
 
@@ -76,10 +74,7 @@ function parseAllowedOrigins(rawOrigins: string | undefined) {
     }
   }
 
-  return {
-    allowAnyOrigin: false,
-    allowedOrigins,
-  };
+  return allowedOrigins;
 }
 
 function getRuntimeConfig(env: Env): RuntimeConfig {
@@ -99,8 +94,7 @@ function getRuntimeConfig(env: Env): RuntimeConfig {
   runtimeConfigCache = {
     appVersion: env.APP_VERSION?.trim() || "1.0.0",
     environment: parsedEnvironment.data,
-    allowedOrigins: parsedOrigins.allowedOrigins,
-    allowAnyOrigin: parsedOrigins.allowAnyOrigin,
+    allowedOrigins: parsedOrigins,
     openAiApiKey: env.OPENAI_API_KEY?.trim() || "",
   };
 
@@ -108,10 +102,6 @@ function getRuntimeConfig(env: Env): RuntimeConfig {
 }
 
 function resolveCorsOrigin(request: Request, config: RuntimeConfig) {
-  if (config.allowAnyOrigin) {
-    return "*";
-  }
-
   const origin = request.headers.get("Origin");
 
   if (!origin) {
@@ -124,8 +114,11 @@ function resolveCorsOrigin(request: Request, config: RuntimeConfig) {
 function corsHeaders(request: Request, config: RuntimeConfig) {
   const headers = new Headers({
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Request-Id",
+    "Access-Control-Expose-Headers": "X-Request-Id",
     "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
   });
   const allowedOrigin = resolveCorsOrigin(request, config);
 
@@ -133,21 +126,38 @@ function corsHeaders(request: Request, config: RuntimeConfig) {
     headers.set("Access-Control-Allow-Origin", allowedOrigin);
   }
 
-  if (!config.allowAnyOrigin) {
-    headers.set("Vary", "Origin");
-  }
-
   return headers;
+}
+
+function withSecurityHeaders(headers: Headers, request: Request) {
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (new URL(request.url).protocol === "https:") {
+    headers.set(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains; preload",
+    );
+  }
+}
+
+function getRequestId(request: Request) {
+  const raw = request.headers.get("x-request-id")?.trim();
+  return raw && raw.length > 0 ? raw : crypto.randomUUID();
 }
 
 function jsonResponse(
   request: Request,
   config: RuntimeConfig,
+  requestId: string,
   body: unknown,
   status = 200,
 ) {
   const headers = corsHeaders(request, config);
+  withSecurityHeaders(headers, request);
   headers.set("Content-Type", "application/json; charset=utf-8");
+  headers.set("X-Request-Id", requestId);
 
   return new Response(JSON.stringify(body), {
     status,
@@ -187,25 +197,30 @@ function createMockDraft(prompt: string, environment: "dev" | "prod") {
   return { triggerJson, actionsJson };
 }
 
-async function handleRequest(request: Request, env: Env) {
-  const config = getRuntimeConfig(env);
+async function handleRequest(request: Request, config: RuntimeConfig, requestId: string) {
   const requestOrigin = request.headers.get("Origin");
 
   if (
     requestOrigin &&
-    !config.allowAnyOrigin &&
     !config.allowedOrigins.includes(requestOrigin)
   ) {
-    return new Response(JSON.stringify({ ok: false, error: "Origin not allowed." }), {
-      status: 403,
-      headers: { "Content-Type": "application/json; charset=utf-8", Vary: "Origin" },
-    });
+    return jsonResponse(
+      request,
+      config,
+      requestId,
+      { ok: false, error: "Origin not allowed." },
+      403,
+    );
   }
 
   if (request.method === "OPTIONS") {
+    const headers = corsHeaders(request, config);
+    withSecurityHeaders(headers, request);
+    headers.set("X-Request-Id", requestId);
+
     return new Response(null, {
       status: 204,
-      headers: corsHeaders(request, config),
+      headers,
     });
   }
 
@@ -218,13 +233,19 @@ async function handleRequest(request: Request, env: Env) {
       timestamp: new Date().toISOString(),
     });
 
-    return jsonResponse(request, config, health);
+    return jsonResponse(request, config, requestId, health);
   }
 
   if (request.method === "POST" && url.pathname === "/v1/audit") {
     const payload = await parseJson(request);
     if (!payload) {
-      return jsonResponse(request, config, { ok: false, error: "Invalid JSON payload." }, 400);
+      return jsonResponse(
+        request,
+        config,
+        requestId,
+        { ok: false, error: "Invalid JSON payload." },
+        400,
+      );
     }
 
     const parsed = auditEventInputSchema.safeParse(payload);
@@ -232,6 +253,7 @@ async function handleRequest(request: Request, env: Env) {
       return jsonResponse(
         request,
         config,
+        requestId,
         {
           ok: false,
           error: parsed.error.issues[0]?.message ?? "Invalid audit payload.",
@@ -252,13 +274,19 @@ async function handleRequest(request: Request, env: Env) {
       id: stored.id,
     });
 
-    return jsonResponse(request, config, response, 201);
+    return jsonResponse(request, config, requestId, response, 201);
   }
 
   if (request.method === "POST" && url.pathname === "/v1/assistant/draft-automation") {
     const payload = await parseJson(request);
     if (!payload) {
-      return jsonResponse(request, config, { ok: false, error: "Invalid JSON payload." }, 400);
+      return jsonResponse(
+        request,
+        config,
+        requestId,
+        { ok: false, error: "Invalid JSON payload." },
+        400,
+      );
     }
 
     const parsed = assistantDraftRequestSchema.safeParse(payload);
@@ -266,6 +294,7 @@ async function handleRequest(request: Request, env: Env) {
       return jsonResponse(
         request,
         config,
+        requestId,
         {
           ok: false,
           error: parsed.error.issues[0]?.message ?? "Invalid draft request.",
@@ -282,22 +311,48 @@ async function handleRequest(request: Request, env: Env) {
       actionsJson: draft.actionsJson,
     });
 
-    return jsonResponse(request, config, response);
+    return jsonResponse(request, config, requestId, response);
   }
 
-  return jsonResponse(request, config, { ok: false, error: "Not Found" }, 404);
+  return jsonResponse(request, config, requestId, { ok: false, error: "Not Found" }, 404);
 }
 
 export default {
   async fetch(request, env) {
+    const requestId = getRequestId(request);
+    const startedAt = Date.now();
+    const pathname = new URL(request.url).pathname;
+
+    let response: Response | null = null;
     try {
-      return await handleRequest(request, env as Env);
+      const config = getRuntimeConfig(env as Env);
+      response = await handleRequest(request, config, requestId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      return new Response(JSON.stringify({ ok: false, error: message }), {
-        status: 500,
-        headers: { "Content-Type": "application/json; charset=utf-8" },
+      const headers = new Headers({
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Request-Id": requestId,
       });
+      withSecurityHeaders(headers, request);
+      response = new Response(JSON.stringify({ ok: false, error: message }), {
+        status: 500,
+        headers,
+      });
+    } finally {
+      const durationMs = Date.now() - startedAt;
+      const status = response?.status ?? 500;
+      console.info(
+        JSON.stringify({
+          event: "api.request",
+          requestId,
+          method: request.method,
+          path: pathname,
+          status,
+          durationMs,
+        }),
+      );
     }
+
+    return response ?? new Response("Unexpected runtime error", { status: 500 });
   },
 } satisfies ExportedHandler<Env>;

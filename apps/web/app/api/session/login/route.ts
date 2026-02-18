@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { appendAuditLog } from "@/lib/audit";
 import { createSessionForUser, verifyCredentials } from "@/lib/auth/session";
-import { isSameOriginRequest } from "@/lib/security";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getClientIp, isSameOriginRequest, logSecurityEvent } from "@/lib/security";
 import { getDefaultWorkspaceForUser } from "@/lib/workspace";
 
 const loginSchema = z.object({
@@ -13,6 +14,28 @@ const loginSchema = z.object({
 export async function POST(request: Request) {
   if (!isSameOriginRequest(request)) {
     return Response.json({ ok: false, message: "Cross-origin request blocked." }, { status: 403 });
+  }
+
+  const ip = getClientIp(request);
+  const loginRateLimit = checkRateLimit({
+    key: `auth.login:${ip}`,
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (!loginRateLimit.allowed) {
+    logSecurityEvent("auth.login_rate_limited", { ip });
+    return Response.json(
+      {
+        ok: false,
+        message: "Too many login attempts. Please wait and retry.",
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(loginRateLimit.retryAfterSeconds),
+        },
+      },
+    );
   }
 
   let payload: unknown;
@@ -35,7 +58,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const ip = request.headers.get("x-forwarded-for") ?? undefined;
   const result = await verifyCredentials({
     email: parsed.data.email,
     password: parsed.data.password,

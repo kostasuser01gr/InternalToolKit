@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { appendAuditLog } from "@/lib/audit";
 import { createSessionForUser, verifyCredentials } from "@/lib/auth/session";
-import { isSameOriginRequest } from "@/lib/security";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getClientIp, isSameOriginRequest, logSecurityEvent } from "@/lib/security";
 import { getDefaultWorkspaceForUser } from "@/lib/workspace";
 
 const formSchema = z.object({
@@ -45,6 +46,24 @@ export async function POST(request: Request) {
     ? (searchParams.get("callbackUrl") as string)
     : "/overview";
 
+  const ip = getClientIp(request);
+  const loginRateLimit = checkRateLimit({
+    key: `auth.login-form:${ip}`,
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (!loginRateLimit.allowed) {
+    logSecurityEvent("auth.login_form_rate_limited", { ip });
+    return Response.redirect(
+      buildLoginUrl(
+        request,
+        callbackUrl,
+        "Too many attempts. Please wait and try again.",
+      ),
+      303,
+    );
+  }
+
   const formData = await request.formData();
   const parsed = formSchema.safeParse({
     email: formData.get("email"),
@@ -62,7 +81,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const ip = request.headers.get("x-forwarded-for") ?? undefined;
   const result = await verifyCredentials({
     email: parsed.data.email,
     password: parsed.data.password,

@@ -11,18 +11,55 @@ export function logSecurityEvent(
   console.info("[security]", JSON.stringify(payload));
 }
 
-export function isSameOriginRequest(request: Request) {
-  const origin = request.headers.get("origin");
-  const host = request.headers.get("host");
+export function getClientIp(request: Request) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    const firstHop = forwardedFor
+      .split(",")
+      .map((part) => part.trim())
+      .find(Boolean);
 
-  if (!origin || !host) {
+    if (firstHop) {
+      return firstHop;
+    }
+  }
+
+  return request.headers.get("x-real-ip") ?? "unknown";
+}
+
+export function isSameOriginRequest(request: Request) {
+  const method = request.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
     return true;
   }
 
-  try {
-    const originUrl = new URL(origin);
-    return originUrl.host === host;
-  } catch {
+  const host =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+
+  if (!host) {
     return false;
   }
+
+  const candidates = [
+    request.headers.get("origin"),
+    request.headers.get("referer"),
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    try {
+      if (new URL(candidate).host === host) {
+        return true;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  if (candidates.length > 0) {
+    return false;
+  }
+
+  // Browser POSTs include Origin (or Referer). For local non-browser tooling
+  // we keep development ergonomics by allowing missing origin metadata in dev.
+  return process.env.NODE_ENV !== "production";
 }
