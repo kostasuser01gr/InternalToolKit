@@ -20,8 +20,8 @@ export default async function DashboardPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="API Connectivity"
-          value={health ? "Online" : "Offline"}
+          label="API Status"
+          value={health ? "ok" : "not ok"}
           delta={health ? "Worker reachable" : "Worker unavailable"}
           icon={ShieldCheck}
         />
@@ -48,8 +48,8 @@ export default async function DashboardPage() {
       <section className="grid gap-4 xl:grid-cols-2">
         <GlassCard className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="kpi-font text-xl font-semibold">Backend Health</h2>
-            <Badge variant={health ? "active" : "default"}>{health ? "Healthy" : "Degraded"}</Badge>
+            <h2 className="kpi-font text-xl font-semibold">API Status Widget</h2>
+            <Badge variant={health ? "active" : "default"}>{health ? "ok" : "not ok"}</Badge>
           </div>
           <dl className="space-y-3 text-sm">
             <div className="flex items-center justify-between gap-3">

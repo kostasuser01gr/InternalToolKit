@@ -46,10 +46,14 @@ function parseEnv(): ServerEnv {
   }
 
   const normalized = parsed.data;
-  const secret = normalized.SESSION_SECRET ?? normalized.NEXTAUTH_SECRET;
+  let secret = normalized.SESSION_SECRET ?? normalized.NEXTAUTH_SECRET;
 
   if (!secret) {
-    configError("SESSION_SECRET (or NEXTAUTH_SECRET) is required.");
+    if (process.env.NODE_ENV === "production") {
+      configError("SESSION_SECRET (or NEXTAUTH_SECRET) is required.");
+    }
+
+    secret = "dev-session-secret-change-before-production";
   }
 
   const provider = normalized.ASSISTANT_PROVIDER ?? "mock";

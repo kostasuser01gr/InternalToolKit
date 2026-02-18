@@ -1,28 +1,31 @@
 import {
   assistantDraftRequestSchema,
   assistantDraftResponseSchema,
+  auditCreatedResponseSchema,
   auditEventInputSchema,
   auditEventSchema,
-  demoUserSchema,
   healthResponseSchema,
   type AuditEvent,
-  type AutomationDraft,
 } from "@internal-toolkit/shared";
+import { z } from "zod";
 
 type Env = {
   APP_VERSION?: string;
-  CORS_ORIGIN?: string;
+  ENVIRONMENT?: string;
+  ALLOWED_ORIGINS?: string;
+  OPENAI_API_KEY?: string;
 };
 
 type RuntimeConfig = {
   appVersion: string;
+  environment: "dev" | "prod";
   allowedOrigins: string[];
   allowAnyOrigin: boolean;
+  openAiApiKey: string;
 };
 
 type AuditRepository = {
   append: (event: AuditEvent) => AuditEvent;
-  list: () => AuditEvent[];
 };
 
 class InMemoryAuditRepository implements AuditRepository {
@@ -32,47 +35,43 @@ class InMemoryAuditRepository implements AuditRepository {
     this.#events.push(event);
     return event;
   }
-
-  list() {
-    return [...this.#events];
-  }
 }
 
+const environmentSchema = z.enum(["dev", "prod"]);
 const auditRepository = new InMemoryAuditRepository();
-
 let runtimeConfigCache: RuntimeConfig | null = null;
 
 function parseAllowedOrigins(rawOrigins: string | undefined) {
-  const configured = rawOrigins?.trim();
+  const normalized =
+    rawOrigins?.trim() || "http://127.0.0.1:3000,http://localhost:3000";
 
-  if (!configured || configured === "*") {
+  if (normalized === "*") {
     return {
       allowAnyOrigin: true,
       allowedOrigins: ["*"],
     };
   }
 
-  const allowedOrigins = configured
+  const allowedOrigins = normalized
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
 
   if (allowedOrigins.length === 0) {
     throw new Error(
-      "Invalid CORS_ORIGIN: at least one origin is required. See apps/api/.dev.vars.example.",
+      "Invalid ALLOWED_ORIGINS: set at least one origin (or '*'). See apps/api/.dev.vars.example.",
     );
   }
 
   for (const origin of allowedOrigins) {
     try {
       const parsed = new URL(origin);
-
       if (!["http:", "https:"].includes(parsed.protocol)) {
         throw new Error("Only http/https origins are supported.");
       }
     } catch (error) {
       throw new Error(
-        `Invalid CORS_ORIGIN entry "${origin}": ${error instanceof Error ? error.message : "malformed URL"}`,
+        `Invalid ALLOWED_ORIGINS entry "${origin}": ${error instanceof Error ? error.message : "malformed URL"}`,
       );
     }
   }
@@ -88,49 +87,57 @@ function getRuntimeConfig(env: Env): RuntimeConfig {
     return runtimeConfigCache;
   }
 
-  const appVersion = env.APP_VERSION?.trim() || "1.0.0";
-
-  if (!appVersion) {
-    throw new Error(
-      "Invalid APP_VERSION: value must be a non-empty string. See apps/api/.dev.vars.example.",
-    );
+  const parsedEnvironment = environmentSchema.safeParse(
+    env.ENVIRONMENT?.trim() || "dev",
+  );
+  if (!parsedEnvironment.success) {
+    throw new Error('Invalid ENVIRONMENT: expected "dev" or "prod".');
   }
 
-  const parsedOrigins = parseAllowedOrigins(env.CORS_ORIGIN);
+  const parsedOrigins = parseAllowedOrigins(env.ALLOWED_ORIGINS);
 
   runtimeConfigCache = {
-    appVersion,
+    appVersion: env.APP_VERSION?.trim() || "1.0.0",
+    environment: parsedEnvironment.data,
     allowedOrigins: parsedOrigins.allowedOrigins,
     allowAnyOrigin: parsedOrigins.allowAnyOrigin,
+    openAiApiKey: env.OPENAI_API_KEY?.trim() || "",
   };
 
   return runtimeConfigCache;
 }
 
-function getAllowedOrigin(request: Request, config: RuntimeConfig) {
-  const origin = request.headers.get("Origin");
-
+function resolveCorsOrigin(request: Request, config: RuntimeConfig) {
   if (config.allowAnyOrigin) {
     return "*";
   }
 
+  const origin = request.headers.get("Origin");
+
   if (!origin) {
-    return config.allowedOrigins[0] ?? "*";
+    return null;
   }
 
-  return config.allowedOrigins.includes(origin)
-    ? origin
-    : (config.allowedOrigins[0] ?? "*");
+  return config.allowedOrigins.includes(origin) ? origin : null;
 }
 
 function corsHeaders(request: Request, config: RuntimeConfig) {
-  return {
-    "Access-Control-Allow-Origin": getAllowedOrigin(request, config),
+  const headers = new Headers({
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
-  };
+  });
+  const allowedOrigin = resolveCorsOrigin(request, config);
+
+  if (allowedOrigin) {
+    headers.set("Access-Control-Allow-Origin", allowedOrigin);
+  }
+
+  if (!config.allowAnyOrigin) {
+    headers.set("Vary", "Origin");
+  }
+
+  return headers;
 }
 
 function jsonResponse(
@@ -138,15 +145,13 @@ function jsonResponse(
   config: RuntimeConfig,
   body: unknown,
   status = 200,
-  extraHeaders: HeadersInit = {},
 ) {
+  const headers = corsHeaders(request, config);
+  headers.set("Content-Type", "application/json; charset=utf-8");
+
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      ...corsHeaders(request, config),
-      ...extraHeaders,
-    },
+    headers,
   });
 }
 
@@ -158,41 +163,44 @@ async function parseJson(request: Request) {
   }
 }
 
-function createDraftFromPrompt(prompt: string): AutomationDraft {
-  const normalized = prompt.toLowerCase();
-  const scheduleDaily = normalized.includes("daily") || normalized.includes("every day");
-  const updateRecord = normalized.includes("update") || normalized.includes("status");
+function createMockDraft(prompt: string, environment: "dev" | "prod") {
+  const normalizedPrompt = prompt.toLowerCase();
+  const isDaily = normalizedPrompt.includes("daily") || normalizedPrompt.includes("every day");
 
-  return {
-    name: "Draft from Assistant",
-    trigger: {
-      type: scheduleDaily ? "schedule.cron" : "record.created",
-      config: scheduleDaily
-        ? { cron: "0 9 * * *", timezone: "UTC" }
-        : { tableId: "demo-table" },
+  const triggerJson = isDaily
+    ? { type: "schedule.cron", cron: "0 9 * * *", timezone: "UTC" }
+    : { type: "record.created", tableId: "demo-table" };
+
+  const actionsJson = [
+    {
+      type: "create_notification",
+      title: "Automation draft generated",
+      body: prompt,
     },
-    actions: [
-      {
-        type: "create_notification",
-        config: {
-          title: "Automation draft generated",
-          body: prompt,
-        },
-      },
-      {
-        type: updateRecord ? "update_record" : "write_audit_log",
-        config: updateRecord
-          ? { tableId: "demo-table", field: "status", value: "processed" }
-          : { action: "assistant.draft.generated" },
-      },
-    ],
-    rationale:
-      "This draft maps plain-English intent into a trigger/action structure and is safe to edit before activation.",
-  };
+    {
+      type: "write_audit_log",
+      action: "assistant.draft.generated",
+      environment,
+    },
+  ];
+
+  return { triggerJson, actionsJson };
 }
 
 async function handleRequest(request: Request, env: Env) {
   const config = getRuntimeConfig(env);
+  const requestOrigin = request.headers.get("Origin");
+
+  if (
+    requestOrigin &&
+    !config.allowAnyOrigin &&
+    !config.allowedOrigins.includes(requestOrigin)
+  ) {
+    return new Response(JSON.stringify({ ok: false, error: "Origin not allowed." }), {
+      status: 403,
+      headers: { "Content-Type": "application/json; charset=utf-8", Vary: "Origin" },
+    });
+  }
 
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -213,30 +221,13 @@ async function handleRequest(request: Request, env: Env) {
     return jsonResponse(request, config, health);
   }
 
-  if (request.method === "GET" && url.pathname === "/v1/me") {
-    const role = request.headers.get("Authorization")?.toLowerCase().includes("admin")
-      ? "ADMIN"
-      : "EDITOR";
-
-    const user = demoUserSchema.parse({
-      id: "demo-user-1",
-      email: "demo@internaltoolkit.local",
-      name: "Demo Operator",
-      role,
-    });
-
-    return jsonResponse(request, config, { ok: true, user });
-  }
-
   if (request.method === "POST" && url.pathname === "/v1/audit") {
     const payload = await parseJson(request);
-
     if (!payload) {
       return jsonResponse(request, config, { ok: false, error: "Invalid JSON payload." }, 400);
     }
 
     const parsed = auditEventInputSchema.safeParse(payload);
-
     if (!parsed.success) {
       return jsonResponse(
         request,
@@ -255,24 +246,22 @@ async function handleRequest(request: Request, env: Env) {
       createdAt: new Date().toISOString(),
     });
 
-    auditRepository.append(event);
-
-    return jsonResponse(request, config, {
+    const stored = auditRepository.append(event);
+    const response = auditCreatedResponseSchema.parse({
       ok: true,
-      event,
-      total: auditRepository.list().length,
+      id: stored.id,
     });
+
+    return jsonResponse(request, config, response, 201);
   }
 
   if (request.method === "POST" && url.pathname === "/v1/assistant/draft-automation") {
     const payload = await parseJson(request);
-
     if (!payload) {
       return jsonResponse(request, config, { ok: false, error: "Invalid JSON payload." }, 400);
     }
 
     const parsed = assistantDraftRequestSchema.safeParse(payload);
-
     if (!parsed.success) {
       return jsonResponse(
         request,
@@ -285,9 +274,12 @@ async function handleRequest(request: Request, env: Env) {
       );
     }
 
+    // Mock adapter by default; OPENAI_API_KEY is reserved for a future provider implementation.
+    const draft = createMockDraft(parsed.data.prompt, config.environment);
     const response = assistantDraftResponseSchema.parse({
       ok: true,
-      draft: createDraftFromPrompt(parsed.data.prompt),
+      triggerJson: draft.triggerJson,
+      actionsJson: draft.actionsJson,
     });
 
     return jsonResponse(request, config, response);
@@ -304,9 +296,7 @@ export default {
       const message = error instanceof Error ? error.message : "Unknown error";
       return new Response(JSON.stringify({ ok: false, error: message }), {
         status: 500,
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-        },
+        headers: { "Content-Type": "application/json; charset=utf-8" },
       });
     }
   },

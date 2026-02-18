@@ -2,10 +2,6 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - develop
-      - "codex/**"
   pull_request:
 
 jobs:
@@ -31,6 +27,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Enable Corepack
         run: corepack enable
@@ -39,7 +37,7 @@ jobs:
         run: corepack prepare pnpm@10.17.1 --activate
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
         run: pnpm lint

@@ -1,122 +1,68 @@
 # InternalToolKit
 
-Premium, cross-device internal tool template as a pnpm monorepo.
+Monorepo for an internal dashboard frontend (Next.js on Vercel) and API backend (Cloudflare Workers via Wrangler/GitHub Actions).
 
-## Monorepo
+## Monorepo Structure
 
 ```text
 /
   apps/
-    web/                 # Next.js App Router frontend
-    api/                 # Cloudflare Worker API
+    web/   (Next.js App Router + TS + Tailwind + shadcn/ui + Radix + lucide-react + framer-motion)
+    api/   (Cloudflare Worker + TS + Wrangler)
   packages/
-    shared/              # shared zod schemas/types/constants
-  docs/
-    architecture.md
-    tokens.md
-    scorecard.md
+    shared/ (types + zod schemas)
+  .github/workflows/
+    ci.yml
+    deploy-worker.yml
+  README.md
+  pnpm-workspace.yaml
+  package.json
 ```
 
-## Tech Stack
+## Root Scripts
 
-### Frontend (`apps/web`)
+- `pnpm dev` -> runs `apps/api` + `apps/web` in parallel
+- `pnpm build`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test:e2e`
 
-- Next.js App Router + TypeScript strict
-- Tailwind CSS + shadcn-style + Radix primitives
-- lucide-react icons
-- framer-motion micro-interactions (reduced-motion aware)
-- Recharts placeholders
-- Prisma + SQLite (template local data layer)
-
-### Backend (`apps/api`)
-
-- Cloudflare Worker (TypeScript, ES modules)
-- Native fetch router + proper CORS
-- Shared request/response contracts from `@internal-toolkit/shared`
-
-### Shared (`packages/shared`)
-
-- zod schemas and types used by web + api
-
-## Features Included
-
-- Premium dark glass UI with neon purple active states
-- Universal app shell:
-  - Mobile: sticky header + bottom nav (5 items, center create action)
-  - Tablet: icon side-rail
-  - Desktop: sidebar + topbar
-- Command palette (`Cmd/Ctrl+K`) + keyboard shortcuts
-- Data module with table/field/record flows and CSV export
-- Admin gate and role-safe actions
-- PWA baseline (`manifest`, icons, safe-area handling, viewport-fit cover)
-
-## API Routes (`apps/api`)
+## API Surface (`apps/api`)
 
 - `GET /health` -> `{ ok: true, version, timestamp }`
-- `GET /v1/me` -> demo authenticated user
-- `POST /v1/audit` -> append audit event (in-memory repository)
-- `POST /v1/assistant/draft-automation` -> accepts `{ text }` (or `{ prompt }` for compatibility) and returns a draft automation JSON
+- `POST /v1/audit` -> validates payload and returns `{ ok: true, id }`
+- `POST /v1/assistant/draft-automation` -> accepts `{ prompt }`, returns `{ ok: true, triggerJson, actionsJson }` (mock provider by default)
 
-## Environment Files
+Worker env vars:
 
-- Web example: `apps/web/.env.example`
-- API example: `apps/api/.dev.vars.example`
+- `ENVIRONMENT` (`dev|prod`)
+- `ALLOWED_ORIGINS` (comma-separated; for Vercel/web origins)
+- `APP_VERSION` (optional override)
+- `OPENAI_API_KEY` (optional, reserved for adapter extension)
 
-Never commit real secrets. `.gitignore` covers `.env*` and `.dev.vars*` while allowing `*.example`.
+Local dev vars file:
 
-Runtime validation:
+- `apps/api/.dev.vars` (ignored by git)
+- template: `apps/api/.dev.vars.example`
 
-- Web fails fast on startup when required env vars are invalid (`SESSION_SECRET`/`NEXTAUTH_SECRET`).
-- API validates `CORS_ORIGIN` shape and returns a clear runtime error if malformed.
+## Web/API Wiring (`apps/web`)
 
-## Setup
+- Browser-safe API base URL uses `NEXT_PUBLIC_API_URL`
+- API client lives at `apps/web/lib/api/client.ts`
+- Dashboard includes an `API Status` widget that calls `/health` and renders `ok` / `not ok`
+
+## Local Development
 
 1. Install dependencies:
 
 ```bash
-pnpm install
+pnpm i
 ```
 
-2. Configure web env:
+2. Start both apps:
 
 ```bash
-cp apps/web/.env.example apps/web/.env.local
-```
-
-3. (Optional) Configure Worker local vars:
-
-```bash
-cp apps/api/.dev.vars.example apps/api/.dev.vars
-```
-
-4. Prepare local web DB:
-
-```bash
-pnpm --filter @internal-toolkit/web prisma:generate
-pnpm --filter @internal-toolkit/web db:reset
-```
-
-5. Demo login credentials (dev only):
-
-- Admin:
-  - email: `admin@internal.local`
-  - password: `Admin123!`
-- Viewer:
-  - email: `viewer@internal.local`
-  - password: `Viewer123!`
-
-## Development
-
-Run web:
-
-```bash
-pnpm dev:web
-```
-
-Run API worker:
-
-```bash
-pnpm dev:api
+pnpm dev
 ```
 
 Default local URLs:
@@ -124,117 +70,84 @@ Default local URLs:
 - Web: `http://127.0.0.1:3000`
 - API: `http://127.0.0.1:8787`
 
-If using Playwright smoke tests, web test server runs on `http://127.0.0.1:4173`.
-
-## Quality Gates
-
-```bash
-pnpm install
-pnpm lint
-pnpm typecheck
-pnpm test:e2e
-pnpm build
-```
-
-Playwright smoke coverage:
-
-- Mobile: shell + bottom nav + no overflow
-- Desktop: sidebar/topbar + navigation
-- Data flow: create table -> add field -> add record -> export CSV
-- Admin gate: viewer blocked, admin allowed
-
-`pnpm test:e2e` automatically resets and seeds the local SQLite database before running tests.
-
-## Deployment
-
-## 1) Cloudflare Workers (Backend)
+## Cloudflare SOP (Backend)
 
 From repo root:
+
+```bash
+npx wrangler login
+npx wrangler dev
+npx wrangler deploy
+npx wrangler secret put <KEY>
+```
+
+Or run package scripts:
 
 ```bash
 pnpm --filter @internal-toolkit/api dev
 pnpm --filter @internal-toolkit/api deploy
 ```
 
-Or directly in `apps/api`:
+## GitHub Actions SOP
+
+### CI (`.github/workflows/ci.yml`)
+
+- Triggers on `push` and `pull_request`
+- Runs:
+  - `pnpm install`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - Playwright smoke tests for web (`pnpm test:e2e`)
+  - `pnpm build`
+- Uses pnpm cache via `actions/setup-node`
+
+### Worker Deploy (`.github/workflows/deploy-worker.yml`)
+
+- Triggers on:
+  - `push` to `main` (with API/shared path filters)
+  - `workflow_dispatch` (manual deploy)
+- Uses `cloudflare/wrangler-action@v3`
+- Deploy command runs in `apps/api` (`workingDirectory: apps/api`)
+
+Required repo secrets:
+
+- `CLOUDFLARE_API_TOKEN` (required)
+- `CLOUDFLARE_ACCOUNT_ID` (optional; only if your setup/action path needs explicit account)
+
+## Vercel SOP (Frontend)
+
+1. Import this GitHub repository in Vercel.
+2. Set **Root Directory** to `apps/web`.
+3. Add env var:
+   - `NEXT_PUBLIC_API_URL=https://<your-worker>.<subdomain>.workers.dev`
+4. Push to GitHub to trigger automatic deployments.
+
+Important:
+
+- Vercel env var updates are applied only to new deployments.
+
+## Git Remote and Push Sanity Checks
 
 ```bash
-npx wrangler dev
-npx wrangler deploy
+git remote -v
+git status
 ```
 
-Set secrets:
+Expected:
 
-```bash
-npx wrangler secret put <KEY>
-```
-
-Recommended variables:
-
-- `APP_VERSION`
-- `CORS_ORIGIN` (your frontend domain)
-
-After deploy, note worker URL (for example `https://internaltoolkit-api.<subdomain>.workers.dev`).
-
-## 2) Vercel (Frontend)
-
-1. Import this GitHub repo in Vercel.
-2. Set **Root Directory** to: `apps/web`
-3. Set environment variable:
-   - `NEXT_PUBLIC_API_URL=<your-worker-url>`
-4. Deploy.
-
-Vercel will deploy automatically on push by default.
-
-## CI/CD
-
-- CI workflow: `.github/workflows/ci.yml`
-  - install, lint, typecheck, prisma reset, playwright smoke, build
-- Worker deploy workflow: `.github/workflows/deploy-worker.yml`
-  - deploys on push to `main`
-  - requires secrets:
-    - `CLOUDFLARE_API_TOKEN`
-    - `CLOUDFLARE_ACCOUNT_ID`
-  - if secrets are missing, workflow exits successfully with a clear "skipped" message
-
-## Extension Guide
-
-### Add a new web page
-
-1. Create `apps/web/app/(app)/<page>/page.tsx`
-2. Register item in `apps/web/lib/constants/navigation.ts`
-3. Add RBAC checks if needed in server actions/routes
-
-### Add a new API route
-
-1. Add handler in `apps/api/src/index.ts`
-2. Define/extend zod schema in `packages/shared/src/index.ts`
-3. Parse/validate input in worker and return typed envelope
-
-### Add a new design token
-
-1. Add token in `apps/web/styles/tokens.css`
-2. Consume token in components/pages
-3. Update `docs/tokens.md` contract if the token is part of public design system
-
-### Add a new card/component type
-
-1. Add component in `apps/web/components/kit`
-2. Export from `apps/web/components/kit/index.ts`
-3. Add state coverage on `/components` showroom
-
-## Notes
-
-- No real auth provider is required for the template baseline; web includes a secure cookie session gate and RBAC patterns ready for extension.
-- Worker audit storage is in-memory by design for v1; code is structured around a repository interface so KV/D1 can replace it cleanly.
+- `origin` should be `https://github.com/kostasuser01gr/InternalToolKit.git`
+- working tree should be clean before/after pushing
 
 ## Troubleshooting
 
-- `Invalid environment configuration` on web startup:
-  - `cp apps/web/.env.example apps/web/.env.local`
-  - set `SESSION_SECRET` to at least 16 characters.
-- CI badge red:
-  - open `.github/workflows/ci.yml` run details in GitHub Actions to see failing step.
-  - re-run locally with: `pnpm install && pnpm lint && pnpm typecheck && pnpm test:e2e && pnpm build`.
-- Worker CORS error:
-  - verify `CORS_ORIGIN` in `apps/api/.dev.vars` is a comma-separated list of valid `http(s)` origins.
+- CORS errors from web to Worker:
+  - confirm `ALLOWED_ORIGINS` includes your Vercel domain and local origins
+  - update secret/vars and redeploy Worker
+- Wrong Vercel root directory:
+  - ensure project Root Directory is exactly `apps/web`
+- Missing frontend env vars:
+  - set `NEXT_PUBLIC_API_URL` in Vercel and redeploy
+- Worker deploy failing in Actions:
+  - confirm `CLOUDFLARE_API_TOKEN` exists in repo secrets
+  - if required by account config, add `CLOUDFLARE_ACCOUNT_ID`
+  - review workflow logs in GitHub Actions for Wrangler errors

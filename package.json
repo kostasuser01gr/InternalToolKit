@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.17.1",
   "scripts": {
-    "dev": "pnpm --filter @internal-toolkit/web dev",
+    "dev": "pnpm --parallel --filter @internal-toolkit/api --filter @internal-toolkit/web dev",
     "dev:web": "pnpm --filter @internal-toolkit/web dev",
     "dev:api": "pnpm --filter @internal-toolkit/api dev",
     "build": "pnpm --filter @internal-toolkit/shared build && pnpm --filter @internal-toolkit/api build && pnpm --filter @internal-toolkit/web build",
