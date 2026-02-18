@@ -7,7 +7,14 @@ import { useUiPreferences } from "@/components/layout/ui-preferences-provider";
 import { logClientActivity } from "@/lib/activity/client";
 
 function UiPreferencesPanel() {
-  const { density, setDensity, reduceMotion, setReduceMotion } = useUiPreferences();
+  const {
+    density,
+    setDensity,
+    quantumTheme,
+    setQuantumTheme,
+    reduceMotion,
+    setReduceMotion,
+  } = useUiPreferences();
   const { toast } = useToast();
 
   return (
@@ -34,6 +41,36 @@ function UiPreferencesPanel() {
               entityId: "density",
               meta: {
                 density: nextDensity,
+              },
+            });
+          }}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-[var(--text)]">Quantum theme</p>
+        <SegmentedControl
+          value={quantumTheme}
+          ariaLabel="Quantum theme preference"
+          options={[
+            { label: "Violet", value: "violet" },
+            { label: "Cyan", value: "cyan" },
+            { label: "Amber", value: "amber" },
+          ]}
+          onValueChange={async (value) => {
+            const nextTheme =
+              value === "cyan" || value === "amber" ? value : "violet";
+            setQuantumTheme(nextTheme);
+            toast({
+              title: `Quantum theme set to ${nextTheme}.`,
+              tone: "info",
+            });
+            await logClientActivity({
+              action: "ui.quantum_theme_changed",
+              entityType: "ui_preference",
+              entityId: "quantum_theme",
+              meta: {
+                quantumTheme: nextTheme,
               },
             });
           }}

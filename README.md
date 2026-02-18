@@ -13,6 +13,7 @@ Core implemented modules:
 - Fleet management (vehicles + status/km/fuel + event logging)
 - Washer operations (task queue + optional voice notes)
 - Shared calendar timeline (shifts/requests/fleet/washer events)
+- Quantum theme switching (violet/cyan/amber) + dark/light mode toggle
 
 ## Monorepo Layout
 
