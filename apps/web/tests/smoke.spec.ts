@@ -99,13 +99,19 @@ test("responsive shell renders and navigation works without overflow", async ({
   }
 
   if (isMobile) {
-    await page.getByRole("link", { name: "Analytics" }).click();
+    await page
+      .getByTestId("bottom-nav")
+      .getByRole("link", { name: "Analytics" })
+      .click();
     await expect(page).toHaveURL(/\/analytics/);
     await expect(page.getByTestId("analytics-page")).toBeVisible();
   }
 
   if (isTablet) {
-    await page.getByRole("link", { name: "Data" }).click();
+    await page
+      .getByTestId("side-rail")
+      .getByRole("link", { name: "Data" })
+      .click();
     await expect(page).toHaveURL(/\/data/);
     await expect(page.getByTestId("data-page")).toBeVisible();
   }
