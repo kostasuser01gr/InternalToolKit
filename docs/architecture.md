@@ -26,7 +26,7 @@
   - `/settings`
   - `/admin`
 
-`(app)` routes are protected by `apps/web/middleware.ts` and server-side session checks in `apps/web/lib/auth/*`.
+`(app)` routes are protected by `apps/web/proxy.ts` and server-side session checks in `apps/web/lib/auth/*`.
 
 ## UI Architecture
 
@@ -88,9 +88,9 @@ This keeps infrastructure swappable without UI refactors.
 ## Security Layers
 
 - session cookie flags: HttpOnly, SameSite, Secure (prod/flag)
-- middleware route protection for app pages
+- proxy route protection for app pages
 - server-side RBAC checks for admin/workspace actions
-- CSP and security headers from `apps/web/next.config.ts`
+- CSP and security headers from `apps/web/proxy.ts`
 - audit logging for meaningful user/system actions
 
 ## Error and Offline Strategy

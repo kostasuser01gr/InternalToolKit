@@ -68,11 +68,15 @@
 
 ### Clean Room Verification
 1. Clean artifacts removed (`node_modules`, `.next`, `.wrangler`) -> PASS
-2. `pnpm -w install --frozen-lockfile` -> PASS
-3. `pnpm -w lint` -> PASS
-4. `pnpm -w typecheck` -> PASS
-5. `pnpm -w test` -> PASS (unit + e2e)
-6. `pnpm -w build` -> PASS
+2. `pnpm install --frozen-lockfile` -> PASS
+3. `pnpm lint` -> PASS
+4. `pnpm typecheck` -> PASS
+5. `pnpm test` -> PASS (unit + e2e)
+6. `pnpm build` -> PASS
+
+Note:
+- `pnpm -w install` only installs the workspace root importer in this setup.
+- Full workspace hydration for a fresh clone is `pnpm install` from repository root.
 
 ### Runtime Checks
 - API dev (`pnpm -C apps/api dev`) -> `/health` returns 200 + security headers + `X-Request-Id`.
@@ -85,6 +89,8 @@
 - Latest CI run for release commit `62c00a2` -> PASS:
   - `CI` run `22141293627`: `completed success`
   - `Deploy Worker` run `22141293610`: `completed success`
+- Latest CI run on current `main` head also PASS:
+  - `CI` run `22141418051`: `completed success`
 
 ## Final Acceptance Checklist (DONE ✅)
 - [x] Fresh clone install path works
