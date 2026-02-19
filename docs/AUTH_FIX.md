@@ -1,65 +1,48 @@
 # AuthFix Report
 
 ## Symptom
-Users could create an account successfully, but login could fail afterward in hosted runtime.
+- Production returned `500` on auth pages/routes.
+- Users could sign up in some runs, then fail to log in afterward.
 
 ## Reproduction
-
-### 1) Local dev auth flow (control case)
-- Command: `pnpm -w install`
-- Command: `pnpm -C apps/web dev` (Turbopack in this environment hit a workspace-root resolution issue, so auth repro used webpack dev mode)
-- Command: `pnpm -C apps/web exec next dev --webpack --hostname 127.0.0.1 --port 4173`
-- Signup and login requests (`/api/session/signup-form`, `/api/session/login-form`) returned `303`, and server logs reported:
-  - `auth.signup_success`
-  - `auth.login_success` (pin + password)
-
-### 2) Production-mode cold-start repro (failure case)
-- Command: `pnpm -C apps/web build`
-- Command: `SESSION_SECRET=... DATABASE_URL='file:./prisma/runtime.sqlite' pnpm -C apps/web start --hostname 127.0.0.1 --port 4173`
-- Signup/login before restart:
-  - `POST /api/session/signup` -> `200 {"ok":true,...}`
-  - `POST /api/session/login` (pin) -> `200 {"ok":true,...}`
-  - `POST /api/session/login` (password) -> `200 {"ok":true,...}`
-- DB check before restart:
-  - `apps/web/prisma/runtime.sqlite` user count for new email: `0`
-  - `/tmp/internal-toolkit-runtime.db` user count for new email: `1`
-- Restarted server with same env and retried login:
-  - `POST /api/session/login` (pin) -> `401 {"ok":false,"message":"Invalid credentials."}`
-  - `POST /api/session/login` (password) -> `401 {"ok":false,"message":"Invalid credentials."}`
+1. Vercel runtime logs showed:
+   - `Invalid environment configuration. DATABASE_URL must not use a local sqlite file in hosted production.`
+2. Production env had `DATABASE_URL="file:./prisma/runtime.sqlite"`.
+3. Local control flow (`signup -> login`) succeeded when both requests hit the same process, confirming auth logic itself was functional.
 
 ## Root Cause
-`apps/web/lib/db.ts` copied file-based production databases to `/tmp/internal-toolkit-runtime.db`.  
-In hosted/serverless cold starts, this causes auth writes from one process instance not to be visible in another cold-started instance.
-
-This created the observed sequence:
-1. Signup writes user/session to ephemeral `/tmp` DB.
-2. Cold start copies bundled sqlite again (without that user).
-3. Login lookup cannot find the user and returns invalid credentials.
+- Hosted runtime was configured to a file-based sqlite URL (`file:...`), which is non-durable/invalid for this deployment model.
+- This produced production 500s and non-deterministic auth persistence behavior.
 
 ## Fix Summary
+- Migrated web datasource to **Postgres** (Supabase-compatible) in Prisma schema/config.
+- Removed sqlite/libsql runtime adapter usage from app DB client and seed path.
+- Replaced sqlite migration/reset fallbacks with Prisma Postgres migration/reset scripts.
+- Enforced hosted env requirements for:
+  - `DATABASE_URL`
+  - `DIRECT_URL`
+  - `SESSION_SECRET`
+- Kept auth UX/flows unchanged (`loginName + 4-digit PIN` + compatibility email/password).
+- Added/kept regression coverage for signup/login and PIN leading-zero behavior.
 
-### Code changes
+## Files Changed (Auth/DB-critical)
+- `apps/web/prisma/schema.prisma`
+- `apps/web/prisma.config.ts`
 - `apps/web/lib/db.ts`
-  - Removed production sqlite copy-to-`/tmp` bootstrap logic.
-  - Prisma now uses `DATABASE_URL` directly from validated env.
 - `apps/web/lib/env.ts`
-  - Added fail-fast validation for hosted production:
-    - reject `DATABASE_URL` values starting with `file:`.
-    - keep existing requirement that `DATABASE_URL` must be present.
-- `apps/web/.env.example`
-  - Updated guidance: hosted production must use a persistent, non-file database URL.
-
-### Regression coverage
+- `apps/web/prisma/seed.ts`
+- `apps/web/scripts/migrate-deploy.mjs`
+- `apps/web/scripts/reset-db.mjs`
 - `apps/web/tests/unit/auth-signin.test.ts`
-  - Added focused auth test for:
-    - normalized user lookup (`email`, `loginName`)
-    - bcrypt hash comparison path in login.
 - `apps/web/tests/smoke.spec.ts`
-  - Extended signup/login smoke flow to verify protected session persistence on protected routes after each login path.
 
-## Vercel Environment Variables (required)
-- `SESSION_SECRET` (>=16 chars)
-- `DATABASE_URL` (persistent non-file URL; do not use `file:...`)
-- Optional:
-  - `NEXTAUTH_SECRET` (alternative secret source)
-  - `NEXT_PUBLIC_API_URL`
+## Vercel Env Vars (required)
+Set for **Preview + Production**:
+- `DATABASE_URL` = Supabase pooled URI (runtime)
+- `DIRECT_URL` = Supabase direct URI (migrations)
+- `SESSION_SECRET` = strong random secret (>=16 chars)
+
+After setting vars, redeploy:
+```bash
+vercel --prod --yes
+```

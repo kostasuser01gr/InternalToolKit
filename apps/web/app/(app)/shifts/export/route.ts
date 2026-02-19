@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { AuthError, requireWorkspacePermission } from "@/lib/rbac";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function escapeCsv(value: string) {
   if (value.includes(",") || value.includes("\n") || value.includes('"')) {
     return `"${value.replaceAll('"', '""')}"`;

@@ -6,6 +6,9 @@ import { db } from "@/lib/db";
 import { parseDataQueryContract } from "@/lib/query-contract";
 import { hasRole } from "@/lib/workspace";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(request: Request) {
   const session = await requireSession();
 

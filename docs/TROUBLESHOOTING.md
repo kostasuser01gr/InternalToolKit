@@ -12,12 +12,12 @@ This repository intentionally uses pnpm's default script restrictions.
 - Local build can use safe fallback secret for fresh-clone developer experience.
 
 ### Signup fails with `Unable to create account right now`
-- Check runtime logs for sqlite open errors (for example `Unable to open connection to local database ./dev.db`).
-- If logs show schema drift (for example `The column loginName does not exist`), apply migrations and redeploy:
+- Check runtime logs for Postgres connectivity or auth errors (for example `P1001` / `P1017`).
+- If logs show schema drift, apply migrations and redeploy:
   - local: `pnpm --filter @internal-toolkit/web db:migrate:deploy`
   - CI/prod: run `pnpm --filter @internal-toolkit/web db:migrate:deploy` before startup
-- Set `DATABASE_URL` in Vercel for persistent writes.
-- Hosted runtime requires a non-file `DATABASE_URL`; `file:...` values are rejected at boot.
+- Set both `DATABASE_URL` (pooler) and `DIRECT_URL` (direct) in Vercel.
+- Hosted runtime rejects `file:...` sqlite URLs.
 
 ### Playwright fails by running unit test files
 - Playwright is scoped to `*.spec.ts` in `apps/web/playwright.config.ts`.

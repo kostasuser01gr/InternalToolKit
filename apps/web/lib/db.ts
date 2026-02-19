@@ -1,18 +1,13 @@
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
-
 import { getServerEnv } from "@/lib/env";
 
 declare global {
   var prisma: PrismaClient | undefined;
 }
 
-const DEFAULT_DATABASE_URL = "file:./dev.db";
-const configuredDatabaseUrl = getServerEnv().DATABASE_URL || DEFAULT_DATABASE_URL;
-
-const adapter = new PrismaLibSql({
-  url: configuredDatabaseUrl,
-});
+const { DATABASE_URL } = getServerEnv();
+const adapter = new PrismaPg({ connectionString: DATABASE_URL });
 
 export const db = global.prisma ?? new PrismaClient({ adapter });
 

@@ -8,8 +8,23 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: internal_toolkit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d internal_toolkit"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      DATABASE_URL: file:./dev.db
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public
       SESSION_SECRET: ci-session-secret-please-change
       SESSION_COOKIE_SECURE: "0"
       NEXT_PUBLIC_API_URL: http://127.0.0.1:8787

@@ -14,11 +14,16 @@
 Set these in Vercel project settings for `apps/web`:
 - `NEXT_PUBLIC_API_URL=https://<your-worker>.<subdomain>.workers.dev`
 - `SESSION_SECRET=<strong-random-secret-at-least-16-chars>`
-- `DATABASE_URL=<your-prod-db-url>` (required for hosted runtime; must be persistent and non-file)
+- `DATABASE_URL=<supabase-pooled-uri>` (required; Preview + Production)
+- `DIRECT_URL=<supabase-direct-uri>` (required; Preview + Production)
 - Optional:
   - `ASSISTANT_PROVIDER` (`mock` default)
   - `OPENAI_API_KEY` (only when `ASSISTANT_PROVIDER=openai`)
   - `NEXT_PUBLIC_FEATURE_VOICE_INPUT` (`0` default; set `1` to enable Web Speech UI helpers)
+
+Supabase URI guidance:
+- `DATABASE_URL`: pooler URI (typically port `6543`) for runtime queries.
+- `DIRECT_URL`: direct URI (typically port `5432`) for Prisma migrations.
 
 ### Cloudflare Worker Vars
 Set in Wrangler/Cloudflare:
@@ -37,6 +42,10 @@ Set in Wrangler/Cloudflare:
 pnpm --filter @internal-toolkit/web db:migrate:deploy
 ```
 5. Trigger deploy from `main` push or manual redeploy.
+6. If env vars changed, force a fresh deployment:
+```bash
+vercel --prod --yes
+```
 
 ## Deploy Worker (Cloudflare)
 From repository root:

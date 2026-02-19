@@ -86,7 +86,8 @@ Database scripts (`apps/web`):
 
 Web (`apps/web`), see `apps/web/.env.example`:
 - `SESSION_SECRET` (required in hosted env, >=16 chars)
-- `DATABASE_URL` (required in hosted env; use a writable production database URL)
+- `DATABASE_URL` (required in hosted env; Supabase pooler URI recommended)
+- `DIRECT_URL` (required in hosted env; Supabase direct URI for migrations)
 - `NEXT_PUBLIC_API_URL`
 - `ASSISTANT_PROVIDER` (`mock` default)
 - `OPENAI_API_KEY` (required only when `ASSISTANT_PROVIDER=openai`)
@@ -99,15 +100,15 @@ API worker (`apps/api`), see `apps/api/.dev.vars.example`:
 - `OPENAI_API_KEY` (optional)
 - `ALLOW_LEGACY_MUTATIONS` (`0` default, keep off)
 
-Runtime fallback:
-- Local/non-hosted runtime falls back to `file:./dev.db` when `DATABASE_URL` is not set.
-- Hosted runtime fails fast when `SESSION_SECRET` or `DATABASE_URL` is missing/blank to prevent opaque runtime 500s.
-- Hosted runtime also rejects `DATABASE_URL=file:...`; use a persistent production database URL.
+Runtime validation:
+- Hosted runtime fails fast when `SESSION_SECRET`, `DATABASE_URL`, or `DIRECT_URL` is missing/blank.
+- Hosted runtime rejects `DATABASE_URL=file:...`; production must use persistent Postgres.
+- Local development defaults to `postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public`.
 
 ## Runtime 500 Remediation (2026-02-19)
 - Symptom: production `POST /api/session/login` returned 500.
-- Root cause: hosted env had missing/invalid auth/db runtime variables (missing `SESSION_SECRET`, placeholder/invalid `DATABASE_URL`).
-- Fix: added hosted fail-fast env validation, switched DB bootstrap to validated env source, and blocked file-based sqlite URLs in hosted production.
+- Root cause: hosted env had missing/invalid auth/db runtime variables (`SESSION_SECRET`, `DATABASE_URL`, `DIRECT_URL`) and file-based sqlite URL.
+- Fix: moved runtime to Postgres path, added hosted fail-fast env validation for required vars, and blocked file-based sqlite URLs in hosted production.
 
 ## Auth and Security Baseline
 
@@ -153,6 +154,9 @@ SOP:
 4. Deploy with: `pnpm --filter @internal-toolkit/web db:migrate:deploy`.
 5. Verify with: `pnpm --filter @internal-toolkit/web db:migrate:status`.
 
+Local-only shortcut (never in CI/prod):
+- `pnpm --filter @internal-toolkit/web db:push:dev`
+
 Rollback/restore note:
 1. Take DB backup/snapshot before deploy.
 2. If rollback is required, redeploy previous app revision.
@@ -168,8 +172,10 @@ Rollback/restore note:
 4. Set env vars at minimum:
    - `SESSION_SECRET=<strong-random-secret>`
    - `NEXT_PUBLIC_API_URL=https://<worker-name>.<subdomain>.workers.dev`
-   - `DATABASE_URL=<persistent-db-url>` (recommended)
+   - `DATABASE_URL=<supabase-pooled-uri>`
+   - `DIRECT_URL=<supabase-direct-uri>`
 5. Connect Vercel to `main` branch for auto deploys.
+6. Redeploy after any env var update.
 
 ### API (Cloudflare Workers via GitHub Actions)
 1. Configure `apps/api/wrangler.toml` environments (`dev`, `staging`, `production`) as needed.
@@ -214,225 +220,21 @@ CI workflow: `.github/workflows/ci.yml`
 
 ## Proof Pack
 
-Run date: `2026-02-19`
+Run these from repo root:
 
-Command:
 ```bash
-pnpm install --frozen-lockfile
-```
-Output:
-```text
-Scope: all 4 workspace projects
-Lockfile is up to date, resolution step is skipped
-Already up to date
-
-╭ Warning ─────────────────────────────────────────────────────────────────────╮
-│                                                                              │
-│   Ignored build scripts: @prisma/engines, better-sqlite3, esbuild, prisma,   │
-│   sharp, unrs-resolver, workerd.                                             │
-│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
-│   to run scripts.                                                            │
-│                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-Done in 432ms using pnpm v10.17.1
-
-   ╭──────────────────────────────────────────╮
-   │                                          │
-   │   Update available! 10.17.1 → 10.30.0.   │
-   │   Changelog: https://pnpm.io/v/10.30.0   │
-   │     To update, run: pnpm add -g pnpm     │
-   │                                          │
-   ╰──────────────────────────────────────────╯
+pnpm -w install
+pnpm -w lint
+pnpm -w typecheck
+pnpm -w test
+pnpm -C apps/web build
 ```
 
-Command:
-```bash
-pnpm lint
-```
-Output:
-```text
-> internal-toolkit@1.0.0 lint /Users/user/projects/InternalToolKit
-> pnpm --filter @internal-toolkit/shared lint && pnpm --filter @internal-toolkit/api lint && pnpm --filter @internal-toolkit/web lint
-
-
-> @internal-toolkit/shared@1.0.0 lint /Users/user/projects/InternalToolKit/packages/shared
-> eslint src --max-warnings=0
-
-
-> @internal-toolkit/api@1.0.0 lint /Users/user/projects/InternalToolKit/apps/api
-> eslint src --max-warnings=0
-
-
-> @internal-toolkit/web@1.0.0 lint /Users/user/projects/InternalToolKit/apps/web
-> eslint . --max-warnings=0
-```
-
-Command:
-```bash
-pnpm typecheck
-```
-Output:
-```text
-> internal-toolkit@1.0.0 typecheck /Users/user/projects/InternalToolKit
-> pnpm --filter @internal-toolkit/shared typecheck && pnpm --filter @internal-toolkit/api typecheck && pnpm --filter @internal-toolkit/web typecheck
-
-
-> @internal-toolkit/shared@1.0.0 typecheck /Users/user/projects/InternalToolKit/packages/shared
-> tsc --noEmit
-
-
-> @internal-toolkit/api@1.0.0 typecheck /Users/user/projects/InternalToolKit/apps/api
-> tsc --noEmit
-
-
-> @internal-toolkit/web@1.0.0 typecheck /Users/user/projects/InternalToolKit/apps/web
-> prisma generate && tsc --noEmit
-
-Loaded Prisma config from prisma.config.ts.
-
-Prisma schema loaded from prisma/schema.prisma.
-
-✔ Generated Prisma Client (v7.4.0) to ./../../node_modules/.pnpm/@prisma+client@7.4.0_prisma@7.4.0_@types+react@19.2.14_better-sqlite3@12.6.2_react-dom@_d37e6b0a2bd4a8b1868fc2d62e7c9b5d/node_modules/@prisma/client in 137ms
-
-Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
-```
-
-Command:
-```bash
-pnpm test:unit
-```
-Output:
-```text
-> internal-toolkit@1.0.0 test:unit /Users/user/projects/InternalToolKit
-> pnpm --filter @internal-toolkit/web test:unit
-
-
-> @internal-toolkit/web@1.0.0 test:unit /Users/user/projects/InternalToolKit/apps/web
-> vitest run
-
-
- RUN  v3.2.4 /Users/user/projects/InternalToolKit/apps/web
-
- ✓ tests/unit/rate-limit.test.ts (2 tests) 1ms
- ✓ tests/unit/security.test.ts (3 tests) 2ms
- ✓ tests/unit/shared-schemas.test.ts (3 tests) 4ms
- ✓ tests/unit/rbac-matrix.test.ts (4 tests) 1ms
-
- Test Files  4 passed (4)
-      Tests  12 passed (12)
-   Start at  15:07:31
-   Duration  647ms (transform 107ms, setup 0ms, collect 405ms, tests 8ms, environment 0ms, prepare 213ms)
-```
-
-Command:
-```bash
-NODE_OPTIONS=--no-warnings pnpm test:e2e
-```
-Output:
-```text
-> internal-toolkit@1.0.0 test:e2e /Users/user/projects/InternalToolKit
-> pnpm --filter @internal-toolkit/web test:e2e
-
-
-> @internal-toolkit/web@1.0.0 pretest:e2e /Users/user/projects/InternalToolKit/apps/web
-> playwright install chromium
-
-
-> @internal-toolkit/web@1.0.0 test:e2e /Users/user/projects/InternalToolKit/apps/web
-> pnpm db:reset && playwright test
-
-
-> @internal-toolkit/web@1.0.0 db:reset /Users/user/projects/InternalToolKit/apps/web
-> node scripts/reset-db.mjs
-
-
-> @internal-toolkit/web@1.0.0 db:migrate:deploy /Users/user/projects/InternalToolKit/apps/web
-> node scripts/migrate-deploy.mjs
-
-Loaded Prisma config from prisma.config.ts.
-
-Prisma schema loaded from prisma/schema.prisma.
-Datasource "db": SQLite database "dev.db" at "file:./dev.db"
-
-Error: Schema engine error:
-
-prisma migrate deploy failed, applying checked-in SQL migrations with sqlite3 fallback for fresh local DB.
-Loaded Prisma config from prisma.config.ts.
-
-Running seed command `tsx prisma/seed.ts` ...
-Seed complete {
-  admin: 'admin@internal.local',
-  viewer: 'viewer@internal.local',
-  employee: 'employee@internal.local',
-  washer: 'washer@internal.local',
-  workspaceId: 'seed-workspace'
-}
-
-🌱  The seed command has been executed.
-
-Running 33 tests using 5 workers
-
-  18 skipped
-  15 passed (32.1s)
-```
-
-Command:
-```bash
-pnpm build
-```
-Output:
-```text
-> internal-toolkit@1.0.0 build /Users/user/projects/InternalToolKit
-> pnpm --filter @internal-toolkit/shared build && pnpm --filter @internal-toolkit/api build && pnpm --filter @internal-toolkit/web build
-
-
-> @internal-toolkit/shared@1.0.0 build /Users/user/projects/InternalToolKit/packages/shared
-> tsc -p tsconfig.json
-
-
-> @internal-toolkit/api@1.0.0 build /Users/user/projects/InternalToolKit/apps/api
-> wrangler deploy --dry-run --outdir dist --env production
-
-
- ⛅️ wrangler 4.66.0
-───────────────────
-Total Upload: 536.79 KiB / gzip: 79.86 KiB
-Your Worker has access to the following bindings:
-Binding                                                                 Resource
-env.APP_VERSION ("1.0.0")                                               Environment Variable
-env.ENVIRONMENT ("prod")                                                Environment Variable
-env.ALLOWED_ORIGINS ("https://app.internaltoolkit.example")             Environment Variable
-env.ALLOW_LEGACY_MUTATIONS ("0")                                        Environment Variable
-
---dry-run: exiting now.
-
-> @internal-toolkit/web@1.0.0 build /Users/user/projects/InternalToolKit/apps/web
-> prisma generate && next build
-
-Loaded Prisma config from prisma.config.ts.
-
-Prisma schema loaded from prisma/schema.prisma.
-
-✔ Generated Prisma Client (v7.4.0) to ./../../node_modules/.pnpm/@prisma+client@7.4.0_prisma@7.4.0_@types+react@19.2.14_better-sqlite3@12.6.2_react-dom@_d37e6b0a2bd4a8b1868fc2d62e7c9b5d/node_modules/@prisma/client in 134ms
-
-Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
-
-
-▲ Next.js 16.1.6 (Turbopack)
-- Environments: .env.local, .env
-
-  Creating an optimized production build ...
-✓ Compiled successfully in 2.4s
-  Running TypeScript ...
-  Collecting page data using 9 workers ...
-  Generating static pages using 9 workers (0/40) ...
-  Generating static pages using 9 workers (10/40)
-  Generating static pages using 9 workers (20/40)
-  Generating static pages using 9 workers (30/40)
-✓ Generating static pages using 9 workers (40/40) in 142.6ms
-  Finalizing page optimization ...
-```
+Expected outcomes:
+- install succeeds with no manual edits beyond env vars.
+- lint/typecheck pass.
+- unit + e2e tests pass.
+- Next.js build completes successfully.
 
 ## Documentation Index
 

@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### fix
+- Migrated web runtime DB path from sqlite/libsql to Postgres (Supabase-compatible) and removed file-based sqlite production dependency.
+- Added hosted env enforcement for `DATABASE_URL`, `DIRECT_URL`, and `SESSION_SECRET`, with explicit Supabase/Vercel remediation guidance.
+- Replaced sqlite migration/reset fallbacks with Postgres-safe Prisma workflows (`migrate deploy`, `migrate reset`) and updated CI to run against Postgres service.
 - Incident (auth/runtime): fixed hosted `signup -> login` failures and login 500s caused by file-based sqlite fallback divergence across serverless cold starts.
 - Root cause: production runtime could write auth state to ephemeral sqlite while subsequent requests read a different cold-started copy.
 - Fix: removed production `/tmp` sqlite bootstrap, enforced hosted fail-fast env validation (`DATABASE_URL` required and `file:` rejected), and documented durable DB requirements for Vercel/Cloudflare.

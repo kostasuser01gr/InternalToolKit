@@ -19,8 +19,9 @@ Adopt migration-first discipline with checked-in Prisma migrations.
 
 ## Operational Notes
 - `apps/web/scripts/migrate-deploy.mjs` runs `prisma migrate deploy`.
-- For fresh local SQLite only, if Prisma schema engine fails, a guarded fallback applies checked-in SQL migrations via `sqlite3`.
-- This fallback is local-dev continuity only; production must use normal `migrate deploy`.
+- Runtime datasource is Postgres (Supabase-compatible).
+- `DATABASE_URL` (pooler) and `DIRECT_URL` (direct) are required in hosted environments.
+- `prisma db push` is kept for local-only developer workflows (`db:push:dev`) and must not run in CI/prod.
 
 ## Minimal Migration SOP
 1. Create schema change in `apps/web/prisma/schema.prisma`.

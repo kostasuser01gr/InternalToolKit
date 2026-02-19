@@ -1,13 +1,16 @@
 import { z } from "zod";
 
 const DEFAULT_API_URL = "http://127.0.0.1:8787";
-const DEFAULT_DATABASE_URL = "file:./dev.db";
+const DEFAULT_DATABASE_URL =
+  "postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public";
 
 const envSchema = z.object({
   SESSION_SECRET: z.string().trim().min(16).optional(),
   NEXTAUTH_SECRET: z.string().trim().min(16).optional(),
   NEXT_PUBLIC_API_URL: z.string().trim().url().optional(),
   DATABASE_URL: z.string().trim().min(1).optional(),
+  DIRECT_URL: z.string().trim().min(1).optional(),
+  ALLOW_SQLITE_DEV: z.enum(["0", "1"]).optional(),
   APP_VERSION: z.string().trim().min(1).optional(),
   ASSISTANT_PROVIDER: z.enum(["mock", "openai"]).optional(),
   OPENAI_API_KEY: z.string().trim().optional(),
@@ -17,6 +20,7 @@ export type ServerEnv = {
   SESSION_SECRET: string;
   NEXT_PUBLIC_API_URL: string;
   DATABASE_URL: string;
+  DIRECT_URL: string;
   APP_VERSION: string;
   ASSISTANT_PROVIDER: "mock" | "openai";
   OPENAI_API_KEY: string;
@@ -52,7 +56,8 @@ function configError(details: string): never {
       "Invalid environment configuration.",
       details,
       "Fix: copy apps/web/.env.example to apps/web/.env.local and set values.",
-      "Minimum required in hosted production: SESSION_SECRET (>=16 chars) and DATABASE_URL.",
+      "Vercel required vars: DATABASE_URL, DIRECT_URL, SESSION_SECRET.",
+      "Supabase: use pooled URI for DATABASE_URL and direct URI for DIRECT_URL.",
     ].join("\n"),
   );
 }
@@ -80,7 +85,9 @@ function parseEnv(): ServerEnv {
     secret = "dev-session-secret-change-before-production";
   }
 
+  const allowSqliteDev = normalized.ALLOW_SQLITE_DEV === "1";
   const databaseUrl = normalized.DATABASE_URL;
+  const directUrl = normalized.DIRECT_URL;
 
   if (hostedProduction && !databaseUrl) {
     configError("DATABASE_URL is required and must point to a writable production database.");
@@ -90,6 +97,16 @@ function parseEnv(): ServerEnv {
     configError(
       "DATABASE_URL must not use a local sqlite file in hosted production. Use a persistent database URL.",
     );
+  }
+
+  if (!hostedProduction && databaseUrl?.startsWith("file:") && !allowSqliteDev) {
+    configError(
+      "File-based sqlite URL detected. Set ALLOW_SQLITE_DEV=1 only for local debugging, or switch DATABASE_URL to Postgres.",
+    );
+  }
+
+  if (hostedProduction && !directUrl) {
+    configError("DIRECT_URL is required for safe migrations in hosted production.");
   }
 
   const provider = normalized.ASSISTANT_PROVIDER ?? "mock";
@@ -103,6 +120,7 @@ function parseEnv(): ServerEnv {
     SESSION_SECRET: secret,
     NEXT_PUBLIC_API_URL: normalized.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL,
     DATABASE_URL: databaseUrl ?? DEFAULT_DATABASE_URL,
+    DIRECT_URL: directUrl ?? databaseUrl ?? DEFAULT_DATABASE_URL,
     APP_VERSION: normalized.APP_VERSION ?? "1.0.0",
     ASSISTANT_PROVIDER: provider,
     OPENAI_API_KEY: apiKey,

@@ -1,5 +1,5 @@
 import { hashSync } from "bcryptjs";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaPg } from "@prisma/adapter-pg";
 import {
   AutomationRunStatus,
   ChatRole,
@@ -18,11 +18,16 @@ import {
 
 import { buildRecordSearchText, getRecordOpenIndicator } from "../lib/data-record";
 
-const adapter = new PrismaLibSql({
-  url: process.env.DATABASE_URL ?? "file:./dev.db",
+const DEFAULT_DATABASE_URL =
+  "postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public";
+
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL?.trim() || DEFAULT_DATABASE_URL,
 });
 
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient({
+  adapter,
+});
 
 const ADMIN_EMAIL = "admin@internal.local";
 const VIEWER_EMAIL = "viewer@internal.local";
