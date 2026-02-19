@@ -17,6 +17,11 @@ async function loginWithPassword(page: Page, email: string, password: string) {
   await expect(page).toHaveURL(/\/(overview|home)$/);
 }
 
+async function assertProtectedSessionPersists(page: Page) {
+  await page.reload();
+  await expect(page).toHaveURL(/\/(overview|home)$/);
+}
+
 function createSessionToken(userId: string, secret: string) {
   const issuedAt = Math.floor(Date.now() / 1000);
   const expiresAt = issuedAt + 60 * 60;
@@ -128,6 +133,7 @@ test("signup creates an account and can sign in", async ({ page }, testInfo) => 
 
   await signup(page, "Signup Tester", loginName, email, pin, password);
   await expect(page.getByTestId("home-page")).toBeVisible();
+  await assertProtectedSessionPersists(page);
 
   await page.request.post("/api/session/logout", {
     headers: {
@@ -137,6 +143,7 @@ test("signup creates an account and can sign in", async ({ page }, testInfo) => 
 
   await login(page, loginName, pin);
   await expect(page.getByTestId("home-page")).toBeVisible();
+  await assertProtectedSessionPersists(page);
 
   await page.request.post("/api/session/logout", {
     headers: {
@@ -146,6 +153,7 @@ test("signup creates an account and can sign in", async ({ page }, testInfo) => 
 
   await loginWithPassword(page, email, password);
   await expect(page.getByTestId("home-page")).toBeVisible();
+  await assertProtectedSessionPersists(page);
 });
 
 test("responsive shell renders and navigation works without overflow", async ({

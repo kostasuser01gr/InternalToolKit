@@ -86,6 +86,12 @@ function parseEnv(): ServerEnv {
     configError("DATABASE_URL is required and must point to a writable production database.");
   }
 
+  if (hostedProduction && databaseUrl?.startsWith("file:")) {
+    configError(
+      "DATABASE_URL must not use a local sqlite file in hosted production. Use a persistent database URL.",
+    );
+  }
+
   const provider = normalized.ASSISTANT_PROVIDER ?? "mock";
   const apiKey = normalized.OPENAI_API_KEY ?? "";
 
