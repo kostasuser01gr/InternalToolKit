@@ -87,7 +87,7 @@ Database scripts (`apps/web`):
 Web (`apps/web`), see `apps/web/.env.example`:
 - `SESSION_SECRET` (required in hosted env, >=16 chars)
 - `DATABASE_URL` (required in hosted env; Supabase pooler URI recommended)
-- `DIRECT_URL` (required in hosted env; Supabase direct URI for migrations)
+- `DIRECT_URL` (required for migration workflows; Supabase direct URI)
 - `NEXT_PUBLIC_API_URL`
 - `ASSISTANT_PROVIDER` (`mock` default)
 - `OPENAI_API_KEY` (required only when `ASSISTANT_PROVIDER=openai`)
@@ -101,14 +101,14 @@ API worker (`apps/api`), see `apps/api/.dev.vars.example`:
 - `ALLOW_LEGACY_MUTATIONS` (`0` default, keep off)
 
 Runtime validation:
-- Hosted runtime fails fast when `SESSION_SECRET`, `DATABASE_URL`, or `DIRECT_URL` is missing/blank.
+- Hosted runtime fails fast when `SESSION_SECRET` or `DATABASE_URL` is missing/blank.
 - Hosted runtime rejects `DATABASE_URL=file:...`; production must use persistent Postgres.
 - Local development defaults to `postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public`.
 
 ## Runtime 500 Remediation (2026-02-19)
 - Symptom: production `POST /api/session/login` returned 500.
-- Root cause: hosted env had missing/invalid auth/db runtime variables (`SESSION_SECRET`, `DATABASE_URL`, `DIRECT_URL`) and file-based sqlite URL.
-- Fix: moved runtime to Postgres path, added hosted fail-fast env validation for required vars, and blocked file-based sqlite URLs in hosted production.
+- Root cause: hosted env had invalid runtime DB config (sqlite/file URL), and runtime env validation had been too strict for non-runtime migration variables.
+- Fix: moved runtime to Postgres path, scoped hosted fail-fast validation to runtime-required vars, and blocked file-based sqlite URLs in hosted production.
 
 ## Auth and Security Baseline
 

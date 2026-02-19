@@ -56,7 +56,7 @@ function configError(details: string): never {
       "Invalid environment configuration.",
       details,
       "Fix: copy apps/web/.env.example to apps/web/.env.local and set values.",
-      "Vercel required vars: DATABASE_URL, DIRECT_URL, SESSION_SECRET.",
+      "Vercel required vars: DATABASE_URL, SESSION_SECRET (DIRECT_URL is required for migrations).",
       "Supabase: use pooled URI for DATABASE_URL and direct URI for DIRECT_URL.",
     ].join("\n"),
   );
@@ -103,10 +103,6 @@ function parseEnv(): ServerEnv {
     configError(
       "File-based sqlite URL detected. Set ALLOW_SQLITE_DEV=1 only for local debugging, or switch DATABASE_URL to Postgres.",
     );
-  }
-
-  if (hostedProduction && !directUrl) {
-    configError("DIRECT_URL is required for safe migrations in hosted production.");
   }
 
   const provider = normalized.ASSISTANT_PROVIDER ?? "mock";
