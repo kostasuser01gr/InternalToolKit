@@ -75,4 +75,47 @@ describe("cookieAuthAdapter.signInWithCredentials", () => {
       expect(result.user.id).toBe("user-2");
     }
   });
+
+  it("preserves leading-zero pin values", async () => {
+    const pin = "0123";
+    findUniqueMock.mockResolvedValue({
+      id: "user-3",
+      email: "zero@example.com",
+      name: "Zero Pin",
+      roleGlobal: "USER",
+      passwordHash: hashSync("AnotherPassword123!", 12),
+      pinHash: hashSync(pin, 12),
+    });
+
+    const result = await cookieAuthAdapter.signInWithCredentials({
+      loginName: "zero.user",
+      pin,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.user.id).toBe("user-3");
+    }
+  });
+
+  it("rejects wrong pin credentials", async () => {
+    findUniqueMock.mockResolvedValue({
+      id: "user-4",
+      email: "wrong@example.com",
+      name: "Wrong Pin",
+      roleGlobal: "USER",
+      passwordHash: hashSync("AnotherPassword123!", 12),
+      pinHash: hashSync("0123", 12),
+    });
+
+    const result = await cookieAuthAdapter.signInWithCredentials({
+      loginName: "wrong.user",
+      pin: "9999",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Invalid credentials.",
+    });
+  });
 });

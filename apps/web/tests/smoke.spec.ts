@@ -128,7 +128,7 @@ test("signup creates an account and can sign in", async ({ page }, testInfo) => 
   const nonce = Date.now();
   const loginName = `signup${nonce}`;
   const email = `signup.${nonce}@internal.local`;
-  const pin = "5612";
+  const pin = "0123";
   const password = "Signup123!";
 
   await signup(page, "Signup Tester", loginName, email, pin, password);
@@ -140,6 +140,13 @@ test("signup creates an account and can sign in", async ({ page }, testInfo) => 
       Origin: "http://127.0.0.1:4173",
     },
   });
+
+  await page.goto("/login");
+  await page.getByLabel("Login name").fill(loginName);
+  await page.getByLabel("PIN").fill("9999");
+  await page.getByRole("button", { name: /^Continue$/ }).click();
+  await expect(page).toHaveURL(/\/login\?/);
+  await expect(page.getByText("Invalid credentials.")).toBeVisible();
 
   await login(page, loginName, pin);
   await expect(page.getByTestId("home-page")).toBeVisible();

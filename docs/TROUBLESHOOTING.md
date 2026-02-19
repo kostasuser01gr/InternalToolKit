@@ -17,7 +17,7 @@ This repository intentionally uses pnpm's default script restrictions.
   - local: `pnpm --filter @internal-toolkit/web db:migrate:deploy`
   - CI/prod: run `pnpm --filter @internal-toolkit/web db:migrate:deploy` before startup
 - Set `DATABASE_URL` in Vercel for persistent writes.
-- Without `DATABASE_URL`, the app uses `/tmp/internal-toolkit-runtime.db` fallback (ephemeral demo storage).
+- Hosted runtime requires a non-file `DATABASE_URL`; `file:...` values are rejected at boot.
 
 ### Playwright fails by running unit test files
 - Playwright is scoped to `*.spec.ts` in `apps/web/playwright.config.ts`.

@@ -1,9 +1,14 @@
+import path from "node:path";
+
 import type { NextConfig } from "next";
+
+const repoRoot = path.resolve(process.cwd(), "../..");
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@internal-toolkit/shared"],
-  outputFileTracingIncludes: {
-    "/*": ["./prisma/runtime.sqlite"],
+  outputFileTracingRoot: repoRoot,
+  turbopack: {
+    root: repoRoot,
   },
 };
 

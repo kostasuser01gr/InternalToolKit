@@ -3,9 +3,13 @@
 ## Unreleased
 
 ### fix
+- Incident (auth/runtime): fixed hosted `signup -> login` failures and login 500s caused by file-based sqlite fallback divergence across serverless cold starts.
+- Root cause: production runtime could write auth state to ephemeral sqlite while subsequent requests read a different cold-started copy.
+- Fix: removed production `/tmp` sqlite bootstrap, enforced hosted fail-fast env validation (`DATABASE_URL` required and `file:` rejected), and documented durable DB requirements for Vercel/Cloudflare.
+- Prevention: added auth regression tests for normalized lookup, wrong PIN rejection, leading-zero PIN support, and signup/login session persistence smoke flow.
 - Unblocked Vercel `next build` when runtime session secret is injected after build phase.
 - Fixed stale-cookie redirect loop (`/login` <-> `/overview`) by validating session cookie signature/expiry in `proxy` and clearing invalid cookies.
-- Fixed signup/runtime schema drift by enforcing checked-in Prisma migrations (`prisma migrate deploy`) and refreshing the production sqlite `/tmp` fallback copy on cold start.
+- Fixed signup/runtime schema drift by enforcing checked-in Prisma migrations (`prisma migrate deploy`) and removing ephemeral production sqlite fallback behavior.
 - Hardened API CORS to strict allowlist mode (wildcard rejected).
 - Added API security headers and request-id correlation.
 - Added auth endpoint abuse controls (in-memory login rate limiting).
