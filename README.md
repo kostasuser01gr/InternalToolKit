@@ -104,6 +104,11 @@ Runtime fallback:
 - Hosted runtime fails fast when `SESSION_SECRET` or `DATABASE_URL` is missing/blank to prevent opaque runtime 500s.
 - Vercel zero-infra fallback: set `DATABASE_URL=file:./prisma/runtime.sqlite` (bundled schema snapshot copied to `/tmp`; ephemeral, non-durable).
 
+## Runtime 500 Remediation (2026-02-19)
+- Symptom: production `POST /api/session/login` returned 500.
+- Root cause: hosted env had missing/invalid auth/db runtime variables (missing `SESSION_SECRET`, placeholder/invalid `DATABASE_URL`).
+- Fix: added hosted fail-fast env validation, switched DB bootstrap to validated env source, and bundled sqlite runtime snapshot fallback for Vercel.
+
 ## Auth and Security Baseline
 
 - Invite onboarding uses one-time token flow with expiry and audit events.
