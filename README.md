@@ -183,6 +183,24 @@ Rollback/restore note:
 pnpm --filter @internal-toolkit/api deploy
 ```
 
+## OpenAI MCP Registration (Cloudflare Tunnel, Free)
+
+Recommended free method for public HTTPS exposure: Cloudflare Tunnel.
+
+- Use `ops/cloudflare/setup.md` for full setup (quick mode + named tunnel mode).
+- Example tunnel config template: `ops/cloudflare/config.example.yml`.
+- OpenAI MCP domain verification does **not** work with `localhost` URLs.
+- Verification requires a public HTTPS URL and the verification file must return **plain text only** (no HTML wrapper).
+
+Verification commands:
+```bash
+curl https://app.example.com/.well-known/mcp-verification.txt
+curl https://app.example.com/health
+```
+
+OpenAI form copy/paste pack:
+- `ops/openai-form-pack.md`
+
 ## CI Gates
 
 CI workflow: `.github/workflows/ci.yml`
