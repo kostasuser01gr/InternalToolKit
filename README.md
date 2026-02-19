@@ -117,6 +117,7 @@ See `apps/api/.dev.vars.example`.
 - Unit tests: `pnpm test:unit`
 - E2E smoke tests: `pnpm test:e2e`
 - Full test gate: `pnpm test`
+  - On first run in a fresh environment, `pnpm test:e2e` auto-installs Playwright Chromium.
 
 Playwright smoke suite covers auth gate, responsive shell, nav flows, command palette, data workflow, and admin access behavior.
 Desktop smoke coverage also includes signup + login, chat flow, shift planner flow, and fleet create/update flow.
