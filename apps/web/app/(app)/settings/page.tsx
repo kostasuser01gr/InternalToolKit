@@ -17,12 +17,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getAppContext } from "@/lib/app-context";
+import { listActiveSessionsForUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
-import { updatePreferencesAction, updateProfileAction } from "./actions";
+import {
+  revokeAllSessionsAction,
+  revokeCurrentSessionAction,
+  revokeSessionAction,
+  updatePreferencesAction,
+  updateProfileAction,
+} from "./actions";
 
 type SettingsPageProps = {
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    success?: string;
+    requestId?: string;
+    errorId?: string;
+  }>;
 };
 
 export default async function SettingsPage({
@@ -34,6 +46,7 @@ export default async function SettingsPage({
   const profile = await db.user.findUniqueOrThrow({
     where: { id: user.id },
   });
+  const activeSessions = await listActiveSessionsForUser(user.id);
 
   return (
     <div className="space-y-6" data-testid="settings-page">
@@ -42,7 +55,12 @@ export default async function SettingsPage({
         subtitle="Profile, theme, density, motion accessibility, notification preferences, and build details."
       />
 
-      <StatusBanner error={params.error} success={params.success} />
+      <StatusBanner
+        error={params.error}
+        success={params.success}
+        requestId={params.requestId}
+        errorId={params.errorId}
+      />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <GlassCard className="space-y-4">
@@ -134,6 +152,61 @@ export default async function SettingsPage({
           </div>
         </dl>
         <SignOutButton />
+      </GlassCard>
+
+      <GlassCard className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="kpi-font text-xl font-semibold">Active Sessions</h2>
+          <div className="flex items-center gap-2">
+            <form action={revokeAllSessionsAction}>
+              <input type="hidden" name="userId" value={profile.id} />
+              <PrimaryButton type="submit">Revoke all others</PrimaryButton>
+            </form>
+            <form action={revokeCurrentSessionAction}>
+              <input type="hidden" name="userId" value={profile.id} />
+              <PrimaryButton type="submit">Revoke current</PrimaryButton>
+            </form>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {activeSessions.map((session) => (
+            <article
+              key={session.id}
+              className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3 text-sm"
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="font-medium text-[var(--text)]">
+                  {session.userAgent ?? "Unknown user agent"}
+                </p>
+                <span className="text-xs text-[var(--text-muted)]">
+                  {session.isCurrent ? "Current session" : "Active"}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-muted)]">
+                Device: {session.deviceId ?? "n/a"}
+              </p>
+              <p className="text-xs text-[var(--text-muted)]">
+                IP: {session.ipAddress ?? "n/a"}
+              </p>
+              <p className="text-xs text-[var(--text-muted)]">
+                Last seen: {session.lastSeenAt.toISOString()}
+              </p>
+              <p className="text-xs text-[var(--text-muted)]">
+                Expires: {session.expiresAt.toISOString()}
+              </p>
+              {!session.isCurrent ? (
+                <form action={revokeSessionAction} className="mt-2">
+                  <input type="hidden" name="userId" value={profile.id} />
+                  <input type="hidden" name="sessionId" value={session.id} />
+                  <PrimaryButton type="submit">Revoke session</PrimaryButton>
+                </form>
+              ) : null}
+            </article>
+          ))}
+          {activeSessions.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No active sessions.</p>
+          ) : null}
+        </div>
       </GlassCard>
     </div>
   );

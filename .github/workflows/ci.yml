@@ -38,6 +38,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Apply database migrations
+        run: pnpm --filter @internal-toolkit/web db:migrate:deploy
+
       - name: Lint
         run: pnpm lint
 

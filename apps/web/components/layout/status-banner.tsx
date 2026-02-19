@@ -5,9 +5,11 @@ import { cn } from "@/lib/utils";
 type StatusBannerProps = {
   error: string | undefined;
   success: string | undefined;
+  requestId?: string | undefined;
+  errorId?: string | undefined;
 };
 
-function StatusBanner({ error, success }: StatusBannerProps) {
+function StatusBanner({ error, success, requestId, errorId }: StatusBannerProps) {
   if (!error && !success) {
     return null;
   }
@@ -30,7 +32,16 @@ function StatusBanner({ error, success }: StatusBannerProps) {
       ) : (
         <CheckCircle2 className="size-4" />
       )}
-      <span>{isError ? error : success}</span>
+      <div className="space-y-0.5">
+        <span>{isError ? error : success}</span>
+        {isError && (requestId || errorId) ? (
+          <p className="text-xs opacity-80">
+            {errorId ? `Error ID: ${errorId}` : null}
+            {errorId && requestId ? " · " : null}
+            {requestId ? `Request ID: ${requestId}` : null}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

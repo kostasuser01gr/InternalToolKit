@@ -13,7 +13,9 @@ This repository intentionally uses pnpm's default script restrictions.
 
 ### Signup fails with `Unable to create account right now`
 - Check runtime logs for sqlite open errors (for example `Unable to open connection to local database ./dev.db`).
-- If logs show schema drift (for example `The column loginName does not exist`), redeploy latest build; web build now runs `prisma db push` to align schema before `next build`.
+- If logs show schema drift (for example `The column loginName does not exist`), apply migrations and redeploy:
+  - local: `pnpm --filter @internal-toolkit/web db:migrate:deploy`
+  - CI/prod: run `pnpm --filter @internal-toolkit/web db:migrate:deploy` before startup
 - Set `DATABASE_URL` in Vercel for persistent writes.
 - Without `DATABASE_URL`, the app uses `/tmp/internal-toolkit-runtime.db` fallback (ephemeral demo storage).
 
@@ -41,9 +43,9 @@ This repository intentionally uses pnpm's default script restrictions.
 - If your browser still loops, clear site cookies once and refresh.
 
 ### Login blocked with rate limit message
-- Wait for the limiter window to reset (default 60s).
-- In local development, restart server to clear in-memory limiter state.
-- Automated browser tests can hit this limit if running many concurrent auth attempts from one IP; keep default suite settings.
+- Wait for lockout cooldown to expire (lockout duration depends on IP/account/device dimension policy).
+- Auth throttle state is persisted in DB (`AuthThrottle`), not memory; local reset option: `pnpm --filter @internal-toolkit/web db:reset`.
+- Automated browser tests can still hit account/device lockouts if a single identity is retried repeatedly.
 
 ### Cannot sign in with old email/password form usage
 - Primary UI login is `loginName + 4-digit PIN`.

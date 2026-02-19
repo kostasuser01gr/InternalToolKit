@@ -27,6 +27,18 @@ export function getClientIp(request: Request) {
   return request.headers.get("x-real-ip") ?? "unknown";
 }
 
+export function getClientDeviceId(request: Request) {
+  const explicit = request.headers.get("x-device-id")?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const userAgent = request.headers.get("user-agent")?.trim() || "unknown";
+  const language = request.headers.get("accept-language")?.trim() || "unknown";
+  const digest = `${userAgent}|${language}`.slice(0, 180);
+  return digest;
+}
+
 export function isSameOriginRequest(request: Request) {
   const method = request.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") {

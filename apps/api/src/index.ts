@@ -14,6 +14,7 @@ type Env = {
   ENVIRONMENT?: string;
   ALLOWED_ORIGINS?: string;
   OPENAI_API_KEY?: string;
+  ALLOW_LEGACY_MUTATIONS?: string;
 };
 
 type RuntimeConfig = {
@@ -21,6 +22,7 @@ type RuntimeConfig = {
   environment: "dev" | "prod";
   allowedOrigins: string[];
   openAiApiKey: string;
+  allowLegacyMutations: boolean;
 };
 
 type AuditRepository = {
@@ -37,6 +39,7 @@ class InMemoryAuditRepository implements AuditRepository {
 }
 
 const environmentSchema = z.enum(["dev", "prod"]);
+const BOOLEAN_TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 const auditRepository = new InMemoryAuditRepository();
 let runtimeConfigCache: RuntimeConfig | null = null;
 
@@ -96,6 +99,9 @@ function getRuntimeConfig(env: Env): RuntimeConfig {
     environment: parsedEnvironment.data,
     allowedOrigins: parsedOrigins,
     openAiApiKey: env.OPENAI_API_KEY?.trim() || "",
+    allowLegacyMutations: BOOLEAN_TRUE_VALUES.has(
+      env.ALLOW_LEGACY_MUTATIONS?.trim().toLowerCase() || "",
+    ),
   };
 
   return runtimeConfigCache;
@@ -237,6 +243,24 @@ async function handleRequest(request: Request, config: RuntimeConfig, requestId:
   }
 
   if (request.method === "POST" && url.pathname === "/v1/audit") {
+    if (!config.allowLegacyMutations) {
+      const headers = corsHeaders(request, config);
+      withSecurityHeaders(headers, request);
+      headers.set("X-Request-Id", requestId);
+      headers.set("Warning", '299 - "Legacy endpoint disabled. Use web canonical backend."');
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error:
+            "Legacy Worker mutation endpoint disabled. Set ALLOW_LEGACY_MUTATIONS=1 only for temporary compatibility. Deprecation deadline: 2026-06-30.",
+        }),
+        {
+          status: 410,
+          headers,
+        },
+      );
+    }
+
     const payload = await parseJson(request);
     if (!payload) {
       return jsonResponse(
@@ -278,6 +302,24 @@ async function handleRequest(request: Request, config: RuntimeConfig, requestId:
   }
 
   if (request.method === "POST" && url.pathname === "/v1/assistant/draft-automation") {
+    if (!config.allowLegacyMutations) {
+      const headers = corsHeaders(request, config);
+      withSecurityHeaders(headers, request);
+      headers.set("X-Request-Id", requestId);
+      headers.set("Warning", '299 - "Legacy endpoint disabled. Use web canonical backend."');
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error:
+            "Legacy Worker mutation endpoint disabled. Set ALLOW_LEGACY_MUTATIONS=1 only for temporary compatibility. Deprecation deadline: 2026-06-30.",
+        }),
+        {
+          status: 410,
+          headers,
+        },
+      );
+    }
+
     const payload = await parseJson(request);
     if (!payload) {
       return jsonResponse(

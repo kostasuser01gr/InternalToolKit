@@ -18,11 +18,13 @@ import {
 import { USAGE_LIMITS } from "@/lib/constants/limits";
 import { db } from "@/lib/db";
 import { getAppContext } from "@/lib/app-context";
+import { hasRecentAdminStepUp } from "@/lib/auth/session";
 
 import {
   inviteMemberAction,
   removeMemberAction,
   updateMemberRoleAction,
+  verifyAdminStepUpAction,
 } from "./actions";
 
 type AdminPageProps = {
@@ -33,6 +35,9 @@ type AdminPageProps = {
     entity?: string;
     error?: string;
     success?: string;
+    inviteCode?: string;
+    requestId?: string;
+    errorId?: string;
   }>;
 };
 
@@ -53,6 +58,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const { user, workspace, workspaceRole } = await getAppContext(
     params.workspaceId,
   );
+  const stepUpActive = await hasRecentAdminStepUp();
 
   const isAdmin =
     user.roleGlobal === "ADMIN" || workspaceRole === WorkspaceRole.ADMIN;
@@ -111,10 +117,63 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         subtitle="Manage workspace roles, review audit activity, and monitor usage guardrails."
       />
 
-      <StatusBanner error={params.error} success={params.success} />
+      <StatusBanner
+        error={params.error}
+        success={params.success}
+        requestId={params.requestId}
+        errorId={params.errorId}
+      />
+
+      {params.inviteCode ? (
+        <GlassCard className="space-y-3">
+          <h2 className="kpi-font text-lg font-semibold">One-time invite code</h2>
+          <p className="text-sm text-[var(--text-muted)]">
+            Share this once. It expires on first use or when its TTL elapses.
+          </p>
+          <p className="break-all rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 px-3 py-2 font-mono text-xs text-[var(--text)]">
+            {params.inviteCode}
+          </p>
+          <a
+            href={`/accept-invite?code=${encodeURIComponent(params.inviteCode)}`}
+            className="text-sm text-[#9a6fff] hover:underline"
+          >
+            Open invite URL
+          </a>
+        </GlassCard>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <GlassCard className="space-y-4">
+          <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-[var(--text)]">Admin step-up</p>
+              <Badge variant={stepUpActive ? "active" : "default"}>
+                {stepUpActive ? "verified" : "required"}
+              </Badge>
+            </div>
+            <p className="mb-3 text-xs text-[var(--text-muted)]">
+              Re-enter your PIN to unlock member invite/role/remove actions for
+              10 minutes.
+            </p>
+            <form
+              action={verifyAdminStepUpAction}
+              className="grid gap-2 sm:grid-cols-[160px,auto]"
+            >
+              <input type="hidden" name="workspaceId" value={workspace.id} />
+              <Input
+                name="pin"
+                type="password"
+                inputMode="numeric"
+                pattern="\d{4}"
+                minLength={4}
+                maxLength={4}
+                placeholder="Admin PIN"
+                required
+              />
+              <PrimaryButton type="submit">Verify admin PIN</PrimaryButton>
+            </form>
+          </div>
+
           <h2 className="kpi-font text-xl font-semibold">Workspace Members</h2>
 
           <form

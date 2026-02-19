@@ -1,4 +1,5 @@
-import { Activity, ShieldCheck, Zap } from "lucide-react";
+import { headers } from "next/headers";
+import { ShieldCheck, Zap } from "lucide-react";
 
 import { GlassCard } from "@/components/kit/glass-card";
 import { ProgressPill } from "@/components/kit/progress-pill";
@@ -6,9 +7,14 @@ import { StatCard } from "@/components/kit/stat-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { fetchApiHealth, getApiBaseUrl } from "@/lib/api-health";
+import { db } from "@/lib/db";
 
 export default async function DashboardPage() {
+  const headerStore = await headers();
+  const requestId = headerStore.get("x-request-id") ?? "n/a";
   const health = await fetchApiHealth();
+  const dataHealth = await db.$queryRaw<Array<{ ok: number }>>`SELECT 1 as ok`;
+  const dataStatus = dataHealth.length > 0 && dataHealth[0]?.ok === 1;
   const apiBaseUrl = getApiBaseUrl();
 
   return (
@@ -20,27 +26,27 @@ export default async function DashboardPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
+          label="Web Status"
+          value="ok"
+          delta={`request ${requestId}`}
+          icon={ShieldCheck}
+        />
+        <StatCard
           label="API Status"
           value={health ? "ok" : "not ok"}
           delta={health ? "Worker reachable" : "Worker unavailable"}
           icon={ShieldCheck}
         />
         <StatCard
+          label="Data Status"
+          value={dataStatus ? "ok" : "not ok"}
+          delta={dataStatus ? "Database reachable" : "Database unavailable"}
+          icon={ShieldCheck}
+        />
+        <StatCard
           label="Live Automations"
           value="12"
           delta="Active in workspace"
-          icon={Zap}
-        />
-        <StatCard
-          label="Audit Throughput"
-          value="184"
-          delta="Events in 24h"
-          icon={Activity}
-        />
-        <StatCard
-          label="Latency"
-          value={health ? "42ms" : "--"}
-          delta="P95 simulated"
           icon={Zap}
         />
       </section>
@@ -63,6 +69,14 @@ export default async function DashboardPage() {
             <div className="flex items-center justify-between gap-3">
               <dt className="text-[var(--text-muted)]">Timestamp</dt>
               <dd className="text-[var(--text)]">{health?.timestamp ?? "No response"}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-[var(--text-muted)]">Web request id</dt>
+              <dd className="text-[var(--text)]">{requestId}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-[var(--text-muted)]">Data layer</dt>
+              <dd className="text-[var(--text)]">{dataStatus ? "ok" : "not ok"}</dd>
             </div>
           </dl>
         </GlassCard>

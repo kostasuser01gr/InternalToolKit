@@ -2,8 +2,14 @@ import { z } from "zod";
 
 import { createSessionForUser } from "@/lib/auth/session";
 import { signupWithPassword } from "@/lib/auth/signup";
+import { getRequestId, logWebRequest, withObservabilityHeaders } from "@/lib/http-observability";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getClientIp, isSameOriginRequest, logSecurityEvent } from "@/lib/security";
+import {
+  getClientDeviceId,
+  getClientIp,
+  isSameOriginRequest,
+  logSecurityEvent,
+} from "@/lib/security";
 
 const signupSchema = z.object({
   name: z.string().trim().min(2).max(80),
@@ -19,11 +25,29 @@ const signupSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  const requestId = getRequestId(request);
+  const route = "/api/session/signup";
+
   if (!isSameOriginRequest(request)) {
-    return Response.json({ ok: false, message: "Cross-origin request blocked." }, { status: 403 });
+    const response = Response.json(
+      { ok: false, message: "Cross-origin request blocked." },
+      withObservabilityHeaders({ status: 403 }, requestId),
+    );
+    logWebRequest({
+      event: "web.auth.signup",
+      requestId,
+      route,
+      method: request.method,
+      status: 403,
+      durationMs: Date.now() - startedAt,
+    });
+    return response;
   }
 
   const ip = getClientIp(request);
+  const deviceId = getClientDeviceId(request);
+  const userAgent = request.headers.get("user-agent") ?? "unknown";
   const signupRateLimit = checkRateLimit({
     key: `auth.signup:${ip}`,
     limit: 5,
@@ -31,7 +55,7 @@ export async function POST(request: Request) {
   });
   if (!signupRateLimit.allowed) {
     logSecurityEvent("auth.signup_rate_limited", { ip });
-    return Response.json(
+    const response = Response.json(
       {
         ok: false,
         message: "Too many signup attempts. Please wait and retry.",
@@ -40,9 +64,19 @@ export async function POST(request: Request) {
         status: 429,
         headers: {
           "Retry-After": String(signupRateLimit.retryAfterSeconds),
+          "X-Request-Id": requestId,
         },
       },
     );
+    logWebRequest({
+      event: "web.auth.signup",
+      requestId,
+      route,
+      method: request.method,
+      status: 429,
+      durationMs: Date.now() - startedAt,
+    });
+    return response;
   }
 
   let payload: unknown;
@@ -50,19 +84,40 @@ export async function POST(request: Request) {
   try {
     payload = await request.json();
   } catch {
-    return Response.json({ ok: false, message: "Invalid JSON payload." }, { status: 400 });
+    const response = Response.json(
+      { ok: false, message: "Invalid JSON payload." },
+      withObservabilityHeaders({ status: 400 }, requestId),
+    );
+    logWebRequest({
+      event: "web.auth.signup",
+      requestId,
+      route,
+      method: request.method,
+      status: 400,
+      durationMs: Date.now() - startedAt,
+    });
+    return response;
   }
 
   const parsed = signupSchema.safeParse(payload);
 
   if (!parsed.success) {
-    return Response.json(
+    const response = Response.json(
       {
         ok: false,
         message: parsed.error.issues[0]?.message ?? "Invalid signup payload.",
       },
-      { status: 400 },
+      withObservabilityHeaders({ status: 400 }, requestId),
     );
+    logWebRequest({
+      event: "web.auth.signup",
+      requestId,
+      route,
+      method: request.method,
+      status: 400,
+      durationMs: Date.now() - startedAt,
+    });
+    return response;
   }
 
   const result = await signupWithPassword({
@@ -75,23 +130,54 @@ export async function POST(request: Request) {
   });
 
   if (!result.ok) {
-    return Response.json(
+    const response = Response.json(
       { ok: false, message: result.message },
-      {
-        status: result.reason === "email_taken" ? 409 : 500,
-      },
+      withObservabilityHeaders(
+        {
+          status: result.reason === "email_taken" ? 409 : 500,
+        },
+        requestId,
+      ),
     );
+    logWebRequest({
+      event: "web.auth.signup",
+      requestId,
+      route,
+      method: request.method,
+      status: result.reason === "email_taken" ? 409 : 500,
+      durationMs: Date.now() - startedAt,
+    });
+    return response;
   }
 
-  await createSessionForUser(result.user.id);
-
-  return Response.json({
-    ok: true,
-    user: {
-      id: result.user.id,
-      email: result.user.email,
-      name: result.user.name,
-      roleGlobal: result.user.roleGlobal,
-    },
+  await createSessionForUser(result.user.id, {
+    ipAddress: ip,
+    userAgent,
+    deviceId,
   });
+
+  const response = Response.json(
+    {
+      ok: true,
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        roleGlobal: result.user.roleGlobal,
+      },
+    },
+    withObservabilityHeaders({ status: 200 }, requestId),
+  );
+
+  logWebRequest({
+    event: "web.auth.signup",
+    requestId,
+    route,
+    method: request.method,
+    status: 200,
+    durationMs: Date.now() - startedAt,
+    userId: result.user.id,
+  });
+
+  return response;
 }

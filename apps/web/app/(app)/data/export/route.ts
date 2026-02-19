@@ -3,6 +3,7 @@ import { WorkspaceRole } from "@prisma/client";
 import { requireSession } from "@/lib/auth/session";
 import { toCsv, toDownloadFilename } from "@/lib/csv";
 import { db } from "@/lib/db";
+import { parseDataQueryContract } from "@/lib/query-contract";
 import { hasRole } from "@/lib/workspace";
 
 export async function GET(request: Request) {
@@ -15,7 +16,6 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workspaceId = searchParams.get("workspaceId");
   const tableId = searchParams.get("tableId");
-  const q = searchParams.get("q")?.trim().toLowerCase();
 
   if (!workspaceId || !tableId) {
     return new Response("workspaceId and tableId are required", {
@@ -54,11 +54,6 @@ export async function GET(request: Request) {
           position: "asc",
         },
       },
-      records: {
-        orderBy: {
-          updatedAt: "desc",
-        },
-      },
     },
   });
 
@@ -66,14 +61,59 @@ export async function GET(request: Request) {
     return new Response("Table not found", { status: 404 });
   }
 
-  const filteredRecords = q
-    ? table.records.filter((record) =>
-        JSON.stringify(record.dataJson).toLowerCase().includes(q),
-      )
-    : table.records;
+  const query = parseDataQueryContract({
+    q: searchParams.get("q") ?? undefined,
+    from: searchParams.get("from") ?? undefined,
+    to: searchParams.get("to") ?? undefined,
+    sort: searchParams.get("sort") ?? undefined,
+    sortField: searchParams.get("sortField") ?? undefined,
+    page: "1",
+    pageSize: "100",
+  });
+
+  const where = {
+    tableId: table.id,
+    ...(query.q ? { searchText: { contains: query.q } } : {}),
+    ...(query.from || query.to
+      ? {
+          createdAt: {
+            ...(query.from ? { gte: query.from } : {}),
+            ...(query.to ? { lte: query.to } : {}),
+          },
+        }
+      : {}),
+  };
+
+  const orderBy =
+    query.sortField === "createdAt"
+      ? [{ createdAt: query.sort }, { id: query.sort }]
+      : [{ updatedAt: query.sort }, { id: query.sort }];
+
+  const records: Array<{ dataJson: unknown }> = [];
+  const batchSize = 500;
+  let skip = 0;
+
+  while (true) {
+    const batch = await db.record.findMany({
+      where,
+      orderBy,
+      skip,
+      take: batchSize,
+      select: {
+        dataJson: true,
+      },
+    });
+
+    if (batch.length === 0) {
+      break;
+    }
+
+    records.push(...batch);
+    skip += batch.length;
+  }
 
   const headers = table.fields.map((field) => field.name);
-  const rows = filteredRecords.map((record) => {
+  const rows = records.map((record) => {
     const rowJson = (record.dataJson ?? {}) as Record<string, unknown>;
     return headers.map((header) => rowJson[header]);
   });

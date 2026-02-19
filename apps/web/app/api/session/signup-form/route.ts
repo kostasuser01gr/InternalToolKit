@@ -2,8 +2,14 @@ import { z } from "zod";
 
 import { createSessionForUser } from "@/lib/auth/session";
 import { signupWithPassword } from "@/lib/auth/signup";
+import { getRequestId, logWebRequest } from "@/lib/http-observability";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getClientIp, isSameOriginRequest, logSecurityEvent } from "@/lib/security";
+import {
+  getClientDeviceId,
+  getClientIp,
+  isSameOriginRequest,
+  logSecurityEvent,
+} from "@/lib/security";
 
 const formSchema = z
   .object({
@@ -42,16 +48,49 @@ function getRequestOrigin(request: Request) {
   return new URL(request.url).origin;
 }
 
-function buildSignupUrl(request: Request, callbackUrl: string, errorMessage: string) {
+function buildSignupUrl(
+  request: Request,
+  callbackUrl: string,
+  errorMessage: string,
+  requestId?: string,
+  errorId?: string,
+) {
   const url = new URL("/signup", getRequestOrigin(request));
   url.searchParams.set("callbackUrl", callbackUrl);
   url.searchParams.set("error", errorMessage);
+
+  if (requestId) {
+    url.searchParams.set("requestId", requestId);
+  }
+
+  if (errorId) {
+    url.searchParams.set("errorId", errorId);
+  }
+
   return url;
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  const requestId = getRequestId(request);
+  const route = "/api/session/signup-form";
+
   if (!isSameOriginRequest(request)) {
-    return Response.json({ ok: false, message: "Cross-origin request blocked." }, { status: 403 });
+    const response = Response.json(
+      { ok: false, message: "Cross-origin request blocked." },
+      { status: 403, headers: { "X-Request-Id": requestId } },
+    );
+
+    logWebRequest({
+      event: "web.auth.signup_form",
+      requestId,
+      route,
+      method: request.method,
+      status: 403,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return response;
   }
 
   const { searchParams } = new URL(request.url);
@@ -59,22 +98,40 @@ export async function POST(request: Request) {
     ? (searchParams.get("callbackUrl") as string)
     : "/overview";
 
-  const ip = getClientIp(request);
+  const ipAddress = getClientIp(request);
+  const deviceId = getClientDeviceId(request);
+  const userAgent = request.headers.get("user-agent") ?? "unknown";
+
   const signupRateLimit = checkRateLimit({
-    key: `auth.signup-form:${ip}`,
+    key: `auth.signup-form:${ipAddress}`,
     limit: 5,
     windowMs: 60_000,
   });
+
   if (!signupRateLimit.allowed) {
-    logSecurityEvent("auth.signup_form_rate_limited", { ip });
-    return Response.redirect(
+    logSecurityEvent("auth.signup_form_rate_limited", { ipAddress });
+
+    const response = Response.redirect(
       buildSignupUrl(
         request,
         callbackUrl,
         "Too many attempts. Please wait and try again.",
+        requestId,
       ),
       303,
     );
+
+
+    logWebRequest({
+      event: "web.auth.signup_form",
+      requestId,
+      route,
+      method: request.method,
+      status: 303,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return response;
   }
 
   const formData = await request.formData();
@@ -88,14 +145,27 @@ export async function POST(request: Request) {
   });
 
   if (!parsed.success) {
-    return Response.redirect(
+    const response = Response.redirect(
       buildSignupUrl(
         request,
         callbackUrl,
         parsed.error.issues[0]?.message ?? "Invalid signup payload.",
+        requestId,
       ),
       303,
     );
+
+
+    logWebRequest({
+      event: "web.auth.signup_form",
+      requestId,
+      route,
+      method: request.method,
+      status: 303,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return response;
   }
 
   const result = await signupWithPassword({
@@ -104,17 +174,45 @@ export async function POST(request: Request) {
     pin: parsed.data.pin,
     email: parsed.data.email,
     password: parsed.data.password,
-    ...(ip ? { ip } : {}),
+    ip: ipAddress,
   });
 
   if (!result.ok) {
-    return Response.redirect(
-      buildSignupUrl(request, callbackUrl, result.message),
+    const response = Response.redirect(
+      buildSignupUrl(request, callbackUrl, result.message, requestId),
       303,
     );
+
+
+    logWebRequest({
+      event: "web.auth.signup_form",
+      requestId,
+      route,
+      method: request.method,
+      status: 303,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return response;
   }
 
-  await createSessionForUser(result.user.id);
+  await createSessionForUser(result.user.id, {
+    ipAddress,
+    userAgent,
+    deviceId,
+  });
 
-  return Response.redirect(new URL(callbackUrl, getRequestOrigin(request)), 303);
+  const response = Response.redirect(new URL(callbackUrl, getRequestOrigin(request)), 303);
+
+  logWebRequest({
+    event: "web.auth.signup_form",
+    requestId,
+    route,
+    method: request.method,
+    status: 303,
+    durationMs: Date.now() - startedAt,
+    userId: result.user.id,
+  });
+
+  return response;
 }

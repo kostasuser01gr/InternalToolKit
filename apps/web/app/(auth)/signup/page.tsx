@@ -8,6 +8,8 @@ type SignupPageProps = {
   searchParams: Promise<{
     callbackUrl?: string;
     error?: string;
+    requestId?: string;
+    errorId?: string;
   }>;
 };
 
@@ -23,5 +25,12 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
     redirect(safeCallbackUrl);
   }
 
-  return <SignupForm callbackUrl={safeCallbackUrl} error={params.error} />;
+  return (
+    <SignupForm
+      callbackUrl={safeCallbackUrl}
+      error={params.error}
+      requestId={params.requestId}
+      errorId={params.errorId}
+    />
+  );
 }

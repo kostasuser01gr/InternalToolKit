@@ -5,10 +5,19 @@ import { getAssistantProvider } from "@/lib/assistant/provider";
 export async function summarizeRecords(
   records: Array<{ dataJson: Prisma.JsonValue }>,
   filterText?: string,
+  options?: {
+    totalMatchingRecords?: number;
+  },
 ) {
   const provider = getAssistantProvider();
+  const totalMatchingRecords = options?.totalMatchingRecords ?? records.length;
+  const sampled = totalMatchingRecords > records.length;
 
-  const prompt = `Summarize ${records.length} records${
+  const prompt = `Summarize ${
+    sampled
+      ? `${records.length} sampled records (out of ${totalMatchingRecords} matching)`
+      : `${records.length} records`
+  }${
     filterText ? ` filtered by: ${filterText}` : ""
   }.`;
 

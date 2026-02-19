@@ -9,9 +9,11 @@ import { Label } from "@/components/ui/label";
 type LoginFormProps = {
   callbackUrl: string | undefined;
   error: string | undefined;
+  requestId?: string | undefined;
+  errorId?: string | undefined;
 };
 
-export function LoginForm({ callbackUrl, error }: LoginFormProps) {
+export function LoginForm({ callbackUrl, error, requestId, errorId }: LoginFormProps) {
   const safeCallbackUrl =
     callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/overview";
 
@@ -60,6 +62,12 @@ export function LoginForm({ callbackUrl, error }: LoginFormProps) {
         </div>
 
         {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+        {errorId ? (
+          <p className="text-xs text-[var(--text-muted)]">Error ID: {errorId}</p>
+        ) : null}
+        {requestId ? (
+          <p className="text-xs text-[var(--text-muted)]">Request ID: {requestId}</p>
+        ) : null}
 
         <PrimaryButton type="submit" className="w-full">
           Continue
@@ -73,6 +81,16 @@ export function LoginForm({ callbackUrl, error }: LoginFormProps) {
           className="font-medium text-[#9a6fff] hover:underline"
         >
           Create account
+        </Link>
+      </p>
+
+      <p className="text-center text-sm text-[var(--text-muted)]">
+        Forgot password?{" "}
+        <Link
+          href="/forgot-password"
+          className="font-medium text-[#9a6fff] hover:underline"
+        >
+          Reset it
         </Link>
       </p>
     </GlassCard>

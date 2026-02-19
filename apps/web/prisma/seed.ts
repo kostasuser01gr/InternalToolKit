@@ -16,6 +16,8 @@ import {
   WorkspaceRole,
 } from "@prisma/client";
 
+import { buildRecordSearchText, getRecordOpenIndicator } from "../lib/data-record";
+
 const adapter = new PrismaLibSql({
   url: process.env.DATABASE_URL ?? "file:./dev.db",
 });
@@ -235,27 +237,34 @@ async function main() {
     where: { tableId: incidentTable.id },
   });
   if (recordCount === 0) {
+    const firstPayload = {
+      Title: "Billing latency spike",
+      Priority: "High",
+      Open: true,
+      Owner: "SRE Alpha",
+      DueDate: "2026-02-18",
+    };
+    const secondPayload = {
+      Title: "Failed webhook retries",
+      Priority: "Medium",
+      Open: true,
+      Owner: "Platform Team",
+      DueDate: "2026-02-19",
+    };
+
     await prisma.record.createMany({
       data: [
         {
           tableId: incidentTable.id,
-          dataJson: {
-            Title: "Billing latency spike",
-            Priority: "High",
-            Open: true,
-            Owner: "SRE Alpha",
-            DueDate: "2026-02-18",
-          },
+          dataJson: firstPayload,
+          searchText: buildRecordSearchText(firstPayload),
+          openIndicator: getRecordOpenIndicator(firstPayload),
         },
         {
           tableId: incidentTable.id,
-          dataJson: {
-            Title: "Failed webhook retries",
-            Priority: "Medium",
-            Open: true,
-            Owner: "Platform Team",
-            DueDate: "2026-02-19",
-          },
+          dataJson: secondPayload,
+          searchText: buildRecordSearchText(secondPayload),
+          openIndicator: getRecordOpenIndicator(secondPayload),
         },
       ],
     });

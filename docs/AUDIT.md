@@ -197,7 +197,10 @@ DONE ✅
 
 ### Fix Applied
 - Updated `apps/web/package.json` build script:
-  - `prisma db push && prisma generate && next build`
+  - `prisma generate && next build` (no schema drift command in build)
+- Added controlled migration scripts:
+  - dev: `pnpm --filter @internal-toolkit/web db:migrate:dev`
+  - CI/prod: `pnpm --filter @internal-toolkit/web db:migrate:deploy`
 - Updated `apps/web/lib/db.ts`:
   - production sqlite fallback now refreshes `/tmp/internal-toolkit-runtime.db` on cold start to avoid stale schema copies.
 

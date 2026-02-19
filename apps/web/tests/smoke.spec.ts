@@ -204,7 +204,7 @@ test("command palette opens and navigates", async ({ page }, testInfo) => {
   await expect(palette).toBeVisible();
 
   await page.getByLabel("Search commands").fill("go to analytics");
-  await page.getByRole("button", { name: "Go to Analytics" }).first().click();
+  await palette.getByRole("button", { name: /^Go to Analytics/ }).first().click();
   await expect(page).toHaveURL(/\/analytics$/);
 
   await page.keyboard.press("g");

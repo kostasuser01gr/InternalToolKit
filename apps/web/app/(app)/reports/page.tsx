@@ -25,7 +25,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const { workspace } = await getAppContext(params.workspaceId);
 
   const tables = await db.table.findMany({
-    where: { workspaceId: workspace.id },
+    where: {
+      workspaceId: workspace.id,
+      ...(params.q ? { name: { contains: params.q } } : {}),
+    },
     include: {
       _count: {
         select: { records: true },
@@ -33,10 +36,6 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     },
     orderBy: { name: "asc" },
   });
-
-  const filtered = params.q
-    ? tables.filter((table) => table.name.toLowerCase().includes(params.q!.toLowerCase()))
-    : tables;
 
   return (
     <div className="page-stack" data-testid="reports-page">
@@ -57,10 +56,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         <GlassCard className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="kpi-font text-xl font-semibold">CSV Exports</h2>
-            <Badge variant="active">{filtered.length}</Badge>
+            <Badge variant="active">{tables.length}</Badge>
           </div>
           <ul className="space-y-2">
-            {filtered.map((table) => (
+            {tables.map((table) => (
               <li
                 key={table.id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 px-3 py-2"
@@ -77,7 +76,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
                 />
               </li>
             ))}
-            {filtered.length === 0 ? (
+            {tables.length === 0 ? (
               <li className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 px-3 py-5 text-sm text-[var(--text-muted)]">
                 No tables match the current report filters.
               </li>

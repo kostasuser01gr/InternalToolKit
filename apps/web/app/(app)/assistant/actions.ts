@@ -20,6 +20,8 @@ import {
   summarizeTableSchema,
 } from "@/lib/validators/assistant";
 
+const SUMMARY_SAMPLE_LIMIT = 250;
+
 function buildAssistantUrl(params: Record<string, string | undefined>) {
   const searchParams = new URLSearchParams();
 
@@ -127,8 +129,9 @@ export async function summarizeTableAction(formData: FormData) {
         id: parsed.tableId,
         workspaceId: parsed.workspaceId,
       },
-      include: {
-        records: true,
+      select: {
+        id: true,
+        name: true,
       },
     });
 
@@ -136,15 +139,26 @@ export async function summarizeTableAction(formData: FormData) {
       throw new Error("Table not found.");
     }
 
-    const records = parsed.filterText
-      ? table.records.filter((record) =>
-          JSON.stringify(record.dataJson)
-            .toLowerCase()
-            .includes(parsed.filterText!.toLowerCase()),
-        )
-      : table.records;
+    const normalizedFilter = parsed.filterText?.trim().toLowerCase();
+    const where = {
+      tableId: table.id,
+      ...(normalizedFilter
+        ? { searchText: { contains: normalizedFilter } }
+        : {}),
+    };
+    const totalMatchingRecords = await db.record.count({ where });
+    const records = await db.record.findMany({
+      where,
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      take: SUMMARY_SAMPLE_LIMIT,
+      select: {
+        dataJson: true,
+      },
+    });
 
-    const result = await summarizeRecords(records, parsed.filterText);
+    const result = await summarizeRecords(records, parsed.filterText, {
+      totalMatchingRecords,
+    });
 
     await saveAssistantExchange({
       workspaceId: parsed.workspaceId,

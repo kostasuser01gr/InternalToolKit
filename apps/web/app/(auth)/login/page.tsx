@@ -8,6 +8,8 @@ type LoginPageProps = {
   searchParams: Promise<{
     callbackUrl?: string;
     error?: string;
+    requestId?: string;
+    errorId?: string;
   }>;
 };
 
@@ -23,5 +25,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     redirect(safeCallbackUrl);
   }
 
-  return <LoginForm callbackUrl={safeCallbackUrl} error={params.error} />;
+  return (
+    <LoginForm
+      callbackUrl={safeCallbackUrl}
+      error={params.error}
+      requestId={params.requestId}
+      errorId={params.errorId}
+    />
+  );
 }

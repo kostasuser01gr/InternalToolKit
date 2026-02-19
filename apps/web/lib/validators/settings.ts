@@ -11,3 +11,12 @@ export const updatePreferencesSchema = z.object({
   notificationsEnabled: z.boolean(),
   themePreference: z.nativeEnum(ThemePreference),
 });
+
+export const revokeSessionSchema = z.object({
+  userId: z.string().min(1),
+  sessionId: z.string().min(1),
+});
+
+export const revokeAllSessionsSchema = z.object({
+  userId: z.string().min(1),
+});

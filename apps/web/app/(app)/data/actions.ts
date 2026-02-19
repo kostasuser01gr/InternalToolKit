@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { appendAuditLog } from "@/lib/audit";
 import { USAGE_LIMITS } from "@/lib/constants/limits";
+import { buildRecordSearchText, getRecordOpenIndicator } from "@/lib/data-record";
 import { db } from "@/lib/db";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
 import { AuthError, requireWorkspaceRole } from "@/lib/rbac";
@@ -402,6 +403,8 @@ export async function createRecordAction(formData: FormData) {
       data: {
         tableId: table.id,
         dataJson: payload,
+        searchText: buildRecordSearchText(payload),
+        openIndicator: getRecordOpenIndicator(payload),
       },
     });
 
@@ -475,7 +478,11 @@ export async function updateRecordAction(formData: FormData) {
 
     await db.record.update({
       where: { id: record.id },
-      data: { dataJson: payload },
+      data: {
+        dataJson: payload,
+        searchText: buildRecordSearchText(payload),
+        openIndicator: getRecordOpenIndicator(payload),
+      },
     });
 
     await appendAuditLog({
@@ -652,6 +659,8 @@ export async function importCsvAction(formData: FormData) {
         return {
           tableId: table.id,
           dataJson: data,
+          searchText: buildRecordSearchText(data),
+          openIndicator: getRecordOpenIndicator(data),
         };
       }),
     });

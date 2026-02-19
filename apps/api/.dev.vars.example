@@ -4,3 +4,5 @@ ENVIRONMENT="dev"
 # Comma-separated strict allowlist. Wildcard '*' is intentionally rejected.
 ALLOWED_ORIGINS="http://127.0.0.1:3000,http://localhost:3000"
 OPENAI_API_KEY=""
+# Keep off by default. Enables deprecated Worker mutation endpoints temporarily.
+ALLOW_LEGACY_MUTATIONS="0"

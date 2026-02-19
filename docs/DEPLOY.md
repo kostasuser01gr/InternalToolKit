@@ -28,12 +28,17 @@ Set in Wrangler/Cloudflare:
 - `ENVIRONMENT` (`dev` or `prod`)
 - `ALLOWED_ORIGINS` (comma-separated strict allowlist, no `*`)
 - `OPENAI_API_KEY` (optional)
+- `ALLOW_LEGACY_MUTATIONS` (`0` recommended; keep worker mutation compatibility disabled)
 
 ## Deploy Web (Vercel)
 1. Import repository into Vercel.
 2. Set project Root Directory to `apps/web`.
 3. Add required environment variables.
-4. Trigger deploy from `main` push or manual redeploy.
+4. Apply DB migrations before or during deploy:
+```bash
+pnpm --filter @internal-toolkit/web db:migrate:deploy
+```
+5. Trigger deploy from `main` push or manual redeploy.
 
 ## Deploy Worker (Cloudflare)
 From repository root:
@@ -43,9 +48,10 @@ pnpm --filter @internal-toolkit/api deploy
 
 ## GitHub Workflows
 - CI: `.github/workflows/ci.yml`
-  - install -> lint -> typecheck -> unit tests -> e2e smoke -> build
+  - install -> migrate deploy -> lint -> typecheck -> unit tests -> e2e smoke -> build
 - Worker Deploy: `.github/workflows/deploy-worker.yml`
   - triggers on `main` changes for API/shared/lockfiles + manual dispatch
+  - deploy command targets `--env production`
   - skips safely when `CLOUDFLARE_API_TOKEN` is missing
 
 ## Post-Deploy Checks

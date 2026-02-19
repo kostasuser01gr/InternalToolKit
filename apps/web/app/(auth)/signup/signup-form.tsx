@@ -9,9 +9,11 @@ import { Label } from "@/components/ui/label";
 type SignupFormProps = {
   callbackUrl: string | undefined;
   error: string | undefined;
+  requestId?: string | undefined;
+  errorId?: string | undefined;
 };
 
-export function SignupForm({ callbackUrl, error }: SignupFormProps) {
+export function SignupForm({ callbackUrl, error, requestId, errorId }: SignupFormProps) {
   const safeCallbackUrl =
     callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/overview";
 
@@ -116,6 +118,12 @@ export function SignupForm({ callbackUrl, error }: SignupFormProps) {
         </div>
 
         {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+        {errorId ? (
+          <p className="text-xs text-[var(--text-muted)]">Error ID: {errorId}</p>
+        ) : null}
+        {requestId ? (
+          <p className="text-xs text-[var(--text-muted)]">Request ID: {requestId}</p>
+        ) : null}
 
         <PrimaryButton type="submit" className="w-full">
           Create account

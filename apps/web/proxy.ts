@@ -191,6 +191,7 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-request-id", requestId);
 
   const pathname = request.nextUrl.pathname;
+  requestHeaders.set("x-pathname", pathname);
 
   let response: NextResponse;
   if (

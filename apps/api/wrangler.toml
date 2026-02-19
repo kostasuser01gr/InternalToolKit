@@ -7,3 +7,22 @@ workers_dev = true
 APP_VERSION = "1.0.0"
 ENVIRONMENT = "dev"
 ALLOWED_ORIGINS = "http://127.0.0.1:3000,http://localhost:3000"
+ALLOW_LEGACY_MUTATIONS = "0"
+
+[env.staging]
+name = "internaltoolkit-api-staging"
+
+[env.staging.vars]
+APP_VERSION = "1.0.0"
+ENVIRONMENT = "prod"
+ALLOWED_ORIGINS = "https://staging.internaltoolkit.example"
+ALLOW_LEGACY_MUTATIONS = "0"
+
+[env.production]
+name = "internaltoolkit-api-production"
+
+[env.production.vars]
+APP_VERSION = "1.0.0"
+ENVIRONMENT = "prod"
+ALLOWED_ORIGINS = "https://app.internaltoolkit.example"
+ALLOW_LEGACY_MUTATIONS = "0"

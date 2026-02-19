@@ -17,3 +17,8 @@ export const removeMemberSchema = z.object({
   workspaceId: z.string().min(1),
   userId: z.string().min(1),
 });
+
+export const verifyAdminStepUpSchema = z.object({
+  workspaceId: z.string().min(1),
+  pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits."),
+});

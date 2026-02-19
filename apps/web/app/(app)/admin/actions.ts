@@ -1,19 +1,22 @@
 "use server";
 
-import { hashSync } from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { createWorkspaceInvite } from "@/lib/auth/invite";
+import { hasRecentAdminStepUp, verifyAdminStepUpPin } from "@/lib/auth/session";
 import { appendAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
+import { getRequestContext } from "@/lib/request-context";
 import { AuthError, requireAdminAccess } from "@/lib/rbac";
 import { logSecurityEvent } from "@/lib/security";
 import {
   inviteMemberSchema,
   removeMemberSchema,
   updateMemberRoleSchema,
+  verifyAdminStepUpSchema,
 } from "@/lib/validators/admin";
 
 function buildAdminUrl(params: Record<string, string | undefined>) {
@@ -46,6 +49,66 @@ function getErrorMessage(error: unknown) {
   return "Unexpected error.";
 }
 
+async function ensureAdminStepUp(workspaceId: string) {
+  const stepUpActive = await hasRecentAdminStepUp();
+
+  if (!stepUpActive) {
+    throw new AuthError(
+      "Step-up verification required. Re-enter your PIN to continue admin changes.",
+    );
+  }
+
+  return requireAdminAccess(workspaceId);
+}
+
+export async function verifyAdminStepUpAction(formData: FormData) {
+  const parsed = verifyAdminStepUpSchema.parse({
+    workspaceId: formData.get("workspaceId"),
+    pin: formData.get("pin"),
+  });
+
+  try {
+    const { user, membership } = await requireAdminAccess(parsed.workspaceId);
+    const context = await getRequestContext("/admin");
+
+    const elevated = await verifyAdminStepUpPin(parsed.pin);
+    if (!elevated) {
+      logSecurityEvent("admin.step_up_failed", {
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        requestId: context.requestId,
+      });
+      throw new AuthError("Step-up verification failed. Check your PIN.");
+    }
+
+    await appendAuditLog({
+      workspaceId: parsed.workspaceId,
+      actorUserId: user.id,
+      action: "admin.step_up_verified",
+      entityType: "session",
+      entityId: user.id,
+      metaJson: {
+        adminRole: membership.role,
+        requestId: context.requestId,
+      },
+    });
+
+    revalidatePath("/admin");
+    redirect(buildAdminUrl({ success: "Admin verification active for 10 minutes." }));
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    const context = await getRequestContext("/admin");
+    const errorId = crypto.randomUUID().slice(0, 12);
+    redirect(
+      buildAdminUrl({
+        error: getErrorMessage(error),
+        requestId: context.requestId,
+        errorId,
+      }),
+    );
+  }
+}
+
 export async function inviteMemberAction(formData: FormData) {
   const parsed = inviteMemberSchema.parse({
     workspaceId: formData.get("workspaceId"),
@@ -54,62 +117,64 @@ export async function inviteMemberAction(formData: FormData) {
   });
 
   try {
-    const { user, membership } = await requireAdminAccess(parsed.workspaceId);
+    const { user, membership } = await ensureAdminStepUp(parsed.workspaceId);
+    const context = await getRequestContext("/admin");
 
-    const memberUser = await db.user.upsert({
-      where: {
-        email: parsed.email.toLowerCase(),
-      },
-      update: {},
-      create: {
-        email: parsed.email.toLowerCase(),
-        name: parsed.email.split("@")[0] ?? "New Member",
-        passwordHash: hashSync("ChangeMe123!", 12),
-        roleGlobal: "USER",
-      },
+    const invite = await createWorkspaceInvite({
+      workspaceId: parsed.workspaceId,
+      invitedByUserId: user.id,
+      email: parsed.email,
+      role: parsed.role,
+      requestId: context.requestId,
+      ipAddress: context.ipAddress,
+      deviceId: context.deviceId,
+      route: context.route,
     });
 
-    await db.workspaceMember.upsert({
-      where: {
-        workspaceId_userId: {
-          workspaceId: parsed.workspaceId,
-          userId: memberUser.id,
-        },
-      },
-      update: {
-        role: parsed.role,
-      },
-      create: {
-        workspaceId: parsed.workspaceId,
-        userId: memberUser.id,
-        role: parsed.role,
-      },
-    });
+    if (!invite.ok) {
+      throw new Error(invite.message);
+    }
 
     await appendAuditLog({
       workspaceId: parsed.workspaceId,
       actorUserId: user.id,
       action: "admin.member_invited",
-      entityType: "workspace_member",
-      entityId: memberUser.id,
+      entityType: "workspace_invite",
+      entityId: invite.email,
       metaJson: {
-        role: parsed.role,
+        role: invite.role,
         adminRole: membership.role,
+        expiresAt: invite.expiresAt.toISOString(),
+        requestId: context.requestId,
       },
     });
 
     logSecurityEvent("admin.member_invited", {
       workspaceId: parsed.workspaceId,
       actorUserId: user.id,
-      invitedUserId: memberUser.id,
-      role: parsed.role,
+      invitedEmail: invite.email,
+      role: invite.role,
+      requestId: context.requestId,
     });
 
     revalidatePath("/admin");
-    redirect(buildAdminUrl({ success: "Member invited or updated." }));
+    redirect(
+      buildAdminUrl({
+        success: "Invite generated. Share the one-time invite code now.",
+        inviteCode: invite.token,
+      }),
+    );
   } catch (error) {
     rethrowIfRedirectError(error);
-    redirect(buildAdminUrl({ error: getErrorMessage(error) }));
+    const context = await getRequestContext("/admin");
+    const errorId = crypto.randomUUID().slice(0, 12);
+    redirect(
+      buildAdminUrl({
+        error: getErrorMessage(error),
+        requestId: context.requestId,
+        errorId,
+      }),
+    );
   }
 }
 
@@ -121,7 +186,7 @@ export async function updateMemberRoleAction(formData: FormData) {
   });
 
   try {
-    const { user } = await requireAdminAccess(parsed.workspaceId);
+    const { user } = await ensureAdminStepUp(parsed.workspaceId);
 
     await db.workspaceMember.update({
       where: {
@@ -157,7 +222,15 @@ export async function updateMemberRoleAction(formData: FormData) {
     redirect(buildAdminUrl({ success: "Member role updated." }));
   } catch (error) {
     rethrowIfRedirectError(error);
-    redirect(buildAdminUrl({ error: getErrorMessage(error) }));
+    const context = await getRequestContext("/admin");
+    const errorId = crypto.randomUUID().slice(0, 12);
+    redirect(
+      buildAdminUrl({
+        error: getErrorMessage(error),
+        requestId: context.requestId,
+        errorId,
+      }),
+    );
   }
 }
 
@@ -168,7 +241,7 @@ export async function removeMemberAction(formData: FormData) {
   });
 
   try {
-    const { user } = await requireAdminAccess(parsed.workspaceId);
+    const { user } = await ensureAdminStepUp(parsed.workspaceId);
 
     const workspace = await db.workspace.findUnique({
       where: { id: parsed.workspaceId },
@@ -206,6 +279,14 @@ export async function removeMemberAction(formData: FormData) {
     redirect(buildAdminUrl({ success: "Member removed." }));
   } catch (error) {
     rethrowIfRedirectError(error);
-    redirect(buildAdminUrl({ error: getErrorMessage(error) }));
+    const context = await getRequestContext("/admin");
+    const errorId = crypto.randomUUID().slice(0, 12);
+    redirect(
+      buildAdminUrl({
+        error: getErrorMessage(error),
+        requestId: context.requestId,
+        errorId,
+      }),
+    );
   }
 }

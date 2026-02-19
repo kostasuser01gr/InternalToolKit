@@ -43,6 +43,15 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     where: {
       workspaceId: workspace.id,
       ...(params.actor ? { actorUserId: params.actor } : {}),
+      ...(q
+        ? {
+            OR: [
+              { action: { contains: q } },
+              { entityType: { contains: q } },
+              { entityId: { contains: q } },
+            ],
+          }
+        : {}),
       ...(from || to
         ? {
             createdAt: {
@@ -56,14 +65,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     orderBy: { createdAt: "desc" },
     take: 120,
   });
-
-  const filteredAuditEntries = q
-    ? auditEntries.filter((entry) =>
-        `${entry.action} ${entry.entityType} ${entry.entityId}`
-          .toLowerCase()
-          .includes(q),
-      )
-    : auditEntries;
 
   const memoryEvents = listDemoEvents(200).filter((event) => {
     if (q) {
@@ -159,7 +160,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
       <GlassCard className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="kpi-font text-xl font-semibold">Audit Trail</h2>
-          <Badge variant="default">{filteredAuditEntries.length}</Badge>
+          <Badge variant="default">{auditEntries.length}</Badge>
         </div>
         <DataTable
           columns={[
@@ -168,7 +169,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             { key: "entity", label: "Entity" },
             { key: "actor", label: "Actor" },
           ]}
-          rows={filteredAuditEntries.map((entry) => ({
+          rows={auditEntries.map((entry) => ({
             id: entry.id,
             cells: [
               formatDistanceToNow(entry.createdAt, { addSuffix: true }),

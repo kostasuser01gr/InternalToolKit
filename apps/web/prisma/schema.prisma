@@ -105,50 +105,61 @@ enum WasherTaskStatus {
   BLOCKED
 }
 
+enum AuthThrottleDimension {
+  IP
+  ACCOUNT
+  DEVICE
+}
+
 model User {
-  id                   String            @id @default(cuid())
-  email                String            @unique
-  loginName            String?           @unique
+  id                   String               @id @default(cuid())
+  email                String               @unique
+  loginName            String?              @unique
   name                 String
   passwordHash         String
   pinHash              String?
-  roleGlobal           GlobalRole        @default(USER)
-  themePreference      ThemePreference   @default(DARK)
-  localePreference     LocalePreference  @default(EN)
-  quantumTheme         QuantumTheme      @default(VIOLET)
-  notificationsEnabled Boolean           @default(true)
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
-  ownedWorkspaces      Workspace[]       @relation("WorkspaceOwner")
+  roleGlobal           GlobalRole           @default(USER)
+  themePreference      ThemePreference      @default(DARK)
+  localePreference     LocalePreference     @default(EN)
+  quantumTheme         QuantumTheme         @default(VIOLET)
+  notificationsEnabled Boolean              @default(true)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  ownedWorkspaces      Workspace[]          @relation("WorkspaceOwner")
   workspaceMemberships WorkspaceMember[]
   notifications        Notification[]
-  auditActorLogs       AuditLog[]        @relation("AuditActor")
-  createdThreads       ChatThread[]      @relation("ChatThreadCreator")
-  authoredMessages     ChatMessage[]     @relation("ChatMessageAuthor")
-  assignedShifts       Shift[]           @relation("ShiftAssignee")
-  createdShifts        Shift[]           @relation("ShiftCreator")
-  shiftRequests        ShiftRequest[]    @relation("ShiftRequester")
-  vehicleEvents        VehicleEvent[]    @relation("VehicleEventActor")
-  washerTasks          WasherTask[]      @relation("WasherTaskAssignee")
+  auditActorLogs       AuditLog[]           @relation("AuditActor")
+  createdThreads       ChatThread[]         @relation("ChatThreadCreator")
+  authoredMessages     ChatMessage[]        @relation("ChatMessageAuthor")
+  assignedShifts       Shift[]              @relation("ShiftAssignee")
+  createdShifts        Shift[]              @relation("ShiftCreator")
+  shiftRequests        ShiftRequest[]       @relation("ShiftRequester")
+  vehicleEvents        VehicleEvent[]       @relation("VehicleEventActor")
+  washerTasks          WasherTask[]         @relation("WasherTaskAssignee")
+  authSessions         AuthSession[]
+  inviteTokensCreated  InviteToken[]        @relation("InviteCreator")
+  inviteTokensUsed     InviteToken[]        @relation("InviteConsumer")
+  passwordResetTokens  PasswordResetToken[]
 }
 
 model Workspace {
-  id          String            @id @default(cuid())
-  name        String
-  ownerId     String
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  owner       User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members     WorkspaceMember[]
-  tables      Table[]
-  automations Automation[]
-  auditLogs   AuditLog[]
-  chatThreads ChatThread[]
-  shifts      Shift[]
+  id            String            @id @default(cuid())
+  name          String
+  ownerId       String
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  owner         User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members       WorkspaceMember[]
+  tables        Table[]
+  automations   Automation[]
+  auditLogs     AuditLog[]
+  chatThreads   ChatThread[]
+  shifts        Shift[]
   shiftRequests ShiftRequest[]
-  vehicles    Vehicle[]
+  vehicles      Vehicle[]
   vehicleEvents VehicleEvent[]
-  washerTasks WasherTask[]
+  washerTasks   WasherTask[]
+  inviteTokens  InviteToken[]
 
   @@index([ownerId])
 }
@@ -157,9 +168,9 @@ model WorkspaceMember {
   workspaceId String
   userId      String
   role        WorkspaceRole
-  createdAt   DateTime   @default(now())
-  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([workspaceId, userId])
   @@index([userId])
@@ -197,14 +208,20 @@ model Field {
 }
 
 model Record {
-  id        String   @id @default(cuid())
-  tableId   String
-  dataJson  Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  table     Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  tableId       String
+  dataJson      Json
+  searchText    String   @default("")
+  openIndicator Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  table         Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   @@index([tableId])
+  @@index([tableId, updatedAt])
+  @@index([tableId, createdAt, id])
+  @@index([tableId, searchText])
+  @@index([tableId, openIndicator])
 }
 
 model View {
@@ -249,14 +266,14 @@ model AutomationRun {
 }
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   type      String
   title     String
   body      String
   readAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -292,35 +309,35 @@ model ChatThread {
 }
 
 model ChatMessage {
-  id           String     @id @default(cuid())
-  threadId      String
-  authorUserId  String?
-  role          ChatRole
-  content       String
-  attachmentUrl String?
+  id             String     @id @default(cuid())
+  threadId       String
+  authorUserId   String?
+  role           ChatRole
+  content        String
+  attachmentUrl  String?
   attachmentMime String?
-  createdAt     DateTime  @default(now())
-  thread        ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  author        User?     @relation("ChatMessageAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime   @default(now())
+  thread         ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author         User?      @relation("ChatMessageAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
 
   @@index([threadId, createdAt])
 }
 
 model Shift {
-  id             String      @id @default(cuid())
+  id             String         @id @default(cuid())
   workspaceId    String
   assignedUserId String?
   createdBy      String
   title          String
   startsAt       DateTime
   endsAt         DateTime
-  status         ShiftStatus @default(DRAFT)
+  status         ShiftStatus    @default(DRAFT)
   notes          String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  workspace      Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  assignee       User?       @relation("ShiftAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
-  creator        User        @relation("ShiftCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee       User?          @relation("ShiftAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  creator        User           @relation("ShiftCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   requests       ShiftRequest[]
 
   @@index([workspaceId, startsAt, endsAt])
@@ -348,19 +365,19 @@ model ShiftRequest {
 }
 
 model Vehicle {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   workspaceId   String
   plateNumber   String
   model         String
-  status        VehicleStatus @default(READY)
-  mileageKm     Int           @default(0)
-  fuelPercent   Int           @default(100)
+  status        VehicleStatus  @default(READY)
+  mileageKm     Int            @default(0)
+  fuelPercent   Int            @default(100)
   lastServiceAt DateTime?
   photoDataUrl  String?
   notes         String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   events        VehicleEvent[]
   washerTasks   WasherTask[]
 
@@ -369,19 +386,19 @@ model Vehicle {
 }
 
 model VehicleEvent {
-  id          String           @id @default(cuid())
-  workspaceId String
-  vehicleId   String
-  actorUserId String?
-  type        VehicleEventType
-  valueText   String?
-  valueNumber Float?
+  id           String           @id @default(cuid())
+  workspaceId  String
+  vehicleId    String
+  actorUserId  String?
+  type         VehicleEventType
+  valueText    String?
+  valueNumber  Float?
   photoDataUrl String?
-  notes       String?
-  createdAt   DateTime         @default(now())
-  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  vehicle     Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  actor       User?            @relation("VehicleEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  notes        String?
+  createdAt    DateTime         @default(now())
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  actor        User?            @relation("VehicleEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
   @@index([vehicleId, createdAt])
@@ -406,4 +423,91 @@ model WasherTask {
 
   @@index([workspaceId, status, createdAt])
   @@index([vehicleId, createdAt])
+}
+
+model AuthSession {
+  id            String    @id @default(cuid())
+  userId        String
+  tokenHash     String    @unique
+  userAgent     String?
+  deviceId      String?
+  ipAddress     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastSeenAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?
+  elevatedUntil DateTime?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([lastSeenAt])
+}
+
+model InviteToken {
+  id              String        @id @default(cuid())
+  workspaceId     String
+  email           String
+  role            WorkspaceRole
+  tokenHash       String        @unique
+  invitedByUserId String
+  expiresAt       DateTime
+  usedAt          DateTime?
+  usedByUserId    String?
+  createdAt       DateTime      @default(now())
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy       User          @relation("InviteCreator", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  usedBy          User?         @relation("InviteConsumer", fields: [usedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, email, usedAt])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id                String    @id @default(cuid())
+  userId            String
+  tokenHash         String    @unique
+  requestedIp       String?
+  requestedDeviceId String?
+  requestedAgent    String?
+  expiresAt         DateTime
+  usedAt            DateTime?
+  createdAt         DateTime  @default(now())
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt, usedAt])
+}
+
+model AuthThrottle {
+  id              String                @id @default(cuid())
+  dimension       AuthThrottleDimension
+  identifier      String
+  windowStartedAt DateTime
+  attemptCount    Int                   @default(0)
+  lastAttemptAt   DateTime              @default(now())
+  lockoutUntil    DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([dimension, identifier])
+  @@index([dimension, lockoutUntil])
+}
+
+model SecurityEvent {
+  id           String   @id @default(cuid())
+  event        String
+  severity     String   @default("info")
+  requestId    String?
+  actorUserId  String?
+  targetUserId String?
+  ipAddress    String?
+  deviceId     String?
+  route        String?
+  detailsJson  Json
+  createdAt    DateTime @default(now())
+
+  @@index([event, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([targetUserId, createdAt])
 }

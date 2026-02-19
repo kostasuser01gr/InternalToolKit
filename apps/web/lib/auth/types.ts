@@ -9,4 +9,23 @@ export type SessionUser = {
 
 export type AppSession = {
   user: SessionUser;
+  session: {
+    id: string;
+    createdAt: Date;
+    lastSeenAt: Date;
+    expiresAt: Date;
+    elevatedUntil: Date | null;
+  };
+};
+
+export type ActiveSessionInfo = {
+  id: string;
+  userAgent: string | null;
+  deviceId: string | null;
+  ipAddress: string | null;
+  createdAt: Date;
+  lastSeenAt: Date;
+  expiresAt: Date;
+  elevatedUntil: Date | null;
+  isCurrent: boolean;
 };

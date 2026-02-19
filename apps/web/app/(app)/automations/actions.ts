@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { appendAuditLog } from "@/lib/audit";
 import { USAGE_LIMITS } from "@/lib/constants/limits";
+import { buildRecordSearchText, getRecordOpenIndicator } from "@/lib/data-record";
 import { db } from "@/lib/db";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
 import { AuthError, requireWorkspaceRole } from "@/lib/rbac";
@@ -286,6 +287,12 @@ export async function runAutomationNowAction(formData: FormData) {
             where: { id: record.id },
             data: {
               dataJson: payload as Prisma.InputJsonValue,
+              searchText: buildRecordSearchText(
+                payload as Record<string, Prisma.JsonValue>,
+              ),
+              openIndicator: getRecordOpenIndicator(
+                payload as Record<string, Prisma.JsonValue>,
+              ),
             },
           });
 

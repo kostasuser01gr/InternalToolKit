@@ -23,6 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
+import { parseDataQueryContract } from "@/lib/query-contract";
 import { cn } from "@/lib/utils";
 
 import {
@@ -44,6 +45,7 @@ type DataPageProps = {
     sort?: "asc" | "desc";
     sortField?: string;
     page?: string;
+    pageSize?: string;
     from?: string;
     to?: string;
     period?: "week" | "month" | "year";
@@ -51,6 +53,8 @@ type DataPageProps = {
     editRecordId?: string;
     error?: string;
     success?: string;
+    requestId?: string;
+    errorId?: string;
   }>;
 };
 
@@ -162,19 +166,19 @@ function buildQuery(
   return `/data?${query.toString()}`;
 }
 
-function parseDate(value?: string) {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
 export default async function DataPage({ searchParams }: DataPageProps) {
   const params = await searchParams;
   const { workspace, workspaceRole } = await getAppContext(params.workspaceId);
   const canEdit = workspaceRole !== WorkspaceRole.VIEWER;
+  const query = parseDataQueryContract({
+    page: params.page,
+    pageSize: params.pageSize,
+    sort: params.sort,
+    sortField: params.sortField,
+    q: params.q,
+    from: params.from,
+    to: params.to,
+  });
 
   const tables = await db.table.findMany({
     where: { workspaceId: workspace.id },
@@ -200,7 +204,6 @@ export default async function DataPage({ searchParams }: DataPageProps) {
           fields: {
             orderBy: { position: "asc" },
           },
-          records: true,
           views: {
             orderBy: { createdAt: "asc" },
           },
@@ -215,86 +218,65 @@ export default async function DataPage({ searchParams }: DataPageProps) {
   const activeView = selectedTable?.views.find(
     (view) => view.type === activeViewType,
   );
-  const fromDate = parseDate(params.from);
-  const toDate = parseDate(params.to);
-  const sortDirection = params.sort ?? "desc";
-  const sortField = params.sortField ?? selectedTable?.fields[0]?.name ?? "updatedAt";
+  const sortDirection = query.sort;
+  const sortField = query.sortField;
+  const pageSize = query.pageSize;
 
-  const filteredRecords = selectedTable
-    ? selectedTable.records.filter((record) => {
-        if (!params.q) {
-          return true;
-        }
+  const recordWhere = selectedTable
+    ? {
+        tableId: selectedTable.id,
+        ...(query.q ? { searchText: { contains: query.q } } : {}),
+        ...(query.from || query.to
+          ? {
+              createdAt: {
+                ...(query.from ? { gte: query.from } : {}),
+                ...(query.to ? { lte: query.to } : {}),
+              },
+            }
+          : {}),
+      }
+    : null;
 
-        const matchesText = JSON.stringify(record.dataJson)
-          .toLowerCase()
-          .includes(params.q.toLowerCase());
+  const totalRecords =
+    recordWhere != null
+      ? await db.record.count({
+          where: recordWhere,
+        })
+      : 0;
 
-        if (!matchesText) {
-          return false;
-        }
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const page = Math.min(totalPages, query.page);
 
-        return true;
-      })
-    : [];
+  const recordOrderBy =
+    sortField === "createdAt"
+      ? [{ createdAt: sortDirection }, { id: sortDirection }]
+      : [{ updatedAt: sortDirection }, { id: sortDirection }];
 
-  const dateFilteredRecords = filteredRecords.filter((record) => {
-    if (!fromDate && !toDate) {
-      return true;
-    }
-
-    const createdAt = record.createdAt;
-
-    if (fromDate && createdAt < fromDate) {
-      return false;
-    }
-
-    if (toDate && createdAt > toDate) {
-      return false;
-    }
-
-    return true;
-  });
-
-  const sortedRecords = [...dateFilteredRecords].sort((left, right) => {
-    if (sortField === "updatedAt") {
-      const leftValue = left.updatedAt.getTime();
-      const rightValue = right.updatedAt.getTime();
-
-      return sortDirection === "asc" ? leftValue - rightValue : rightValue - leftValue;
-    }
-
-    const leftRow = (left.dataJson ?? {}) as Record<string, unknown>;
-    const rightRow = (right.dataJson ?? {}) as Record<string, unknown>;
-    const leftValue = getString(leftRow[sortField]).toLowerCase();
-    const rightValue = getString(rightRow[sortField]).toLowerCase();
-
-    const comparison = leftValue.localeCompare(rightValue, undefined, {
-      numeric: true,
-    });
-
-    return sortDirection === "asc" ? comparison : -comparison;
-  });
-
-  const pageSize = 50;
-  const totalPages = Math.max(1, Math.ceil(sortedRecords.length / pageSize));
-  const page = Math.min(
-    totalPages,
-    Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1),
-  );
-  const paginatedRecords = sortedRecords.slice((page - 1) * pageSize, page * pageSize);
+  const paginatedRecords =
+    recordWhere != null
+      ? await db.record.findMany({
+          where: recordWhere,
+          orderBy: recordOrderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        })
+      : [];
 
   const editingRecord =
     selectedTable && params.editRecordId
-      ? selectedTable.records.find(
-          (record) => record.id === params.editRecordId,
-        )
+      ? await db.record.findFirst({
+          where: {
+            id: params.editRecordId,
+            tableId: selectedTable.id,
+          },
+        })
       : null;
+  const viewRecords = paginatedRecords;
 
   const viewQueryBase = {
     workspaceId: workspace.id,
     tableId: selectedTable?.id,
-    q: params.q,
+    q: query.q,
     sort: sortDirection,
     sortField,
     viewType: activeViewType,
@@ -302,7 +284,21 @@ export default async function DataPage({ searchParams }: DataPageProps) {
     to: params.to,
     period: params.period,
     page: String(page),
+    pageSize: String(pageSize),
   };
+  const exportQuery = new URLSearchParams(
+    Object.entries({
+      workspaceId: workspace.id,
+      tableId: selectedTable?.id,
+      q: query.q,
+      from: params.from,
+      to: params.to,
+      sort: sortDirection,
+      sortField,
+      pageSize: String(pageSize),
+    }).filter(([, value]) => Boolean(value)) as Array<[string, string]>,
+  ).toString();
+  const exportHref = `/data/export?${exportQuery}`;
 
   return (
     <div className="space-y-6" data-testid="data-page">
@@ -311,7 +307,12 @@ export default async function DataPage({ searchParams }: DataPageProps) {
         subtitle="Structured tables, saved views, imports, and role-safe editing for internal ops data."
       />
 
-      <StatusBanner error={params.error} success={params.success} />
+      <StatusBanner
+        error={params.error}
+        success={params.success}
+        requestId={params.requestId}
+        errorId={params.errorId}
+      />
 
       <div className="grid gap-4 xl:grid-cols-[320px,1fr]">
         <GlassCard className="space-y-4">
@@ -404,10 +405,7 @@ export default async function DataPage({ searchParams }: DataPageProps) {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <ExportButton
-                      href={`/data/export?workspaceId=${workspace.id}&tableId=${selectedTable.id}${params.q ? `&q=${encodeURIComponent(params.q)}` : ""}`}
-                      label="Export CSV"
-                    />
+                    <ExportButton href={exportHref} label="Export CSV" />
                     <Badge variant="active">
                       <Eye className="size-3" />
                       {activeViewType}
@@ -416,7 +414,7 @@ export default async function DataPage({ searchParams }: DataPageProps) {
                 </div>
 
                 <FilterBar
-                  defaultQuery={params.q}
+                  defaultQuery={query.q}
                   defaultFrom={params.from}
                   defaultTo={params.to}
                   defaultPeriod={params.period ?? "week"}
@@ -426,6 +424,7 @@ export default async function DataPage({ searchParams }: DataPageProps) {
                     { name: "viewType", value: activeViewType },
                     { name: "sort", value: sortDirection },
                     { name: "sortField", value: sortField },
+                    { name: "pageSize", value: String(pageSize) },
                   ]}
                 />
 
@@ -449,26 +448,40 @@ export default async function DataPage({ searchParams }: DataPageProps) {
 
                 {activeViewType === ViewType.GRID ? (
                   <div className="space-y-3">
-                    <DataTable
-                      columns={selectedTable.fields.map((field) => {
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                      <span>Sort:</span>
+                      {(["updatedAt", "createdAt"] as const).map((option) => {
+                        const isActive = sortField === option;
                         const nextDirection =
-                          sortField === field.name && sortDirection === "asc"
-                            ? "desc"
-                            : "asc";
+                          isActive && sortDirection === "asc" ? "desc" : "asc";
 
-                        return {
-                          key: field.id,
-                          label: field.name,
-                          sortHref: buildQuery(viewQueryBase, {
-                            sortField: field.name,
-                            sort: nextDirection,
-                            page: "1",
-                          }),
-                          sortState:
-                            sortField === field.name ? sortDirection : null,
-                        };
+                        return (
+                          <Link
+                            key={option}
+                            href={buildQuery(viewQueryBase, {
+                              sortField: option,
+                              sort: nextDirection,
+                              page: "1",
+                            })}
+                            className={cn(
+                              "focus-ring rounded-full border px-2 py-1",
+                              isActive
+                                ? "border-[#9a6fff66] bg-[#9a6fff22] text-[var(--text)]"
+                                : "border-[var(--border)] hover:bg-white/8",
+                            )}
+                          >
+                            {option === "updatedAt" ? "Updated time" : "Created time"}
+                            {isActive ? ` (${sortDirection})` : ""}
+                          </Link>
+                        );
                       })}
-                      rows={paginatedRecords.map((record) => {
+                    </div>
+                    <DataTable
+                      columns={selectedTable.fields.map((field) => ({
+                        key: field.id,
+                        label: field.name,
+                      }))}
+                      rows={viewRecords.map((record) => {
                         const rowData = (record.dataJson ?? {}) as Record<
                           string,
                           unknown
@@ -520,7 +533,7 @@ export default async function DataPage({ searchParams }: DataPageProps) {
 
                     <div className="flex items-center justify-between rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 px-3 py-2 text-xs text-[var(--text-muted)]">
                       <p>
-                        Page {page} of {totalPages} · {sortedRecords.length} total
+                        Page {page} of {totalPages} · {totalRecords} total
                         rows
                       </p>
                       <div className="flex items-center gap-1">
@@ -572,8 +585,8 @@ export default async function DataPage({ searchParams }: DataPageProps) {
                           : "Priority";
 
                       return Object.entries(
-                        sortedRecords.reduce<
-                          Record<string, typeof sortedRecords>
+                        viewRecords.reduce<
+                          Record<string, typeof viewRecords>
                         >((acc, record) => {
                           const rowData = (record.dataJson ?? {}) as Record<
                             string,
@@ -635,7 +648,7 @@ export default async function DataPage({ searchParams }: DataPageProps) {
                           ? config.dateField
                           : "DueDate";
 
-                      return sortedRecords
+                      return viewRecords
                         .map((record) => ({
                           record,
                           date: getString(
@@ -670,7 +683,7 @@ export default async function DataPage({ searchParams }: DataPageProps) {
 
                 {activeViewType === ViewType.LIST ? (
                   <ul className="space-y-2">
-                    {sortedRecords.map((record) => {
+                    {viewRecords.map((record) => {
                       const rowData = (record.dataJson ?? {}) as Record<
                         string,
                         unknown

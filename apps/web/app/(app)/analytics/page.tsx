@@ -12,22 +12,21 @@ export default async function AnalyticsPage() {
 
   const [tableCount, records, automationCount] = await Promise.all([
     db.table.count({ where: { workspaceId: workspace.id } }),
-    db.record.findMany({
+    db.record.count({
       where: {
         table: { workspaceId: workspace.id },
-      },
-      select: {
-        dataJson: true,
       },
     }),
     db.automation.count({ where: { workspaceId: workspace.id } }),
   ]);
 
-  const recordCount = records.length;
-  const openIncidentCount = records.filter((record) => {
-    const payload = record.dataJson as Record<string, unknown>;
-    return payload.Open === true;
-  }).length;
+  const recordCount = records;
+  const openIncidentCount = await db.record.count({
+    where: {
+      table: { workspaceId: workspace.id },
+      openIndicator: true,
+    },
+  });
 
   return (
     <div className="space-y-6" data-testid="analytics-page">
