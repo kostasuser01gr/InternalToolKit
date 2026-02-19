@@ -130,11 +130,16 @@ export async function POST(request: Request) {
   });
 
   if (!result.ok) {
+    const status =
+      result.reason === "email_taken" || result.reason === "login_taken"
+        ? 409
+        : 503;
+
     const response = Response.json(
       { ok: false, message: result.message },
       withObservabilityHeaders(
         {
-          status: result.reason === "email_taken" ? 409 : 500,
+          status,
         },
         requestId,
       ),
@@ -144,7 +149,7 @@ export async function POST(request: Request) {
       requestId,
       route,
       method: request.method,
-      status: result.reason === "email_taken" ? 409 : 500,
+      status,
       durationMs: Date.now() - startedAt,
     });
     return response;

@@ -31,6 +31,16 @@ const pinLoginSchema = z.object({
 
 const loginSchema = z.union([passwordLoginSchema, pinLoginSchema]);
 
+function isDatabaseUnavailableError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /(invalid url|can't reach database server|econrefused|econnreset|timed out|p1001)/i.test(
+    error.message,
+  );
+}
+
 export async function POST(request: Request) {
   const startedAt = Date.now();
   const requestId = getRequestId(request);
@@ -112,7 +122,39 @@ export async function POST(request: Request) {
     accountIdentifier,
   });
 
-  const throttle = await checkAuthThrottle(throttleKeys);
+  let throttle;
+  try {
+    throttle = await checkAuthThrottle(throttleKeys);
+  } catch (error) {
+    const errorId = createErrorId();
+
+    logSecurityEvent("auth.login_error", {
+      requestId,
+      errorId,
+      phase: "throttle",
+      message: error instanceof Error ? error.message : "unknown",
+    });
+
+    const response = Response.json(
+      {
+        ok: false,
+        message: `Login temporarily unavailable. Reference: ${errorId}`,
+      },
+      withObservabilityHeaders({ status: 503 }, requestId, errorId),
+    );
+
+    logWebRequest({
+      event: "web.auth.login",
+      requestId,
+      route,
+      method: request.method,
+      status: 503,
+      durationMs: Date.now() - startedAt,
+      errorId,
+    });
+
+    return response;
+  }
 
   if (!throttle.allowed) {
     await appendSecurityEvent({
@@ -264,6 +306,11 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     const errorId = createErrorId();
+    const serviceUnavailable = isDatabaseUnavailableError(error);
+    const status = serviceUnavailable ? 503 : 500;
+    const message = serviceUnavailable
+      ? `Login temporarily unavailable. Reference: ${errorId}`
+      : `Login failed. Reference: ${errorId}`;
 
     logSecurityEvent("auth.login_error", {
       requestId,
@@ -274,9 +321,9 @@ export async function POST(request: Request) {
     const response = Response.json(
       {
         ok: false,
-        message: `Login failed. Reference: ${errorId}`,
+        message,
       },
-      withObservabilityHeaders({ status: 500 }, requestId, errorId),
+      withObservabilityHeaders({ status }, requestId, errorId),
     );
 
     logWebRequest({
@@ -284,7 +331,7 @@ export async function POST(request: Request) {
       requestId,
       route,
       method: request.method,
-      status: 500,
+      status,
       durationMs: Date.now() - startedAt,
       errorId,
     });

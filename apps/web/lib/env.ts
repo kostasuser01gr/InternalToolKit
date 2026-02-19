@@ -105,6 +105,19 @@ function parseEnv(): ServerEnv {
     );
   }
 
+  if (databaseUrl && !databaseUrl.startsWith("file:")) {
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(databaseUrl);
+    } catch {
+      configError("DATABASE_URL must be a valid Postgres connection URL.");
+    }
+
+    if (parsedUrl.protocol !== "postgresql:" && parsedUrl.protocol !== "postgres:") {
+      configError("DATABASE_URL must use the postgres:// or postgresql:// protocol.");
+    }
+  }
+
   const provider = normalized.ASSISTANT_PROVIDER ?? "mock";
   const apiKey = normalized.OPENAI_API_KEY ?? "";
 
