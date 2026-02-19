@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 
+import { getServerEnv } from "@/lib/env";
+
 declare global {
   var prisma: PrismaClient | undefined;
 }
@@ -45,8 +47,7 @@ function ensureWritableRuntimeDatabase(sourceFilePath: string) {
   return `file:${FALLBACK_RUNTIME_DB}`;
 }
 
-function resolveRuntimeDatabaseUrl() {
-  const configured = process.env.DATABASE_URL?.trim() || DEFAULT_DATABASE_URL;
+function resolveRuntimeDatabaseUrl(configured: string) {
   const isProduction = process.env.NODE_ENV === "production";
 
   if (!isProduction) {
@@ -66,8 +67,8 @@ function resolveRuntimeDatabaseUrl() {
   return configured !== fallback ? fallback : configured;
 }
 
-const databaseUrl = resolveRuntimeDatabaseUrl();
-process.env.DATABASE_URL = databaseUrl;
+const configuredDatabaseUrl = getServerEnv().DATABASE_URL || DEFAULT_DATABASE_URL;
+const databaseUrl = resolveRuntimeDatabaseUrl(configuredDatabaseUrl);
 
 const adapter = new PrismaLibSql({
   url: databaseUrl,

@@ -86,7 +86,7 @@ Database scripts (`apps/web`):
 
 Web (`apps/web`), see `apps/web/.env.example`:
 - `SESSION_SECRET` (required in hosted env, >=16 chars)
-- `DATABASE_URL` (recommended for persistent hosted data)
+- `DATABASE_URL` (required in hosted env; use a writable production database URL)
 - `NEXT_PUBLIC_API_URL`
 - `ASSISTANT_PROVIDER` (`mock` default)
 - `OPENAI_API_KEY` (required only when `ASSISTANT_PROVIDER=openai`)
@@ -100,7 +100,9 @@ API worker (`apps/api`), see `apps/api/.dev.vars.example`:
 - `ALLOW_LEGACY_MUTATIONS` (`0` default, keep off)
 
 Runtime fallback:
-- If `DATABASE_URL` is not set in hosted web runtime, sqlite fallback uses `/tmp/internal-toolkit-runtime.db` (ephemeral, non-durable).
+- Local/non-hosted runtime falls back to `file:./dev.db` when `DATABASE_URL` is not set.
+- Hosted runtime fails fast when `SESSION_SECRET` or `DATABASE_URL` is missing/blank to prevent opaque runtime 500s.
+- Vercel zero-infra fallback: set `DATABASE_URL=file:./prisma/runtime.sqlite` (bundled schema snapshot copied to `/tmp`; ephemeral, non-durable).
 
 ## Auth and Security Baseline
 

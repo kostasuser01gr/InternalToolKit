@@ -52,7 +52,7 @@ function configError(details: string): never {
       "Invalid environment configuration.",
       details,
       "Fix: copy apps/web/.env.example to apps/web/.env.local and set values.",
-      "Minimum required: SESSION_SECRET with at least 16 characters.",
+      "Minimum required in hosted production: SESSION_SECRET (>=16 chars) and DATABASE_URL.",
     ].join("\n"),
   );
 }
@@ -68,15 +68,22 @@ function parseEnv(): ServerEnv {
   }
 
   const normalized = parsed.data;
+  const hostedProduction = isHostedProductionRuntime();
   let secret = normalized.SESSION_SECRET ?? normalized.NEXTAUTH_SECRET;
 
   if (!secret) {
-    if (isHostedProductionRuntime()) {
+    if (hostedProduction) {
       configError("SESSION_SECRET (or NEXTAUTH_SECRET) is required.");
     }
 
     // Local fallback to keep fresh clones runnable without paid/managed secrets.
     secret = "dev-session-secret-change-before-production";
+  }
+
+  const databaseUrl = normalized.DATABASE_URL;
+
+  if (hostedProduction && !databaseUrl) {
+    configError("DATABASE_URL is required and must point to a writable production database.");
   }
 
   const provider = normalized.ASSISTANT_PROVIDER ?? "mock";
@@ -89,7 +96,7 @@ function parseEnv(): ServerEnv {
   return {
     SESSION_SECRET: secret,
     NEXT_PUBLIC_API_URL: normalized.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL,
-    DATABASE_URL: normalized.DATABASE_URL ?? DEFAULT_DATABASE_URL,
+    DATABASE_URL: databaseUrl ?? DEFAULT_DATABASE_URL,
     APP_VERSION: normalized.APP_VERSION ?? "1.0.0",
     ASSISTANT_PROVIDER: provider,
     OPENAI_API_KEY: apiKey,
