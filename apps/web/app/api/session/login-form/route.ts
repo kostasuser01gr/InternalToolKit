@@ -29,6 +29,8 @@ const pinFormSchema = z.object({
   pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits."),
 });
 
+const loginMethodSchema = z.enum(["pin", "password"]);
+
 function getRequestOrigin(request: Request) {
   const origin = request.headers.get("origin");
 
@@ -99,15 +101,25 @@ export async function POST(request: Request) {
   const userAgent = request.headers.get("user-agent") ?? "unknown";
 
   const formData = await request.formData();
-  const loginName = formData.get("loginName");
-  const pin = formData.get("pin");
+  const methodRaw = formData.get("method");
+  const requestedMethod = loginMethodSchema.safeParse(methodRaw);
+  const loginNameValue =
+    typeof formData.get("loginName") === "string"
+      ? String(formData.get("loginName")).trim()
+      : "";
+  const pinValue =
+    typeof formData.get("pin") === "string"
+      ? String(formData.get("pin")).trim()
+      : "";
+  const hasPinCredentials = loginNameValue.length > 0 || pinValue.length > 0;
+  const shouldUsePinFlow = requestedMethod.success
+    ? requestedMethod.data === "pin"
+    : hasPinCredentials;
 
-  const usesPinFlow = typeof loginName === "string" || typeof pin === "string";
-
-  const parsed = usesPinFlow
+  const parsed = shouldUsePinFlow
     ? pinFormSchema.safeParse({
-        loginName,
-        pin,
+        loginName: formData.get("loginName"),
+        pin: formData.get("pin"),
       })
     : passwordFormSchema.safeParse({
         email: formData.get("email"),

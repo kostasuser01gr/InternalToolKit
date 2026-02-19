@@ -5,7 +5,15 @@ async function login(page: Page, loginName: string, pin: string) {
   await page.goto("/login");
   await page.getByLabel("Login name").fill(loginName);
   await page.getByLabel("PIN").fill(pin);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: /^Continue$/ }).click();
+  await expect(page).toHaveURL(/\/(overview|home)$/);
+}
+
+async function loginWithPassword(page: Page, email: string, password: string) {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Continue with password" }).click();
   await expect(page).toHaveURL(/\/(overview|home)$/);
 }
 
@@ -128,6 +136,15 @@ test("signup creates an account and can sign in", async ({ page }, testInfo) => 
   });
 
   await login(page, loginName, pin);
+  await expect(page.getByTestId("home-page")).toBeVisible();
+
+  await page.request.post("/api/session/logout", {
+    headers: {
+      Origin: "http://127.0.0.1:4173",
+    },
+  });
+
+  await loginWithPassword(page, email, password);
   await expect(page.getByTestId("home-page")).toBeVisible();
 });
 
@@ -270,10 +287,7 @@ test("admin gate: viewer blocked, admin allowed", async ({
     },
   });
 
-  await page.goto("/login");
-  await page.getByLabel("Login name").fill("admin");
-  await page.getByLabel("PIN").fill("1234");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await login(page, "admin", "1234");
   await page.goto("/admin");
   await expect(page.getByTestId("admin-page")).toBeVisible();
 });

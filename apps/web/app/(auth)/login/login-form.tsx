@@ -25,7 +25,8 @@ export function LoginForm({ callbackUrl, error, requestId, errorId }: LoginFormP
         </div>
         <h1 className="kpi-font text-2xl font-semibold">Sign in</h1>
         <p className="text-sm text-[var(--text-muted)]">
-          Access the internal programmable dashboard with your login name and PIN.
+          Access the internal programmable dashboard with login name + PIN or
+          email + password.
         </p>
       </div>
 
@@ -34,6 +35,7 @@ export function LoginForm({ callbackUrl, error, requestId, errorId }: LoginFormP
         action={`/api/session/login-form?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
         className="space-y-4"
       >
+        <input type="hidden" name="method" value="pin" />
         <div className="space-y-2">
           <Label htmlFor="loginName">Login name</Label>
           <Input
@@ -71,6 +73,45 @@ export function LoginForm({ callbackUrl, error, requestId, errorId }: LoginFormP
 
         <PrimaryButton type="submit" className="w-full">
           Continue
+        </PrimaryButton>
+      </form>
+
+      <form
+        method="post"
+        action={`/api/session/login-form?callbackUrl=${encodeURIComponent(safeCallbackUrl)}`}
+        className="space-y-4 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-4"
+      >
+        <input type="hidden" name="method" value="password" />
+        <p className="text-xs text-[var(--text-muted)]">
+          Compatibility login
+        </p>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            placeholder="name@company.com"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            minLength={8}
+            placeholder="Your account password"
+          />
+        </div>
+
+        <PrimaryButton type="submit" className="w-full">
+          Continue with password
         </PrimaryButton>
       </form>
 
