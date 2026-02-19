@@ -105,7 +105,7 @@ function parseEnv(): ServerEnv {
     );
   }
 
-  if (databaseUrl && !databaseUrl.startsWith("file:")) {
+  if (hostedProduction && databaseUrl && !databaseUrl.startsWith("file:")) {
     let parsedUrl: URL;
     try {
       parsedUrl = new URL(databaseUrl);
