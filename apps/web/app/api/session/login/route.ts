@@ -4,6 +4,7 @@ import { checkAuthThrottle, buildAuthThrottleKeys, registerAuthFailure, register
 import { createSessionForUser, verifyCredentials } from "@/lib/auth/session";
 import { normalizeEmail, normalizeLoginName } from "@/lib/auth/tokens";
 import { appendAuditLog } from "@/lib/audit";
+import { getAuthRuntimeEnvError } from "@/lib/env";
 import { createErrorId, getRequestId, logWebRequest, withObservabilityHeaders } from "@/lib/http-observability";
 import { appendSecurityEvent } from "@/lib/security-events";
 import {
@@ -16,7 +17,7 @@ import { getDefaultWorkspaceForUser } from "@/lib/workspace";
 
 const passwordLoginSchema = z.object({
   email: z.string().trim().email().max(200),
-  password: z.string().min(8).max(200),
+  password: z.string().trim().min(8).max(200),
 });
 
 const pinLoginSchema = z.object({
@@ -36,7 +37,7 @@ function isDatabaseUnavailableError(error: unknown) {
     return false;
   }
 
-  return /(invalid url|can't reach database server|econrefused|econnreset|timed out|p1001)/i.test(
+  return /(invalid url|can't reach database server|econnrefused|econnreset|timed out|p1001)/i.test(
     error.message,
   );
 }
@@ -48,6 +49,26 @@ export async function POST(request: Request) {
   const ipAddress = getClientIp(request);
   const deviceId = getClientDeviceId(request);
   const userAgent = request.headers.get("user-agent") ?? "unknown";
+  const envError = getAuthRuntimeEnvError();
+
+  if (envError) {
+    const response = Response.json(
+      { ok: false, error: envError, message: envError },
+      withObservabilityHeaders({ status: 500 }, requestId),
+    );
+
+    logWebRequest({
+      event: "web.auth.login",
+      requestId,
+      route,
+      method: request.method,
+      status: 500,
+      durationMs: Date.now() - startedAt,
+      details: { envError: true },
+    });
+
+    return response;
+  }
 
   if (!isSameOriginRequest(request)) {
     const response = Response.json(

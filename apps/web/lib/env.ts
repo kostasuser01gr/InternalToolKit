@@ -236,3 +236,44 @@ export function getDatabaseUrl() {
 export function validateServerEnv() {
   getServerEnv();
 }
+
+export function getAuthRuntimeEnvError() {
+  const databaseUrl = process.env.DATABASE_URL?.trim() ?? "";
+  const sessionSecret =
+    process.env.SESSION_SECRET?.trim() ??
+    process.env.NEXTAUTH_SECRET?.trim() ??
+    "";
+  const isDevelopment = process.env.NODE_ENV === "development";
+  const hostedProduction = isHostedProductionRuntime();
+  const allowSqliteDev = process.env.ALLOW_SQLITE_DEV === "1";
+
+  if (!databaseUrl) {
+    return hostedProduction ? "Set DATABASE_URL." : null;
+  }
+
+  if (!sessionSecret) {
+    return hostedProduction ? "Set SESSION_SECRET." : null;
+  }
+
+  if (hostedProduction && sessionSecret.length < MIN_SESSION_SECRET_LENGTH) {
+    return `SESSION_SECRET must be at least ${MIN_SESSION_SECRET_LENGTH} characters.`;
+  }
+
+  if (databaseUrl.startsWith("file:")) {
+    if (!isDevelopment) {
+      return "Set DATABASE_URL to a remote Postgres URL (file: is only allowed in development).";
+    }
+
+    if (!allowSqliteDev) {
+      return "Set ALLOW_SQLITE_DEV=1 to use a file-based DATABASE_URL in development.";
+    }
+
+    return null;
+  }
+
+  if (hostedProduction && !isPostgresUrl(databaseUrl)) {
+    return "Set DATABASE_URL to a valid postgres:// or postgresql:// URL.";
+  }
+
+  return null;
+}

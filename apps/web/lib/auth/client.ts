@@ -13,12 +13,16 @@ type LoginResponse =
     };
 
 export async function loginWithPassword(input: LoginInput): Promise<LoginResponse> {
+  const email = input.email.trim().toLowerCase();
+  const password = input.password.trim();
+
   const response = await fetch("/api/session/login", {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ email, password }),
   });
 
   const payload = (await response.json()) as { ok?: boolean; message?: string };
@@ -36,5 +40,6 @@ export async function loginWithPassword(input: LoginInput): Promise<LoginRespons
 export async function logoutSession() {
   await fetch("/api/session/logout", {
     method: "POST",
+    credentials: "include",
   });
 }

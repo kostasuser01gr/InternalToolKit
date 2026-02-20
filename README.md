@@ -104,6 +104,9 @@ Runtime validation:
 - Hosted runtime fails fast when `SESSION_SECRET` or `DATABASE_URL` is missing/blank.
 - Hosted runtime rejects `DATABASE_URL=file:...`; production must use persistent Postgres.
 - Local development defaults to `postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public`.
+- Supabase format examples:
+  - `DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:6543/postgres?pgbouncer=true&connection_limit=1&sslmode=require`
+  - `DIRECT_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?sslmode=require`
 
 ## Runtime 500 Remediation (2026-02-19)
 - Symptom: production `POST /api/session/login` returned 500.

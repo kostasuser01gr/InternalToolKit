@@ -65,6 +65,8 @@ export async function signupWithPassword(input: {
   const normalizedEmail = input.email.trim().toLowerCase();
   const normalizedName = input.name.trim();
   const normalizedLoginName = input.loginName.trim().toLowerCase();
+  const normalizedPassword = input.password.trim();
+  const normalizedPin = input.pin.trim();
   const ip = input.ip ?? "unknown";
 
   try {
@@ -74,8 +76,8 @@ export async function signupWithPassword(input: {
           email: normalizedEmail,
           loginName: normalizedLoginName,
           name: normalizedName,
-          passwordHash: hashSync(input.password, 12),
-          pinHash: hashSync(input.pin, 12),
+          passwordHash: hashSync(normalizedPassword, 12),
+          pinHash: hashSync(normalizedPin, 12),
         },
         select: {
           id: true,

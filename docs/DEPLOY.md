@@ -24,6 +24,10 @@ Set these in Vercel project settings for `apps/web`:
 Supabase URI guidance:
 - `DATABASE_URL`: pooler URI (typically port `6543`) for runtime queries.
 - `DIRECT_URL`: direct URI (typically port `5432`) for Prisma migrations.
+- Example `DATABASE_URL`:
+  - `postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:6543/postgres?pgbouncer=true&connection_limit=1&sslmode=require`
+- Example `DIRECT_URL`:
+  - `postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?sslmode=require`
 
 ### Cloudflare Worker Vars
 Set in Wrangler/Cloudflare:

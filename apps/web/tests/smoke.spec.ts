@@ -148,6 +148,12 @@ test("signup creates an account and can sign in", async ({ page }, testInfo) => 
   await expect(page).toHaveURL(/\/login\?/);
   await expect(page.getByText("Invalid credentials.")).toBeVisible();
 
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("WrongPassword123!");
+  await page.getByRole("button", { name: "Continue with password" }).click();
+  await expect(page).toHaveURL(/\/login\?/);
+  await expect(page.getByText("Invalid credentials.")).toBeVisible();
+
   await login(page, loginName, pin);
   await expect(page.getByTestId("home-page")).toBeVisible();
   await assertProtectedSessionPersists(page);

@@ -4,6 +4,7 @@ import { checkAuthThrottle, buildAuthThrottleKeys, registerAuthFailure, register
 import { createSessionForUser, verifyCredentials } from "@/lib/auth/session";
 import { normalizeEmail, normalizeLoginName } from "@/lib/auth/tokens";
 import { appendAuditLog } from "@/lib/audit";
+import { getAuthRuntimeEnvError } from "@/lib/env";
 import { createErrorId, getRequestId, logWebRequest } from "@/lib/http-observability";
 import { appendSecurityEvent } from "@/lib/security-events";
 import {
@@ -16,7 +17,7 @@ import { getDefaultWorkspaceForUser } from "@/lib/workspace";
 
 const passwordFormSchema = z.object({
   email: z.string().trim().email().max(200),
-  password: z.string().min(8).max(200),
+  password: z.string().trim().min(8).max(200),
 });
 
 const pinFormSchema = z.object({
@@ -99,6 +100,26 @@ export async function POST(request: Request) {
   const ipAddress = getClientIp(request);
   const deviceId = getClientDeviceId(request);
   const userAgent = request.headers.get("user-agent") ?? "unknown";
+  const envError = getAuthRuntimeEnvError();
+
+  if (envError) {
+    const response = Response.redirect(
+      buildLoginUrl(request, callbackUrl, envError, requestId),
+      303,
+    );
+
+    logWebRequest({
+      event: "web.auth.login_form",
+      requestId,
+      route,
+      method: request.method,
+      status: 303,
+      durationMs: Date.now() - startedAt,
+      details: { envError: true },
+    });
+
+    return response;
+  }
 
   const formData = await request.formData();
   const methodRaw = formData.get("method");

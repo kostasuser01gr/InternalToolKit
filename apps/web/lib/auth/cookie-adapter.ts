@@ -53,7 +53,13 @@ function decodeToken(token: string): SessionPayload | null {
     return null;
   }
 
-  const expected = sign(body);
+  let expected: Buffer;
+  try {
+    expected = sign(body);
+  } catch {
+    // Runtime env may be missing/invalid; treat token as unusable instead of crashing.
+    return null;
+  }
   const actual = fromBase64Url(signature);
 
   if (actual.length !== expected.length) {
