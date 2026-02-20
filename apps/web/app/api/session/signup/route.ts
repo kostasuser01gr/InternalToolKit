@@ -127,6 +127,7 @@ export async function POST(request: Request) {
     email: parsed.data.email,
     password: parsed.data.password,
     ...(ip ? { ip } : {}),
+    requestId,
   });
 
   if (!result.ok) {
@@ -155,11 +156,46 @@ export async function POST(request: Request) {
     return response;
   }
 
-  await createSessionForUser(result.user.id, {
-    ipAddress: ip,
-    userAgent,
-    deviceId,
-  });
+  try {
+    await createSessionForUser(result.user.id, {
+      ipAddress: ip,
+      userAgent,
+      deviceId,
+    });
+  } catch (error) {
+    logSecurityEvent("auth.signup_session_failed", {
+      requestId,
+      userId: result.user.id,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+
+    const response = Response.json(
+      {
+        ok: true,
+        user: {
+          id: result.user.id,
+          email: result.user.email,
+          name: result.user.name,
+          roleGlobal: result.user.roleGlobal,
+        },
+        warning: "Account created. Sign in to continue.",
+      },
+      withObservabilityHeaders({ status: 200 }, requestId),
+    );
+
+    logWebRequest({
+      event: "web.auth.signup",
+      requestId,
+      route,
+      method: request.method,
+      status: 200,
+      durationMs: Date.now() - startedAt,
+      userId: result.user.id,
+      details: { sessionEstablished: false },
+    });
+
+    return response;
+  }
 
   const response = Response.json(
     {

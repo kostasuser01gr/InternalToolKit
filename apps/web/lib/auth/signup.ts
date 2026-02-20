@@ -29,6 +29,30 @@ function createWorkspaceName(displayName: string) {
     : `${displayName}'s Workspace`;
 }
 
+function resolveOperationalSignupMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  if (
+    /(database .* does not exist|can't reach database server|econnrefused|econnreset|timed out|p1001|invalid url)/i.test(
+      error.message,
+    )
+  ) {
+    return "Signup is temporarily unavailable because database connectivity is invalid. Set DATABASE_URL to Postgres and redeploy.";
+  }
+
+  if (
+    /(table .* does not exist|relation .* does not exist|column .* does not exist|p2021|p2022)/i.test(
+      error.message,
+    )
+  ) {
+    return "Signup is temporarily unavailable because the database schema is not ready. Run db:migrate:deploy and try again.";
+  }
+
+  return null;
+}
+
 export async function signupWithPassword(input: {
   name: string;
   loginName: string;
@@ -36,6 +60,7 @@ export async function signupWithPassword(input: {
   email: string;
   password: string;
   ip?: string;
+  requestId?: string;
 }): Promise<SignupResult> {
   const normalizedEmail = input.email.trim().toLowerCase();
   const normalizedName = input.name.trim();
@@ -131,6 +156,7 @@ export async function signupWithPassword(input: {
         email: normalizedEmail,
         loginName: normalizedLoginName,
         ip,
+        requestId: input.requestId,
       });
       return {
         ok: false,
@@ -139,17 +165,22 @@ export async function signupWithPassword(input: {
       };
     }
 
+    const operationalMessage = resolveOperationalSignupMessage(error);
+
     logSecurityEvent("auth.signup_failed", {
       reason: "unexpected",
       email: normalizedEmail,
       loginName: normalizedLoginName,
       ip,
+      requestId: input.requestId,
       error: error instanceof Error ? error.message : "unknown",
     });
     return {
       ok: false,
       reason: "unknown",
-      message: "Unable to create account right now. Please try again.",
+      message:
+        operationalMessage ??
+        "Unable to create account right now. Please try again.",
     };
   }
 }

@@ -175,6 +175,7 @@ export async function POST(request: Request) {
     email: parsed.data.email,
     password: parsed.data.password,
     ip: ipAddress,
+    requestId,
   });
 
   if (!result.ok) {
@@ -196,11 +197,42 @@ export async function POST(request: Request) {
     return response;
   }
 
-  await createSessionForUser(result.user.id, {
-    ipAddress,
-    userAgent,
-    deviceId,
-  });
+  try {
+    await createSessionForUser(result.user.id, {
+      ipAddress,
+      userAgent,
+      deviceId,
+    });
+  } catch (error) {
+    logSecurityEvent("auth.signup_form_session_failed", {
+      requestId,
+      userId: result.user.id,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+
+    const loginUrl = new URL("/login", getRequestOrigin(request));
+    loginUrl.searchParams.set("callbackUrl", callbackUrl);
+    loginUrl.searchParams.set(
+      "error",
+      "Account created. Please sign in to continue.",
+    );
+    loginUrl.searchParams.set("requestId", requestId);
+
+    const response = Response.redirect(loginUrl, 303);
+
+    logWebRequest({
+      event: "web.auth.signup_form",
+      requestId,
+      route,
+      method: request.method,
+      status: 303,
+      durationMs: Date.now() - startedAt,
+      userId: result.user.id,
+      details: { sessionEstablished: false },
+    });
+
+    return response;
+  }
 
   const response = Response.redirect(new URL(callbackUrl, getRequestOrigin(request)), 303);
 
