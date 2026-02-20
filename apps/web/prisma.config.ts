@@ -17,6 +17,7 @@ for (const envFile of envFiles) {
 }
 
 process.env.DATABASE_URL ??= DEFAULT_LOCAL_DATABASE_URL;
+process.env.DIRECT_URL ??= process.env.DATABASE_URL;
 
 export default defineConfig({
   schema: "prisma/schema.prisma",

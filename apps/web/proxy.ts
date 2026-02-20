@@ -101,7 +101,7 @@ async function isValidSessionCookie(token: string) {
   }
 
   const secret = (process.env.SESSION_SECRET ?? process.env.NEXTAUTH_SECRET)?.trim();
-  if (!secret || secret.length < 16) {
+  if (!secret || secret.length < 32) {
     // Edge runtime can miss secure env injection in some deploy contexts.
     // Route handlers still perform authoritative session validation.
     return true;

@@ -4,7 +4,17 @@ const DEFAULT_LOCAL_DATABASE_URL =
   "postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public";
 
 const DATABASE_URL = process.env.DATABASE_URL?.trim() || DEFAULT_LOCAL_DATABASE_URL;
-const DIRECT_URL = process.env.DIRECT_URL?.trim() || DATABASE_URL;
+const DIRECT_URL = process.env.DIRECT_URL?.trim();
+
+if (!DIRECT_URL) {
+  console.error(
+    [
+      "DIRECT_URL is required for db:migrate:deploy.",
+      "Use the Supabase direct Postgres URI (typically port 5432).",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
 
 if (DATABASE_URL.startsWith("file:") || DIRECT_URL.startsWith("file:")) {
   console.error(
