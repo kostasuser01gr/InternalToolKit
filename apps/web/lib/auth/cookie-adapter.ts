@@ -150,60 +150,70 @@ function isPinCredentials(input: AuthCredentials): input is {
 }
 
 async function resolveSession(payload: SessionPayload): Promise<AppSession | null> {
-  const now = new Date();
-  const record = await db.authSession.findFirst({
-    where: {
-      id: payload.sid,
-      userId: payload.uid,
-      revokedAt: null,
-      expiresAt: { gt: now },
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          roleGlobal: true,
+  try {
+    const now = new Date();
+    const record = await db.authSession.findFirst({
+      where: {
+        id: payload.sid,
+        userId: payload.uid,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            roleGlobal: true,
+          },
         },
       },
-    },
-  });
-
-  if (!record) {
-    return null;
-  }
-
-  if (!tokenHashesMatch(record.tokenHash, hashOpaqueToken(payload.st))) {
-    return null;
-  }
-
-  const nowMs = Date.now();
-  const lastSeenMs = record.lastSeenAt.getTime();
-  if (nowMs - lastSeenMs >= 30_000) {
-    await db.authSession.update({
-      where: { id: record.id },
-      data: {
-        lastSeenAt: new Date(nowMs),
-      },
     });
-  }
 
-  return {
-    user: {
-      id: record.user.id,
-      email: record.user.email,
-      name: record.user.name,
-      roleGlobal: record.user.roleGlobal,
-    },
-    session: {
-      id: record.id,
-      createdAt: record.createdAt,
-      lastSeenAt: new Date(nowMs - lastSeenMs >= 30_000 ? nowMs : record.lastSeenAt.getTime()),
-      expiresAt: record.expiresAt,
-      elevatedUntil: record.elevatedUntil,
-    },
-  };
+    if (!record) {
+      return null;
+    }
+
+    if (!tokenHashesMatch(record.tokenHash, hashOpaqueToken(payload.st))) {
+      return null;
+    }
+
+    const nowMs = Date.now();
+    const lastSeenMs = record.lastSeenAt.getTime();
+    if (nowMs - lastSeenMs >= 30_000) {
+      await db.authSession.update({
+        where: { id: record.id },
+        data: {
+          lastSeenAt: new Date(nowMs),
+        },
+      });
+    }
+
+    return {
+      user: {
+        id: record.user.id,
+        email: record.user.email,
+        name: record.user.name,
+        roleGlobal: record.user.roleGlobal,
+      },
+      session: {
+        id: record.id,
+        createdAt: record.createdAt,
+        lastSeenAt: new Date(nowMs - lastSeenMs >= 30_000 ? nowMs : record.lastSeenAt.getTime()),
+        expiresAt: record.expiresAt,
+        elevatedUntil: record.elevatedUntil,
+      },
+    };
+  } catch (error) {
+    logSecurityEvent("auth.session_lookup_failed", {
+      reason: "session_lookup_failed",
+      message: error instanceof Error ? error.message : "unknown",
+      userId: payload.uid,
+      sessionId: payload.sid,
+    });
+    return null;
+  }
 }
 
 export const cookieAuthAdapter: AuthAdapter = {

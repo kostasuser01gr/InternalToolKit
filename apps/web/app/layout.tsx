@@ -2,11 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Manrope, Space_Grotesk } from "next/font/google";
 
 import { Providers } from "@/components/providers";
-import { validateServerEnv } from "@/lib/env";
 
 import "@/styles/globals.css";
-
-validateServerEnv();
 
 const bodyFont = Manrope({
   subsets: ["latin"],

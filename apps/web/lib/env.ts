@@ -28,6 +28,7 @@ export type ServerEnv = {
 };
 
 let cachedEnv: ServerEnv | null = null;
+let cachedDatabaseUrl: string | null = null;
 
 function isBuildPhase() {
   // `next build` evaluates server modules to collect route metadata.
@@ -208,6 +209,12 @@ function parseEnv(): ServerEnv {
   };
 }
 
+function parseDatabaseUrl() {
+  // Keep DB client initialization non-throwing for routes that don't require DB access.
+  // Strict hosted env validation is enforced by getServerEnv()/health checks.
+  return process.env.DATABASE_URL?.trim() || DEFAULT_DATABASE_URL;
+}
+
 export function getServerEnv(): ServerEnv {
   if (cachedEnv) {
     return cachedEnv;
@@ -215,6 +222,15 @@ export function getServerEnv(): ServerEnv {
 
   cachedEnv = parseEnv();
   return cachedEnv;
+}
+
+export function getDatabaseUrl() {
+  if (cachedDatabaseUrl) {
+    return cachedDatabaseUrl;
+  }
+
+  cachedDatabaseUrl = parseDatabaseUrl();
+  return cachedDatabaseUrl;
 }
 
 export function validateServerEnv() {

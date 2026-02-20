@@ -7,15 +7,32 @@ function toErrorCode(error: unknown) {
     return "HEALTH_UNKNOWN_ERROR";
   }
 
-  if (error.message.includes("SESSION_SECRET")) {
+  const missingKeysMatch = error.message.match(
+    /Missing required env keys:\s*([^\n.]+)/i,
+  );
+  const missingKeys = (missingKeysMatch?.[1] ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (
+    missingKeys.includes("SESSION_SECRET") ||
+    /SESSION_SECRET must|NEXTAUTH_SECRET must/i.test(error.message)
+  ) {
     return "ENV_SESSION_SECRET_INVALID";
   }
 
-  if (error.message.includes("DATABASE_URL")) {
+  if (
+    missingKeys.includes("DATABASE_URL") ||
+    /DATABASE_URL must/i.test(error.message)
+  ) {
     return "ENV_DATABASE_URL_INVALID";
   }
 
-  if (error.message.includes("DIRECT_URL")) {
+  if (
+    missingKeys.includes("DIRECT_URL") ||
+    /DIRECT_URL must/i.test(error.message)
+  ) {
     return "ENV_DIRECT_URL_INVALID";
   }
 
