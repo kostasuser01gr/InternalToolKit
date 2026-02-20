@@ -540,7 +540,7 @@ export async function sendMessageAction(formData: FormData) {
       buildChatUrl({
         workspaceId: parsed.workspaceId,
         threadId: thread.id,
-        success: `Message sent via ${assistant.provider}.`,
+        success: "Message sent.",
       }),
     );
   } catch (error) {

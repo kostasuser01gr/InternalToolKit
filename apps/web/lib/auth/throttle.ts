@@ -81,6 +81,15 @@ function nowDate() {
   return new Date();
 }
 
+function isUniqueConstraintError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const code = (error as { code?: string }).code;
+  return code === "P2002";
+}
+
 function windowExpired(startedAt: Date, windowMs: number, now: Date) {
   return startedAt.getTime() + windowMs <= now.getTime();
 }
@@ -148,27 +157,41 @@ async function registerAttempt(
   await db.$transaction(async (tx) => {
     for (const { dimension, identifier } of entries) {
       const policy = THROTTLE_POLICY[dimension];
-      const existing = await tx.authThrottle.findUnique({
-        where: {
-          dimension_identifier: {
-            dimension,
-            identifier,
-          },
+      const where = {
+        dimension_identifier: {
+          dimension,
+          identifier,
         },
-      });
+      } as const;
+
+      let existing = await tx.authThrottle.findUnique({ where });
 
       if (!existing) {
-        await tx.authThrottle.create({
-          data: {
-            dimension,
-            identifier,
-            windowStartedAt: now,
-            attemptCount: mutate === "failure" ? 1 : 0,
-            lastAttemptAt: now,
-            lockoutUntil: null,
-          },
-        });
-        continue;
+        try {
+          await tx.authThrottle.create({
+            data: {
+              dimension,
+              identifier,
+              windowStartedAt: now,
+              attemptCount: mutate === "failure" ? 1 : 0,
+              lastAttemptAt: now,
+              lockoutUntil: null,
+            },
+          });
+          continue;
+        } catch (error) {
+          // Parallel login attempts can race on the unique key.
+          if (!isUniqueConstraintError(error)) {
+            throw error;
+          }
+        }
+
+        existing = await tx.authThrottle.findUnique({ where });
+        if (!existing) {
+          throw new Error(
+            `Auth throttle row missing after unique conflict for ${dimension}:${identifier}.`,
+          );
+        }
       }
 
       const shouldResetWindow = windowExpired(
@@ -179,12 +202,7 @@ async function registerAttempt(
 
       if (mutate === "success") {
         await tx.authThrottle.update({
-          where: {
-            dimension_identifier: {
-              dimension,
-              identifier,
-            },
-          },
+          where,
           data: {
             attemptCount: 0,
             windowStartedAt: shouldResetWindow ? now : existing.windowStartedAt,
@@ -200,12 +218,7 @@ async function registerAttempt(
       const shouldLock = nextAttempts > policy.limit;
 
       await tx.authThrottle.update({
-        where: {
-          dimension_identifier: {
-            dimension,
-            identifier,
-          },
-        },
+        where,
         data: {
           attemptCount: nextAttempts,
           windowStartedAt: shouldResetWindow ? now : existing.windowStartedAt,
