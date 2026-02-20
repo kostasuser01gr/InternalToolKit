@@ -85,7 +85,7 @@ Database scripts (`apps/web`):
 ## Environment Variables
 
 Web (`apps/web`), see `apps/web/.env.example`:
-- `SESSION_SECRET` (required in hosted env, >=16 chars)
+- `SESSION_SECRET` (required in hosted env, >=32 chars)
 - `DATABASE_URL` (required in hosted env; Supabase pooler URI recommended)
 - `DIRECT_URL` (required for migration workflows; Supabase direct URI)
 - `NEXT_PUBLIC_API_URL`
@@ -170,7 +170,7 @@ Rollback/restore note:
 2. Set root directory to `apps/web`.
 3. Build command: `pnpm build` (at repo root is also supported by monorepo setup).
 4. Set env vars at minimum:
-   - `SESSION_SECRET=<strong-random-secret>`
+   - `SESSION_SECRET=<strong-random-secret-at-least-32-chars>`
    - `NEXT_PUBLIC_API_URL=https://<worker-name>.<subdomain>.workers.dev`
    - `DATABASE_URL=<supabase-pooled-uri>`
    - `DIRECT_URL=<supabase-direct-uri>`

@@ -40,7 +40,7 @@
 Set for **Preview + Production**:
 - `DATABASE_URL` = Supabase pooled URI (runtime)
 - `DIRECT_URL` = Supabase direct URI (migrations)
-- `SESSION_SECRET` = strong random secret (>=16 chars)
+- `SESSION_SECRET` = strong random secret (>=32 chars)
 
 After setting vars, redeploy:
 ```bash
