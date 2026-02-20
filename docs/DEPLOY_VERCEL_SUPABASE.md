@@ -13,11 +13,14 @@ Set these in **Vercel Preview + Production**:
   Supabase **Direct connection** URI (migrations, typically port `5432`).
 - `SESSION_SECRET`  
   Random secret with length **>= 32**.
+- Vercel input format  
+  Paste raw URI values only (no `DATABASE_URL=`/`DIRECT_URL=` prefix and no wrapping quotes).
 
 ## Supabase connection string mapping
 
 - Runtime queries: `DATABASE_URL` (pooler / PgBouncer / `6543`)
 - Migrations: `DIRECT_URL` (direct Postgres / `5432`)
+- Runtime guard expects `DATABASE_URL` to start with `postgresql://` or `postgres://`.
 
 ## Important Vercel behavior
 

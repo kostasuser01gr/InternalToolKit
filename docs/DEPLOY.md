@@ -24,6 +24,8 @@ Set these in Vercel project settings for `apps/web`:
 Supabase URI guidance:
 - `DATABASE_URL`: pooler URI (typically port `6543`) for runtime queries.
 - `DIRECT_URL`: direct URI (typically port `5432`) for Prisma migrations.
+- Runtime accepts `DATABASE_URL` values that start with `postgresql://` or `postgres://`.
+- In Vercel, paste raw URI values only (no `DATABASE_URL=`/`DIRECT_URL=` prefix and no wrapping quotes).
 - Example `DATABASE_URL`:
   - `postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:6543/postgres?pgbouncer=true&connection_limit=1&sslmode=require`
 - Example `DIRECT_URL`:

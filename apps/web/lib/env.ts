@@ -4,6 +4,7 @@ const DEFAULT_API_URL = "http://127.0.0.1:8787";
 const DEFAULT_DATABASE_URL =
   "postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public";
 const MIN_SESSION_SECRET_LENGTH = 32;
+const POSTGRES_PROTOCOL_RE = /^postgres(?:ql)?:\/\//i;
 
 const envSchema = z.object({
   SESSION_SECRET: z.string().trim().optional(),
@@ -62,13 +63,31 @@ function shouldRequireDirectUrl() {
   );
 }
 
-function isPostgresUrl(value: string) {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "postgresql:" || parsed.protocol === "postgres:";
-  } catch {
-    return false;
+function normalizeEnvUrl(value: string | undefined) {
+  if (!value) {
+    return undefined;
   }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const isSingleQuoted =
+    trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length >= 2;
+  const isDoubleQuoted =
+    trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2;
+
+  if (!isSingleQuoted && !isDoubleQuoted) {
+    return trimmed;
+  }
+
+  const unquoted = trimmed.slice(1, -1).trim();
+  return unquoted || undefined;
+}
+
+function isPostgresProtocolUrl(value: string) {
+  return POSTGRES_PROTOCOL_RE.test(value);
 }
 
 function configError(details: string, missingKeys: string[] = []): never {
@@ -109,8 +128,8 @@ function parseEnv(): ServerEnv {
 
   const sessionSecret = normalized.SESSION_SECRET?.trim() || undefined;
   const nextAuthSecret = normalized.NEXTAUTH_SECRET?.trim() || undefined;
-  const databaseUrl = normalized.DATABASE_URL?.trim() || undefined;
-  const directUrl = normalized.DIRECT_URL?.trim() || undefined;
+  const databaseUrl = normalizeEnvUrl(normalized.DATABASE_URL);
+  const directUrl = normalizeEnvUrl(normalized.DIRECT_URL);
   const missingKeys: string[] = [];
 
   if (hostedProduction && !databaseUrl) {
@@ -178,7 +197,12 @@ function parseEnv(): ServerEnv {
     );
   }
 
-  if (hostedProduction && databaseUrl && !usesSqlite && !isPostgresUrl(databaseUrl)) {
+  if (
+    hostedProduction &&
+    databaseUrl &&
+    !usesSqlite &&
+    !isPostgresProtocolUrl(databaseUrl)
+  ) {
     configError("DATABASE_URL must be a valid postgres:// or postgresql:// connection URL.");
   }
 
@@ -186,7 +210,7 @@ function parseEnv(): ServerEnv {
     hostedProduction &&
     directUrl &&
     !usesSqliteDirect &&
-    !isPostgresUrl(directUrl)
+    !isPostgresProtocolUrl(directUrl)
   ) {
     configError("DIRECT_URL must be a valid postgres:// or postgresql:// connection URL.");
   }
@@ -212,7 +236,7 @@ function parseEnv(): ServerEnv {
 function parseDatabaseUrl() {
   // Keep DB client initialization non-throwing for routes that don't require DB access.
   // Strict hosted env validation is enforced by getServerEnv()/health checks.
-  return process.env.DATABASE_URL?.trim() || DEFAULT_DATABASE_URL;
+  return normalizeEnvUrl(process.env.DATABASE_URL) || DEFAULT_DATABASE_URL;
 }
 
 export function getServerEnv(): ServerEnv {
@@ -238,7 +262,7 @@ export function validateServerEnv() {
 }
 
 export function getAuthRuntimeEnvError() {
-  const databaseUrl = process.env.DATABASE_URL?.trim() ?? "";
+  const databaseUrl = normalizeEnvUrl(process.env.DATABASE_URL) ?? "";
   const sessionSecret =
     process.env.SESSION_SECRET?.trim() ??
     process.env.NEXTAUTH_SECRET?.trim() ??
@@ -261,7 +285,7 @@ export function getAuthRuntimeEnvError() {
 
   if (databaseUrl.startsWith("file:")) {
     if (!isDevelopment) {
-      return "Set DATABASE_URL to a remote Postgres URL (file: is only allowed in development).";
+      return "Set DATABASE_URL to the Supabase pooler URI; ensure it starts with postgresql:// or postgres://. file: is only allowed in development.";
     }
 
     if (!allowSqliteDev) {
@@ -271,8 +295,8 @@ export function getAuthRuntimeEnvError() {
     return null;
   }
 
-  if (hostedProduction && !isPostgresUrl(databaseUrl)) {
-    return "Set DATABASE_URL to a valid postgres:// or postgresql:// URL.";
+  if (hostedProduction && !isPostgresProtocolUrl(databaseUrl)) {
+    return "Set DATABASE_URL to the Supabase pooler URI; ensure it starts with postgresql:// or postgres://.";
   }
 
   return null;
