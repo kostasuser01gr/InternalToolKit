@@ -13,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { getAppContext } from "@/lib/app-context";
 import { features } from "@/lib/constants/features";
 import { db } from "@/lib/db";
+import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { logSecurityEvent } from "@/lib/security";
 import { cn } from "@/lib/utils";
 
 import {
@@ -62,12 +64,174 @@ function getMessageTone(role: ChatRole) {
   return "border-[var(--border)] bg-white/8";
 }
 
+type ChatMessageView = {
+  id: string;
+  role: ChatRole;
+  content: string;
+  createdAt: Date;
+  isPinned: boolean;
+  commandName: string | null;
+  modelId: string | null;
+};
+
+type ActiveThreadView = {
+  id: string;
+  title: string;
+  messages: ChatMessageView[];
+};
+
+type OptionalQueryResult<T> = {
+  data: T;
+  degraded: boolean;
+};
+
+async function runOptionalChatQuery<T>(input: {
+  feature: string;
+  query: () => Promise<T>;
+  fallback: () => T;
+}): Promise<OptionalQueryResult<T>> {
+  try {
+    return {
+      data: await input.query(),
+      degraded: false,
+    };
+  } catch (error) {
+    if (!isSchemaNotReadyError(error)) {
+      throw error;
+    }
+
+    logSecurityEvent("chat.optional_query_schema_not_ready", {
+      feature: input.feature,
+      error: error instanceof Error ? error.message : "unknown",
+    });
+
+    return {
+      data: input.fallback(),
+      degraded: true,
+    };
+  }
+}
+
+type LegacyChatMessageRow = {
+  id: string;
+  role: ChatRole;
+  content: string;
+  createdAt: Date | string;
+};
+
+async function getActiveThreadView(input: {
+  workspaceId: string;
+  threadId: string;
+}): Promise<{
+  thread: ActiveThreadView | null;
+  degraded: boolean;
+}> {
+  try {
+    const thread = await db.chatThread.findFirst({
+      where: {
+        id: input.threadId,
+        workspaceId: input.workspaceId,
+      },
+      select: {
+        id: true,
+        title: true,
+        messages: {
+          orderBy: {
+            createdAt: "asc",
+          },
+          take: 1000,
+          select: {
+            id: true,
+            role: true,
+            content: true,
+            createdAt: true,
+            isPinned: true,
+            commandName: true,
+            modelId: true,
+          },
+        },
+      },
+    });
+
+    if (!thread) {
+      return {
+        thread: null,
+        degraded: false,
+      };
+    }
+
+    return {
+      thread: {
+        id: thread.id,
+        title: thread.title,
+        messages: thread.messages,
+      },
+      degraded: false,
+    };
+  } catch (error) {
+    if (!isSchemaNotReadyError(error)) {
+      throw error;
+    }
+
+    logSecurityEvent("chat.active_thread_schema_not_ready", {
+      threadId: input.threadId,
+      error: error instanceof Error ? error.message : "unknown",
+    });
+
+    const thread = await db.chatThread.findFirst({
+      where: {
+        id: input.threadId,
+        workspaceId: input.workspaceId,
+      },
+      select: {
+        id: true,
+        title: true,
+      },
+    });
+
+    if (!thread) {
+      return {
+        thread: null,
+        degraded: true,
+      };
+    }
+
+    const legacyMessages = await db.$queryRaw<LegacyChatMessageRow[]>`
+      SELECT "id", "role", "content", "createdAt"
+      FROM "ChatMessage"
+      WHERE "threadId" = ${input.threadId}
+      ORDER BY "createdAt" ASC
+      LIMIT 1000
+    `;
+
+    return {
+      thread: {
+        id: thread.id,
+        title: thread.title,
+        messages: legacyMessages.map((message) => ({
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          createdAt:
+            message.createdAt instanceof Date
+              ? message.createdAt
+              : new Date(message.createdAt),
+          isPinned: false,
+          commandName: null,
+          modelId: null,
+        })),
+      },
+      degraded: true,
+    };
+  }
+}
+
 export default async function ChatPage({ searchParams }: ChatPageProps) {
   const params = await searchParams;
   const { workspace, user } = await getAppContext(params.workspaceId);
   const modelId = params.modelId ?? DEFAULT_MODEL_ID;
 
-  const [threads, templates, actionButtons, artifacts] = await Promise.all([
+  const [threads, templatesResult, actionButtonsResult, artifactsResult] = await Promise.all([
     db.chatThread.findMany({
       where: { workspaceId: workspace.id },
       include: {
@@ -79,47 +243,63 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
       },
       orderBy: { updatedAt: "desc" },
     }),
-    db.promptTemplate.findMany({
-      where: {
-        workspaceId: workspace.id,
-        userId: user.id,
-      },
-      orderBy: { updatedAt: "desc" },
-      take: 10,
+    runOptionalChatQuery({
+      feature: "prompt_templates",
+      query: () =>
+        db.promptTemplate.findMany({
+          where: {
+            workspaceId: workspace.id,
+            userId: user.id,
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 10,
+        }),
+      fallback: () => [],
     }),
-    db.userActionButton.findMany({
-      where: {
-        workspaceId: workspace.id,
-        userId: user.id,
-      },
-      orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
-      take: 10,
+    runOptionalChatQuery({
+      feature: "user_action_buttons",
+      query: () =>
+        db.userActionButton.findMany({
+          where: {
+            workspaceId: workspace.id,
+            userId: user.id,
+          },
+          orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
+          take: 10,
+        }),
+      fallback: () => [],
     }),
-    db.chatArtifact.findMany({
-      where: { workspaceId: workspace.id },
-      orderBy: { createdAt: "desc" },
-      take: 20,
+    runOptionalChatQuery({
+      feature: "chat_artifacts",
+      query: () =>
+        db.chatArtifact.findMany({
+          where: { workspaceId: workspace.id },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        }),
+      fallback: () => [],
     }),
   ]);
 
+  const templates = templatesResult.data;
+  const actionButtons = actionButtonsResult.data;
+  const artifacts = artifactsResult.data;
   const activeThreadId = params.threadId ?? threads[0]?.id;
-
-  const activeThread = activeThreadId
-    ? await db.chatThread.findFirst({
-        where: {
-          id: activeThreadId,
-          workspaceId: workspace.id,
-        },
-        include: {
-          messages: {
-            orderBy: {
-              createdAt: "asc",
-            },
-            take: 1000,
-          },
-        },
+  const activeThreadState = activeThreadId
+    ? await getActiveThreadView({
+        workspaceId: workspace.id,
+        threadId: activeThreadId,
       })
-    : null;
+    : {
+        thread: null,
+        degraded: false,
+      };
+  const activeThread = activeThreadState.thread;
+  const hasSchemaFallback =
+    templatesResult.degraded ||
+    actionButtonsResult.degraded ||
+    artifactsResult.degraded ||
+    activeThreadState.degraded;
 
   const activePinnedMessages =
     activeThread?.messages.filter((message) => message.isPinned) ?? [];
@@ -132,6 +312,12 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
       />
 
       <StatusBanner error={params.error} success={params.success} />
+      {hasSchemaFallback ? (
+        <div className="rounded-[var(--radius-sm)] border border-amber-300/40 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
+          Some chat enhancements are temporarily unavailable until migrations are
+          applied. Core chat remains available.
+        </div>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[300px,1fr,340px]">
         <GlassCard className="space-y-4">

@@ -9,7 +9,6 @@ import {
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 
 import { appendAuditLog } from "@/lib/audit";
 import { getAssistantProvider } from "@/lib/assistant/provider";
@@ -18,9 +17,12 @@ import {
   generateKpiLayoutSuggestion,
   summarizeRecords,
 } from "@/lib/assistant/service";
+import { getChatErrorMessage } from "@/lib/chat-error-message";
 import { db } from "@/lib/db";
+import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
-import { AuthError, requireWorkspaceRole } from "@/lib/rbac";
+import { requireWorkspaceRole } from "@/lib/rbac";
+import { logSecurityEvent } from "@/lib/security";
 import {
   convertMessageSchema,
   createThreadSchema,
@@ -47,22 +49,6 @@ function buildChatUrl(params: Record<string, string | undefined>) {
   return queryString ? `/chat?${queryString}` : "/chat";
 }
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof AuthError) {
-    return error.message;
-  }
-
-  if (error instanceof z.ZodError) {
-    return error.issues[0]?.message ?? "Invalid input.";
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Unexpected error.";
-}
-
 function estimateTokens(input: string) {
   return Math.max(1, Math.ceil(input.length / 4));
 }
@@ -76,32 +62,106 @@ async function bumpUsageMeter(input: {
   const windowDate = new Date();
   windowDate.setUTCHours(0, 0, 0, 0);
 
-  await db.aiUsageMeter.upsert({
-    where: {
-      workspaceId_userId_windowDate_provider: {
+  try {
+    await db.aiUsageMeter.upsert({
+      where: {
+        workspaceId_userId_windowDate_provider: {
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          windowDate,
+          provider: input.provider,
+        },
+      },
+      create: {
         workspaceId: input.workspaceId,
         userId: input.userId,
         windowDate,
         provider: input.provider,
+        requestsUsed: 1,
+        tokensUsed: input.tokenUsage,
       },
-    },
-    create: {
+      update: {
+        requestsUsed: {
+          increment: 1,
+        },
+        tokensUsed: {
+          increment: input.tokenUsage,
+        },
+      },
+    });
+  } catch (error) {
+    if (!isSchemaNotReadyError(error)) {
+      throw error;
+    }
+
+    logSecurityEvent("chat.usage_meter_schema_not_ready", {
       workspaceId: input.workspaceId,
       userId: input.userId,
-      windowDate,
       provider: input.provider,
-      requestsUsed: 1,
-      tokensUsed: input.tokenUsage,
-    },
-    update: {
-      requestsUsed: {
-        increment: 1,
+      error: error instanceof Error ? error.message : "unknown",
+    });
+  }
+}
+
+type ChatMessageCreateInput = {
+  threadId: string;
+  authorUserId?: string | null;
+  role: ChatRole;
+  content: string;
+  attachmentUrl?: string | null;
+  attachmentMime?: string | null;
+  modelId?: string | null;
+  latencyMs?: number | null;
+  tokenUsage?: number | null;
+  status?: "PENDING" | "COMPLETED" | "FAILED";
+  commandName?: string | null;
+  isPinned?: boolean;
+};
+
+async function createChatMessageWithSchemaFallback(input: ChatMessageCreateInput) {
+  try {
+    await db.chatMessage.create({
+      data: {
+        threadId: input.threadId,
+        authorUserId: input.authorUserId ?? null,
+        role: input.role,
+        content: input.content,
+        attachmentUrl: input.attachmentUrl ?? null,
+        attachmentMime: input.attachmentMime ?? null,
+        modelId: input.modelId ?? null,
+        latencyMs: input.latencyMs ?? null,
+        tokenUsage: input.tokenUsage ?? null,
+        ...(input.status ? { status: input.status } : {}),
+        commandName: input.commandName ?? null,
+        ...(typeof input.isPinned === "boolean"
+          ? { isPinned: input.isPinned }
+          : {}),
       },
-      tokensUsed: {
-        increment: input.tokenUsage,
+      select: { id: true },
+    });
+  } catch (error) {
+    if (!isSchemaNotReadyError(error)) {
+      throw error;
+    }
+
+    logSecurityEvent("chat.message_schema_fallback", {
+      threadId: input.threadId,
+      role: input.role,
+      error: error instanceof Error ? error.message : "unknown",
+    });
+
+    await db.chatMessage.create({
+      data: {
+        threadId: input.threadId,
+        authorUserId: input.authorUserId ?? null,
+        role: input.role,
+        content: input.content,
+        attachmentUrl: input.attachmentUrl ?? null,
+        attachmentMime: input.attachmentMime ?? null,
       },
-    },
-  });
+      select: { id: true },
+    });
+  }
 }
 
 async function runSlashCommand(input: {
@@ -418,13 +478,11 @@ export async function createThreadAction(formData: FormData) {
       },
     });
 
-    await db.chatMessage.create({
-      data: {
-        threadId: thread.id,
-        role: ChatRole.SYSTEM,
-        content: `${user.name ?? user.email ?? "User"} created this thread.`,
-        modelId: DEFAULT_MODEL_ID,
-      },
+    await createChatMessageWithSchemaFallback({
+      threadId: thread.id,
+      role: ChatRole.SYSTEM,
+      content: `${user.name ?? user.email ?? "User"} created this thread.`,
+      modelId: DEFAULT_MODEL_ID,
     });
 
     await appendAuditLog({
@@ -451,7 +509,7 @@ export async function createThreadAction(formData: FormData) {
     redirect(
       buildChatUrl({
         workspaceId: parsed.workspaceId,
-        error: getErrorMessage(error),
+        error: getChatErrorMessage(error),
       }),
     );
   }
@@ -483,16 +541,14 @@ export async function sendMessageAction(formData: FormData) {
       throw new Error("Thread not found.");
     }
 
-    await db.chatMessage.create({
-      data: {
-        threadId: thread.id,
-        authorUserId: user.id,
-        role: ChatRole.USER,
-        content: parsed.content,
-        modelId: parsed.modelId ?? DEFAULT_MODEL_ID,
-        tokenUsage: estimateTokens(parsed.content),
-        status: "COMPLETED",
-      },
+    await createChatMessageWithSchemaFallback({
+      threadId: thread.id,
+      authorUserId: user.id,
+      role: ChatRole.USER,
+      content: parsed.content,
+      modelId: parsed.modelId ?? DEFAULT_MODEL_ID,
+      tokenUsage: estimateTokens(parsed.content),
+      status: "COMPLETED",
     });
 
     const assistant = await getAssistantReply({
@@ -501,17 +557,15 @@ export async function sendMessageAction(formData: FormData) {
       content: parsed.content,
     });
 
-    await db.chatMessage.create({
-      data: {
-        threadId: thread.id,
-        role: ChatRole.ASSISTANT,
-        content: assistant.content,
-        modelId: assistant.modelId,
-        latencyMs: assistant.latencyMs,
-        tokenUsage: assistant.tokenUsage,
-        status: "COMPLETED",
-        commandName: assistant.commandName ?? null,
-      },
+    await createChatMessageWithSchemaFallback({
+      threadId: thread.id,
+      role: ChatRole.ASSISTANT,
+      content: assistant.content,
+      modelId: assistant.modelId,
+      latencyMs: assistant.latencyMs,
+      tokenUsage: assistant.tokenUsage,
+      status: "COMPLETED",
+      commandName: assistant.commandName ?? null,
     });
 
     await bumpUsageMeter({
@@ -549,7 +603,7 @@ export async function sendMessageAction(formData: FormData) {
       buildChatUrl({
         workspaceId: parsed.workspaceId,
         threadId: parsed.threadId,
-        error: getErrorMessage(error),
+        error: getChatErrorMessage(error),
       }),
     );
   }
@@ -575,6 +629,12 @@ export async function regenerateMessageAction(formData: FormData) {
         threadId: parsed.threadId,
       },
       orderBy: [{ createdAt: "asc" }],
+      select: {
+        id: true,
+        role: true,
+        content: true,
+        createdAt: true,
+      },
     });
     const anchorIndex = parsed.messageId
       ? messages.findIndex((message) => message.id === parsed.messageId)
@@ -595,17 +655,15 @@ export async function regenerateMessageAction(formData: FormData) {
       content: latestUser.content,
     });
 
-    await db.chatMessage.create({
-      data: {
-        threadId: parsed.threadId,
-        role: ChatRole.ASSISTANT,
-        content: assistant.content,
-        modelId: parsed.modelId ?? assistant.modelId,
-        latencyMs: assistant.latencyMs,
-        tokenUsage: assistant.tokenUsage,
-        status: "COMPLETED",
-        commandName: assistant.commandName ?? null,
-      },
+    await createChatMessageWithSchemaFallback({
+      threadId: parsed.threadId,
+      role: ChatRole.ASSISTANT,
+      content: assistant.content,
+      modelId: parsed.modelId ?? assistant.modelId,
+      latencyMs: assistant.latencyMs,
+      tokenUsage: assistant.tokenUsage,
+      status: "COMPLETED",
+      commandName: assistant.commandName ?? null,
     });
 
     await bumpUsageMeter({
@@ -640,7 +698,7 @@ export async function regenerateMessageAction(formData: FormData) {
       buildChatUrl({
         workspaceId: parsed.workspaceId,
         threadId: parsed.threadId,
-        error: getErrorMessage(error),
+        error: getChatErrorMessage(error),
       }),
     );
   }
@@ -736,7 +794,7 @@ export async function forkThreadAction(formData: FormData) {
       buildChatUrl({
         workspaceId: parsed.workspaceId,
         threadId: parsed.threadId,
-        error: getErrorMessage(error),
+        error: getChatErrorMessage(error),
       }),
     );
   }
@@ -805,7 +863,7 @@ export async function pinMessageAction(formData: FormData) {
       buildChatUrl({
         workspaceId: parsed.workspaceId,
         threadId: parsed.threadId,
-        error: getErrorMessage(error),
+        error: getChatErrorMessage(error),
       }),
     );
   }
@@ -831,6 +889,10 @@ export async function exportMessageAction(formData: FormData) {
         thread: {
           workspaceId: parsed.workspaceId,
         },
+      },
+      select: {
+        id: true,
+        content: true,
       },
     });
     if (!message) {
@@ -873,7 +935,7 @@ export async function exportMessageAction(formData: FormData) {
       buildChatUrl({
         workspaceId: parsed.workspaceId,
         threadId: parsed.threadId,
-        error: getErrorMessage(error),
+        error: getChatErrorMessage(error),
       }),
     );
   }
@@ -900,6 +962,10 @@ export async function convertMessageAction(formData: FormData) {
         thread: {
           workspaceId: parsed.workspaceId,
         },
+      },
+      select: {
+        id: true,
+        content: true,
       },
     });
     if (!message) {
@@ -950,7 +1016,7 @@ export async function convertMessageAction(formData: FormData) {
       buildChatUrl({
         workspaceId: parsed.workspaceId,
         threadId: parsed.threadId,
-        error: getErrorMessage(error),
+        error: getChatErrorMessage(error),
       }),
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 
 import { GlassCard } from "@/components/kit/glass-card";
 import { PrimaryButton } from "@/components/kit/primary-button";
@@ -23,7 +24,12 @@ export default function AppError({
         The dashboard could not complete that action. Retry or return to a
         stable route.
       </p>
-      <PrimaryButton onClick={reset}>Retry</PrimaryButton>
+      <div className="flex flex-wrap gap-2">
+        <PrimaryButton onClick={reset}>Retry</PrimaryButton>
+        <PrimaryButton asChild className="bg-transparent text-[var(--text)] shadow-none ring-1 ring-[var(--border)] hover:bg-white/10">
+          <Link href="/overview">Go to Overview</Link>
+        </PrimaryButton>
+      </div>
     </GlassCard>
   );
 }
