@@ -124,6 +124,15 @@ Runtime validation:
 - Root cause: hosted env had invalid runtime DB config (sqlite/file URL), and runtime env validation had been too strict for non-runtime migration variables.
 - Fix: moved runtime to Postgres path, scoped hosted fail-fast validation to runtime-required vars, and blocked file-based sqlite URLs in hosted production.
 
+## Unified Chat Migration Readiness (2026-02-20)
+- Symptom: `/chat` can fail or partially degrade after deploy if unified-chat migration is not applied yet.
+- Current behavior: optional chat enhancements degrade gracefully and core route remains available.
+- Required fix in hosted environments:
+  - `pnpm --filter @internal-toolkit/web db:migrate:deploy`
+  - verify with:
+    - `curl -s https://<your-domain>/api/health`
+    - `curl -s https://<your-domain>/api/version`
+
 ## Auth and Security Baseline
 
 - Invite onboarding uses one-time token flow with expiry and audit events.

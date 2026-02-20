@@ -19,6 +19,16 @@ This repository intentionally uses pnpm's default script restrictions.
 - Set both `DATABASE_URL` (pooler) and `DIRECT_URL` (direct) in Vercel.
 - Hosted runtime rejects `file:...` sqlite URLs.
 
+### `/chat` shows generic error or feature panels are missing
+- This usually means unified-chat schema migration drift (for example missing `PromptTemplate`, `UserActionButton`, `ChatArtifact`, `AiUsageMeter`, or new `ChatMessage` columns).
+- Current runtime behavior degrades optional chat enhancements safely instead of hard-failing the route.
+- Apply migrations:
+  - local: `pnpm --filter @internal-toolkit/web db:migrate:deploy`
+  - hosted CI/prod: run `pnpm --filter @internal-toolkit/web db:migrate:deploy` before startup
+- Verify:
+  - `curl -s https://<your-domain>/api/health`
+  - `curl -s https://<your-domain>/api/version`
+
 ### Playwright fails by running unit test files
 - Playwright is scoped to `*.spec.ts` in `apps/web/playwright.config.ts`.
 - Unit tests are executed separately via Vitest (`pnpm test:unit`).
