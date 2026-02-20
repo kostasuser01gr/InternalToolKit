@@ -27,6 +27,11 @@ export type WorkspaceAction<R extends WorkspaceResource> = ResourceActionMap[R];
 export type WorkspacePermission = {
   [R in WorkspaceResource]: Record<ResourceActionMap[R], WorkspaceRole[]>;
 };
+type WorkspaceAnyAction = ResourceActionMap[WorkspaceResource];
+type WorkspacePermissionByRole = Record<
+  WorkspaceRole,
+  Partial<Record<WorkspaceResource, WorkspaceAnyAction[]>>
+>;
 
 export const workspacePermissionMatrix: WorkspacePermission = {
   admin: {
@@ -110,6 +115,30 @@ export const workspacePermissionMatrix: WorkspacePermission = {
   },
 };
 
+const workspacePermissionMatrixByRole: WorkspacePermissionByRole = {
+  [WorkspaceRole.ADMIN]: {},
+  [WorkspaceRole.EDITOR]: {},
+  [WorkspaceRole.EMPLOYEE]: {},
+  [WorkspaceRole.WASHER]: {},
+  [WorkspaceRole.VIEWER]: {},
+};
+
+for (const [resource, permissionByAction] of Object.entries(
+  workspacePermissionMatrix,
+) as [WorkspaceResource, WorkspacePermission[WorkspaceResource]][]) {
+  for (const [action, roles] of Object.entries(permissionByAction) as [
+    WorkspaceAnyAction,
+    WorkspaceRole[],
+  ][]) {
+    for (const role of roles) {
+      const existing = workspacePermissionMatrixByRole[role][resource] ?? [];
+      if (!existing.includes(action)) {
+        workspacePermissionMatrixByRole[role][resource] = [...existing, action];
+      }
+    }
+  }
+}
+
 export function hasWorkspacePermission<R extends WorkspaceResource>(
   role: WorkspaceRole | null,
   resource: R,
@@ -119,8 +148,12 @@ export function hasWorkspacePermission<R extends WorkspaceResource>(
     return false;
   }
 
-  const allowedRoles = workspacePermissionMatrix[resource][action];
-  return allowedRoles.includes(role);
+  const allowedActions = workspacePermissionMatrixByRole[role][resource];
+  if (!allowedActions) {
+    return false;
+  }
+
+  return allowedActions.includes(action);
 }
 
 export async function requireAuthUser() {
