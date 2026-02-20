@@ -5,6 +5,7 @@ const DEFAULT_DATABASE_URL =
   "postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public";
 const MIN_SESSION_SECRET_LENGTH = 32;
 const POSTGRES_PROTOCOL_RE = /^postgres(?:ql)?:\/\//i;
+const DB_ENV_ASSIGNMENT_RE = /^(?:export\s+)?(DATABASE_URL|DIRECT_URL)\s*=/i;
 
 const envSchema = z.object({
   SESSION_SECRET: z.string().trim().optional(),
@@ -14,8 +15,14 @@ const envSchema = z.object({
   DIRECT_URL: z.string().trim().min(1).optional(),
   ALLOW_SQLITE_DEV: z.enum(["0", "1"]).optional(),
   APP_VERSION: z.string().trim().min(1).optional(),
+  FREE_ONLY_MODE: z.enum(["0", "1"]).optional(),
+  AI_PROVIDER_MODE: z.enum(["cloud_free", "mock"]).optional(),
+  AI_ALLOW_PAID: z.enum(["0", "1"]).optional(),
   ASSISTANT_PROVIDER: z.enum(["mock", "openai"]).optional(),
   OPENAI_API_KEY: z.string().trim().optional(),
+  ANTHROPIC_API_KEY: z.string().trim().optional(),
+  GOOGLE_API_KEY: z.string().trim().optional(),
+  COHERE_API_KEY: z.string().trim().optional(),
 });
 
 export type ServerEnv = {
@@ -24,8 +31,9 @@ export type ServerEnv = {
   DATABASE_URL: string;
   DIRECT_URL: string;
   APP_VERSION: string;
-  ASSISTANT_PROVIDER: "mock" | "openai";
-  OPENAI_API_KEY: string;
+  FREE_ONLY_MODE: true;
+  AI_PROVIDER_MODE: "cloud_free" | "mock";
+  AI_ALLOW_PAID: false;
 };
 
 let cachedEnv: ServerEnv | null = null;
@@ -68,26 +76,54 @@ function normalizeEnvUrl(value: string | undefined) {
     return undefined;
   }
 
-  const trimmed = value.trim();
-  if (!trimmed) {
+  let normalized = value.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (DB_ENV_ASSIGNMENT_RE.test(normalized)) {
+    const [, ...rest] = normalized.split("=");
+    normalized = rest.join("=").trim();
+  }
+
+  if (!normalized) {
     return undefined;
   }
 
   const isSingleQuoted =
-    trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length >= 2;
+    normalized.startsWith("'") &&
+    normalized.endsWith("'") &&
+    normalized.length >= 2;
   const isDoubleQuoted =
-    trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2;
+    normalized.startsWith('"') &&
+    normalized.endsWith('"') &&
+    normalized.length >= 2;
 
   if (!isSingleQuoted && !isDoubleQuoted) {
-    return trimmed;
+    return normalized;
   }
 
-  const unquoted = trimmed.slice(1, -1).trim();
+  const unquoted = normalized.slice(1, -1).trim();
   return unquoted || undefined;
 }
 
 function isPostgresProtocolUrl(value: string) {
   return POSTGRES_PROTOCOL_RE.test(value);
+}
+
+function isStructurallyValidPostgresUrl(value: string) {
+  if (!isPostgresProtocolUrl(value)) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const hasHost = Boolean(parsed.hostname);
+    const hasPath = parsed.pathname.length > 1;
+    return hasHost && hasPath;
+  } catch {
+    return false;
+  }
 }
 
 function configError(details: string, missingKeys: string[] = []): never {
@@ -104,6 +140,7 @@ function configError(details: string, missingKeys: string[] = []): never {
       "Fix: copy apps/web/.env.example to apps/web/.env.local and set values.",
       "Set env vars in Vercel Preview + Production, then redeploy.",
       "Required keys for hosted runtime: DATABASE_URL, SESSION_SECRET.",
+      "Free-only keys: FREE_ONLY_MODE=1, AI_ALLOW_PAID=0, AI_PROVIDER_MODE=cloud_free|mock.",
       "DIRECT_URL is required for migration workflows (db:migrate:deploy).",
       "Supabase: use pooled URI for DATABASE_URL and direct URI for DIRECT_URL.",
     ].join("\n"),
@@ -208,6 +245,17 @@ function parseEnv(): ServerEnv {
 
   if (
     hostedProduction &&
+    databaseUrl &&
+    !usesSqlite &&
+    !isStructurallyValidPostgresUrl(databaseUrl)
+  ) {
+    configError(
+      "DATABASE_URL appears malformed. Use the raw URI value only, URL-encode special password characters, then redeploy.",
+    );
+  }
+
+  if (
+    hostedProduction &&
     directUrl &&
     !usesSqliteDirect &&
     !isPostgresProtocolUrl(directUrl)
@@ -215,11 +263,45 @@ function parseEnv(): ServerEnv {
     configError("DIRECT_URL must be a valid postgres:// or postgresql:// connection URL.");
   }
 
-  const provider = normalized.ASSISTANT_PROVIDER ?? "mock";
-  const apiKey = normalized.OPENAI_API_KEY ?? "";
+  if (
+    hostedProduction &&
+    directUrl &&
+    !usesSqliteDirect &&
+    !isStructurallyValidPostgresUrl(directUrl)
+  ) {
+    configError(
+      "DIRECT_URL appears malformed. Use the raw URI value only, URL-encode special password characters, then redeploy.",
+    );
+  }
 
-  if (provider === "openai" && !apiKey) {
-    configError("ASSISTANT_PROVIDER=openai requires OPENAI_API_KEY.");
+  const providerFromLegacy =
+    normalized.ASSISTANT_PROVIDER === "openai" ? "cloud_free" : "mock";
+  const providerMode = normalized.AI_PROVIDER_MODE ?? providerFromLegacy;
+  const freeOnlyModeRaw = normalized.FREE_ONLY_MODE ?? "1";
+  const allowPaidRaw = normalized.AI_ALLOW_PAID ?? "0";
+  const hasPaidTokenConfigured = [
+    normalized.OPENAI_API_KEY,
+    normalized.ANTHROPIC_API_KEY,
+    normalized.GOOGLE_API_KEY,
+    normalized.COHERE_API_KEY,
+  ].some((value) => Boolean(value && value.trim()));
+
+  if (freeOnlyModeRaw !== "1") {
+    configError("FREE_ONLY_MODE must remain set to 1.");
+  }
+
+  if (allowPaidRaw !== "0") {
+    configError("AI_ALLOW_PAID must remain set to 0 in free-only mode.");
+  }
+
+  if (!buildPhase && hasPaidTokenConfigured) {
+    configError(
+      "Paid provider API keys are not allowed in free-only mode. Remove OPENAI_API_KEY/ANTHROPIC_API_KEY/GOOGLE_API_KEY/COHERE_API_KEY.",
+    );
+  }
+
+  if (hostedProduction && providerMode !== "cloud_free" && providerMode !== "mock") {
+    configError("AI_PROVIDER_MODE must be cloud_free or mock.");
   }
 
   return {
@@ -228,8 +310,9 @@ function parseEnv(): ServerEnv {
     DATABASE_URL: databaseUrl ?? DEFAULT_DATABASE_URL,
     DIRECT_URL: directUrl ?? databaseUrl ?? DEFAULT_DATABASE_URL,
     APP_VERSION: normalized.APP_VERSION ?? "1.0.0",
-    ASSISTANT_PROVIDER: provider,
-    OPENAI_API_KEY: apiKey,
+    FREE_ONLY_MODE: true,
+    AI_PROVIDER_MODE: providerMode,
+    AI_ALLOW_PAID: false,
   };
 }
 
@@ -257,6 +340,10 @@ export function getDatabaseUrl() {
   return cachedDatabaseUrl;
 }
 
+export function getDirectDatabaseUrl() {
+  return normalizeEnvUrl(process.env.DIRECT_URL);
+}
+
 export function validateServerEnv() {
   getServerEnv();
 }
@@ -267,6 +354,8 @@ export function getAuthRuntimeEnvError() {
     process.env.SESSION_SECRET?.trim() ??
     process.env.NEXTAUTH_SECRET?.trim() ??
     "";
+  const freeOnlyMode = process.env.FREE_ONLY_MODE?.trim() || "1";
+  const aiAllowPaid = process.env.AI_ALLOW_PAID?.trim() || "0";
   const isDevelopment = process.env.NODE_ENV === "development";
   const hostedProduction = isHostedProductionRuntime();
   const allowSqliteDev = process.env.ALLOW_SQLITE_DEV === "1";
@@ -297,6 +386,18 @@ export function getAuthRuntimeEnvError() {
 
   if (hostedProduction && !isPostgresProtocolUrl(databaseUrl)) {
     return "Set DATABASE_URL to the Supabase pooler URI; ensure it starts with postgresql:// or postgres://.";
+  }
+
+  if (hostedProduction && !isStructurallyValidPostgresUrl(databaseUrl)) {
+    return "Set DATABASE_URL to a valid postgres:// or postgresql:// URI (raw value only). URL-encode special password characters, then redeploy.";
+  }
+
+  if (freeOnlyMode !== "1") {
+    return "Set FREE_ONLY_MODE=1.";
+  }
+
+  if (aiAllowPaid !== "0") {
+    return "Set AI_ALLOW_PAID=0.";
   }
 
   return null;

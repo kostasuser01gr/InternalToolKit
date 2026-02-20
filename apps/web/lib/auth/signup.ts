@@ -2,6 +2,7 @@ import { Prisma, type GlobalRole, WorkspaceRole } from "@prisma/client";
 import { hashSync } from "bcryptjs";
 
 import { appendAuditLog } from "@/lib/audit";
+import { isDatabaseConnectivityError } from "@/lib/db-failover";
 import { db } from "@/lib/db";
 import { logSecurityEvent } from "@/lib/security";
 
@@ -30,16 +31,12 @@ function createWorkspaceName(displayName: string) {
 }
 
 function resolveOperationalSignupMessage(error: unknown) {
-  if (!(error instanceof Error)) {
-    return null;
+  if (isDatabaseConnectivityError(error)) {
+    return "Signup is temporarily unavailable because database connectivity is invalid. Check /api/health and verify Supabase pooler/direct DATABASE_URL values with sslmode before redeploying.";
   }
 
-  if (
-    /(database .* does not exist|can't reach database server|econnrefused|econnreset|timed out|p1001|invalid url)/i.test(
-      error.message,
-    )
-  ) {
-    return "Signup is temporarily unavailable because database connectivity is invalid. Set DATABASE_URL to Postgres and redeploy.";
+  if (!(error instanceof Error)) {
+    return null;
   }
 
   if (

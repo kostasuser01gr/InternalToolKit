@@ -17,14 +17,19 @@ Set these in Vercel project settings for `apps/web`:
 - `DATABASE_URL=<supabase-pooled-uri>` (required; Preview + Production)
 - `DIRECT_URL=<supabase-direct-uri>` (required for migration workflows; set in Preview + Production)
 - Optional:
-  - `ASSISTANT_PROVIDER` (`mock` default)
-  - `OPENAI_API_KEY` (only when `ASSISTANT_PROVIDER=openai`)
+  - `FREE_ONLY_MODE=1`
+  - `AI_PROVIDER_MODE=cloud_free` (or `mock`)
+  - `AI_ALLOW_PAID=0`
   - `NEXT_PUBLIC_FEATURE_VOICE_INPUT` (`0` default; set `1` to enable Web Speech UI helpers)
+  - `NEXT_PUBLIC_FEATURE_UNIFIED_CHAT=1`
+  - `NEXT_PUBLIC_FEATURE_CUSTOM_SHORTCUTS=1`
+  - `NEXT_PUBLIC_FEATURE_CLOUD_AI_GATEWAY=1`
 
 Supabase URI guidance:
 - `DATABASE_URL`: pooler URI (typically port `6543`) for runtime queries.
-- `DIRECT_URL`: direct URI (typically port `5432`) for Prisma migrations.
+- `DIRECT_URL`: direct URI (typically port `5432`) for Prisma migrations and runtime connectivity fallback.
 - Runtime accepts `DATABASE_URL` values that start with `postgresql://` or `postgres://`.
+- Runtime expects structurally valid Postgres URIs; URL-encode special password characters.
 - In Vercel, paste raw URI values only (no `DATABASE_URL=`/`DIRECT_URL=` prefix and no wrapping quotes).
 - Example `DATABASE_URL`:
   - `postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:6543/postgres?pgbouncer=true&connection_limit=1&sslmode=require`
@@ -36,7 +41,9 @@ Set in Wrangler/Cloudflare:
 - `APP_VERSION`
 - `ENVIRONMENT` (`dev` or `prod`)
 - `ALLOWED_ORIGINS` (comma-separated strict allowlist, no `*`)
-- `OPENAI_API_KEY` (optional)
+- `FREE_ONLY_MODE=1`
+- `AI_PROVIDER_MODE=cloud_free` (or `mock`)
+- `AI_ALLOW_PAID=0`
 - `ALLOW_LEGACY_MUTATIONS` (`0` recommended; keep worker mutation compatibility disabled)
 
 ## Deploy Web (Vercel)
@@ -68,7 +75,10 @@ pnpm --filter @internal-toolkit/api deploy
   - skips safely when `CLOUDFLARE_API_TOKEN` is missing
 
 ## Post-Deploy Checks
+- Web: `GET /api/health` returns `{ "ok": true, "db": "ok" }`.
 - Web: open `/login`, verify `loginName + PIN` auth flow and account signup.
 - Web: verify core pages load (`/shifts`, `/fleet`, `/washers`, `/calendar`).
 - API: `GET /health` returns `{ ok: true, version, timestamp }`.
+- AI models: `GET /v1/ai/models` returns free-only provider/model list.
+- AI usage: `GET /v1/ai/usage` returns current free quota counters.
 - CORS: verify only allowed origins can access worker endpoints.

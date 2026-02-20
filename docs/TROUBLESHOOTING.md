@@ -35,6 +35,19 @@ This repository intentionally uses pnpm's default script restrictions.
 - Add repository secret `CLOUDFLARE_API_TOKEN`.
 - Optional: add `CLOUDFLARE_ACCOUNT_ID` if your setup requires it.
 
+### `/v1/ai/chat` returns free-only policy error
+- Ensure worker/web env keeps:
+  - `FREE_ONLY_MODE=1`
+  - `AI_ALLOW_PAID=0`
+  - `AI_PROVIDER_MODE=cloud_free` (or `mock` for fallback-only mode)
+- Remove paid provider keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `COHERE_API_KEY`).
+
+### `/v1/ai/chat` returns quota reached
+- This means the free usage guardrails are protecting the system.
+- Wait until quota window resets, or reduce request volume.
+- Check current usage:
+  - `curl -s https://<your-domain>/v1/ai/usage`
+
 ## Auth/Security Issues
 
 ### Browser shows `ERR_TOO_MANY_REDIRECTS` on login/signup
@@ -73,3 +86,10 @@ Open `http://127.0.0.1:3000`.
 pnpm -C apps/api dev
 ```
 Test `http://127.0.0.1:8787/health`.
+
+### Cloud Runtime Checks
+```bash
+curl -s https://<your-domain>/api/health
+curl -s https://<your-domain>/v1/ai/models
+curl -s https://<your-domain>/v1/ai/usage
+```

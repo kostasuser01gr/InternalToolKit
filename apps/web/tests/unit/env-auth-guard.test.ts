@@ -93,6 +93,18 @@ describe("getAuthRuntimeEnvError", () => {
     expect(getAuthRuntimeEnvError()).toBeNull();
   });
 
+  it("normalizes accidental DATABASE_URL assignment syntax", () => {
+    applyEnv({
+      NODE_ENV: "production",
+      VERCEL: "1",
+      NEXT_PHASE: undefined,
+      DATABASE_URL: `DATABASE_URL=${VALID_DATABASE_URL}`,
+      SESSION_SECRET: VALID_SECRET,
+    });
+
+    expect(getAuthRuntimeEnvError()).toBeNull();
+  });
+
   it("rejects non-postgres protocols in hosted production", () => {
     applyEnv({
       NODE_ENV: "production",
@@ -105,5 +117,46 @@ describe("getAuthRuntimeEnvError", () => {
     expect(getAuthRuntimeEnvError()).toContain(
       "ensure it starts with postgresql:// or postgres://",
     );
+  });
+
+  it("rejects malformed postgres URLs with actionable guidance", () => {
+    applyEnv({
+      NODE_ENV: "production",
+      VERCEL: "1",
+      NEXT_PHASE: undefined,
+      DATABASE_URL: "postgresql://",
+      SESSION_SECRET: VALID_SECRET,
+    });
+
+    expect(getAuthRuntimeEnvError()).toContain(
+      "URL-encode special password characters",
+    );
+  });
+
+  it("requires FREE_ONLY_MODE=1", () => {
+    applyEnv({
+      NODE_ENV: "production",
+      VERCEL: "1",
+      NEXT_PHASE: undefined,
+      DATABASE_URL: VALID_DATABASE_URL,
+      SESSION_SECRET: VALID_SECRET,
+      FREE_ONLY_MODE: "0",
+    });
+
+    expect(getAuthRuntimeEnvError()).toBe("Set FREE_ONLY_MODE=1.");
+  });
+
+  it("requires AI_ALLOW_PAID=0", () => {
+    applyEnv({
+      NODE_ENV: "production",
+      VERCEL: "1",
+      NEXT_PHASE: undefined,
+      DATABASE_URL: VALID_DATABASE_URL,
+      SESSION_SECRET: VALID_SECRET,
+      FREE_ONLY_MODE: "1",
+      AI_ALLOW_PAID: "1",
+    });
+
+    expect(getAuthRuntimeEnvError()).toBe("Set AI_ALLOW_PAID=0.");
   });
 });

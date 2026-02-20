@@ -1,9 +1,14 @@
 import {
+  aiChatRequestSchema,
+  aiChatResponseSchema,
+  aiUsageResponseSchema,
   assistantDraftRequestSchema,
   assistantDraftResponseSchema,
   auditCreatedResponseSchema,
   auditEventInputSchema,
   healthResponseSchema,
+  type AiChatResponse,
+  type AiUsageResponse,
   type AssistantDraftResponse,
   type AuditCreatedResponse,
   type AuditEventInput,
@@ -82,6 +87,43 @@ export async function draftAutomation(
     }
 
     return assistantDraftResponseSchema.parse(payload);
+  } catch {
+    return null;
+  }
+}
+
+export async function chatWithCloudAi(
+  prompt: string,
+): Promise<AiChatResponse | null> {
+  try {
+    const payload = await requestJson("/v1/ai/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(aiChatRequestSchema.parse({ prompt })),
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (!payload) {
+      return null;
+    }
+
+    return aiChatResponseSchema.parse(payload);
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchCloudAiUsage(): Promise<AiUsageResponse | null> {
+  try {
+    const payload = await requestJson("/v1/ai/usage", {
+      signal: AbortSignal.timeout(1500),
+    });
+
+    if (!payload) {
+      return null;
+    }
+
+    return aiUsageResponseSchema.parse(payload);
   } catch {
     return null;
   }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
 import { Command, MoonStar, PlusCircle, Search, SunMedium } from "lucide-react";
+import type { ShortcutDefinition } from "@internal-toolkit/shared";
 
 import { useToast } from "@/components/layout/toast-provider";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -43,6 +44,9 @@ function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pendingSequence, setPendingSequence] = useState<"g" | null>(null);
+  const [customShortcuts, setCustomShortcuts] = useState<ShortcutDefinition[]>(
+    [],
+  );
 
   const sequenceTimerRef = useRef<number | null>(null);
 
@@ -61,8 +65,46 @@ function CommandPalette() {
       },
       }));
 
+    const userActions: PaletteAction[] = customShortcuts.map((shortcut) => ({
+      id: `shortcut-${shortcut.id}`,
+      label: shortcut.label,
+      description: shortcut.command,
+      keywords: `${shortcut.label} ${shortcut.command} ${shortcut.keybinding ?? ""}`,
+      run: async () => {
+        const command = shortcut.command.trim();
+        const normalized = command.toLowerCase();
+
+        if (normalized.startsWith("route ")) {
+          const route = command.slice(6).trim();
+          if (route.startsWith("/")) {
+            router.push(route);
+            return;
+          }
+        }
+
+        if (command.startsWith("/")) {
+          router.push(`/chat?quickCommand=${encodeURIComponent(command)}`);
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(command);
+          toast({
+            title: `Copied "${shortcut.label}" command.`,
+            tone: "success",
+          });
+        } catch {
+          toast({
+            title: "Unable to copy command.",
+            tone: "error",
+          });
+        }
+      },
+    }));
+
     return [
       ...routeActions,
+      ...userActions,
       {
         id: "go-analytics",
         label: "Go to Analytics",
@@ -119,7 +161,42 @@ function CommandPalette() {
         },
       },
     ];
-  }, [router, setTheme, theme, toast]);
+  }, [customShortcuts, router, setTheme, theme, toast]);
+
+  useEffect(() => {
+    if (!features.customShortcuts) {
+      return;
+    }
+
+    let active = true;
+
+    const loadShortcuts = async () => {
+      try {
+        const response = await fetch("/v1/shortcuts", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          items?: ShortcutDefinition[];
+        };
+        if (!active || !payload.ok || !Array.isArray(payload.items)) {
+          return;
+        }
+
+        setCustomShortcuts(payload.items);
+      } catch {
+        // Best-effort enhancement only.
+      }
+    };
+
+    void loadShortcuts();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filteredActions = useMemo(() => {
     const normalized = query.trim().toLowerCase();

@@ -78,7 +78,7 @@ export default async function AssistantPage({
               <p>Workspace: {workspace.name}</p>
               <p>Tables available: {tables.length}</p>
               <p>
-                Assistant provider: {process.env.ASSISTANT_PROVIDER ?? "mock"}
+                Assistant provider: {process.env.AI_PROVIDER_MODE ?? "cloud_free"}
               </p>
             </div>
           </GlassCard>

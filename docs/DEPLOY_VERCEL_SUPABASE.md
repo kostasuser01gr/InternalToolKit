@@ -13,6 +13,12 @@ Set these in **Vercel Preview + Production**:
   Supabase **Direct connection** URI (migrations, typically port `5432`).
 - `SESSION_SECRET`  
   Random secret with length **>= 32**.
+- `FREE_ONLY_MODE`  
+  Must be `1` (hard fail otherwise).
+- `AI_PROVIDER_MODE`  
+  `cloud_free` (default) or `mock`.
+- `AI_ALLOW_PAID`  
+  Must be `0`.
 - Vercel input format  
   Paste raw URI values only (no `DATABASE_URL=`/`DIRECT_URL=` prefix and no wrapping quotes).
 
@@ -20,7 +26,9 @@ Set these in **Vercel Preview + Production**:
 
 - Runtime queries: `DATABASE_URL` (pooler / PgBouncer / `6543`)
 - Migrations: `DIRECT_URL` (direct Postgres / `5432`)
+- Runtime fallback: if pooler connectivity fails, runtime retries once with `DIRECT_URL`.
 - Runtime guard expects `DATABASE_URL` to start with `postgresql://` or `postgres://`.
+- Runtime guard expects structurally valid Postgres URIs. If password contains special characters, URL-encode them.
 
 ## Important Vercel behavior
 

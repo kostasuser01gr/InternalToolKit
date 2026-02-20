@@ -4,6 +4,7 @@ import { checkAuthThrottle, buildAuthThrottleKeys, registerAuthFailure, register
 import { createSessionForUser, verifyCredentials } from "@/lib/auth/session";
 import { normalizeEmail, normalizeLoginName } from "@/lib/auth/tokens";
 import { appendAuditLog } from "@/lib/audit";
+import { isDatabaseConnectivityError } from "@/lib/db-failover";
 import { getAuthRuntimeEnvError } from "@/lib/env";
 import { createErrorId, getRequestId, logWebRequest, withObservabilityHeaders } from "@/lib/http-observability";
 import { appendSecurityEvent } from "@/lib/security-events";
@@ -33,13 +34,7 @@ const pinLoginSchema = z.object({
 const loginSchema = z.union([passwordLoginSchema, pinLoginSchema]);
 
 function isDatabaseUnavailableError(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
-  return /(invalid url|can't reach database server|econnrefused|econnreset|timed out|p1001)/i.test(
-    error.message,
-  );
+  return isDatabaseConnectivityError(error);
 }
 
 export async function POST(request: Request) {

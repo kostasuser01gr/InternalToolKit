@@ -21,6 +21,12 @@ import { listActiveSessionsForUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
 import {
+  createActionButtonAction,
+  createPromptTemplateAction,
+  createShortcutAction,
+  deleteActionButtonAction,
+  deletePromptTemplateAction,
+  deleteShortcutAction,
   revokeAllSessionsAction,
   revokeCurrentSessionAction,
   revokeSessionAction,
@@ -41,12 +47,35 @@ export default async function SettingsPage({
   searchParams,
 }: SettingsPageProps) {
   const params = await searchParams;
-  const { user } = await getAppContext();
+  const { user, workspace } = await getAppContext();
 
   const profile = await db.user.findUniqueOrThrow({
     where: { id: user.id },
   });
   const activeSessions = await listActiveSessionsForUser(user.id);
+  const [shortcuts, actionButtons, promptTemplates] = await Promise.all([
+    db.userShortcut.findMany({
+      where: {
+        userId: user.id,
+        workspaceId: workspace.id,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+    db.userActionButton.findMany({
+      where: {
+        userId: user.id,
+        workspaceId: workspace.id,
+      },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    }),
+    db.promptTemplate.findMany({
+      where: {
+        userId: user.id,
+        workspaceId: workspace.id,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }),
+  ]);
 
   return (
     <div className="space-y-6" data-testid="settings-page">
@@ -148,10 +177,134 @@ export default async function SettingsPage({
           </div>
           <div>
             <dt className="font-medium text-[var(--text)]">Persistence</dt>
-            <dd>Prisma + SQLite (portable to PostgreSQL)</dd>
+            <dd>Prisma + PostgreSQL (cloud authoritative, offline read cache only)</dd>
           </div>
         </dl>
         <SignOutButton />
+      </GlassCard>
+
+      <GlassCard className="space-y-4">
+        <h2 className="kpi-font text-xl font-semibold">
+          Cloud-Synced Chat Controls
+        </h2>
+        <p className="text-sm text-[var(--text-muted)]">
+          Configure custom keyboard shortcuts, quick action buttons, and prompt
+          templates. These settings sync per workspace and user.
+        </p>
+
+        <div className="grid gap-4 xl:grid-cols-3">
+          <section className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3">
+            <h3 className="text-sm font-semibold">Shortcuts</h3>
+            <form action={createShortcutAction} className="space-y-2">
+              <input type="hidden" name="userId" value={profile.id} />
+              <input type="hidden" name="workspaceId" value={workspace.id} />
+              <Input name="label" placeholder="Label (e.g. Daily Summary)" required />
+              <Input name="command" placeholder="/summarize-table incidents" required />
+              <Input name="keybinding" placeholder="Ctrl+Shift+S (optional)" />
+              <PrimaryButton type="submit">Add shortcut</PrimaryButton>
+            </form>
+            <div className="space-y-2">
+              {shortcuts.map((shortcut) => (
+                <article
+                  key={shortcut.id}
+                  className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-black/10 p-2 text-xs"
+                >
+                  <p className="font-medium text-[var(--text)]">{shortcut.label}</p>
+                  <p className="text-[var(--text-muted)]">{shortcut.command}</p>
+                  {shortcut.keybinding ? (
+                    <p className="text-[var(--text-muted)]">{shortcut.keybinding}</p>
+                  ) : null}
+                  <form action={deleteShortcutAction} className="mt-2">
+                    <input type="hidden" name="userId" value={profile.id} />
+                    <input type="hidden" name="workspaceId" value={workspace.id} />
+                    <input type="hidden" name="shortcutId" value={shortcut.id} />
+                    <PrimaryButton type="submit">Remove</PrimaryButton>
+                  </form>
+                </article>
+              ))}
+              {shortcuts.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)]">
+                  No custom shortcuts yet.
+                </p>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3">
+            <h3 className="text-sm font-semibold">Quick Action Buttons</h3>
+            <form action={createActionButtonAction} className="space-y-2">
+              <input type="hidden" name="userId" value={profile.id} />
+              <input type="hidden" name="workspaceId" value={workspace.id} />
+              <Input name="label" placeholder="Label (e.g. New Shift)" required />
+              <Input name="action" placeholder="/create-shift Title|Start|End" required />
+              <Input name="position" placeholder="Position index (optional)" />
+              <PrimaryButton type="submit">Add quick action</PrimaryButton>
+            </form>
+            <div className="space-y-2">
+              {actionButtons.map((button) => (
+                <article
+                  key={button.id}
+                  className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-black/10 p-2 text-xs"
+                >
+                  <p className="font-medium text-[var(--text)]">
+                    {button.position}. {button.label}
+                  </p>
+                  <p className="text-[var(--text-muted)]">{button.action}</p>
+                  <form action={deleteActionButtonAction} className="mt-2">
+                    <input type="hidden" name="userId" value={profile.id} />
+                    <input type="hidden" name="workspaceId" value={workspace.id} />
+                    <input type="hidden" name="buttonId" value={button.id} />
+                    <PrimaryButton type="submit">Remove</PrimaryButton>
+                  </form>
+                </article>
+              ))}
+              {actionButtons.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)]">
+                  No quick action buttons yet.
+                </p>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3">
+            <h3 className="text-sm font-semibold">Prompt Templates</h3>
+            <form action={createPromptTemplateAction} className="space-y-2">
+              <input type="hidden" name="userId" value={profile.id} />
+              <input type="hidden" name="workspaceId" value={workspace.id} />
+              <Input name="title" placeholder="Title (e.g. Incident Digest)" required />
+              <Input
+                name="prompt"
+                placeholder="Prompt text..."
+                required
+              />
+              <PrimaryButton type="submit">Add template</PrimaryButton>
+            </form>
+            <div className="space-y-2">
+              {promptTemplates.map((template) => (
+                <article
+                  key={template.id}
+                  className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-black/10 p-2 text-xs"
+                >
+                  <p className="font-medium text-[var(--text)]">{template.title}</p>
+                  <p className="text-[var(--text-muted)]">
+                    {template.prompt}
+                  </p>
+                  <form action={deletePromptTemplateAction} className="mt-2">
+                    <input type="hidden" name="userId" value={profile.id} />
+                    <input type="hidden" name="workspaceId" value={workspace.id} />
+                    <input type="hidden" name="templateId" value={template.id} />
+                    <PrimaryButton type="submit">Remove</PrimaryButton>
+                  </form>
+                </article>
+              ))}
+              {promptTemplates.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)]">
+                  No prompt templates yet.
+                </p>
+              ) : null}
+            </div>
+          </section>
+        </div>
       </GlassCard>
 
       <GlassCard className="space-y-4">

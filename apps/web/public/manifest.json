@@ -1,13 +1,31 @@
 {
-  "name": "Programmable Internal Tool Dashboard",
-  "short_name": "OpsDashboard",
-  "description": "Internal programmable dashboard for data tables, automations, assistant workflows, and analytics.",
+  "name": "InternalToolKit Cloud Workspace",
+  "short_name": "InternalToolKit",
+  "description": "Cloud-first internal workspace with unified chat, automations, shortcuts, and operational dashboards.",
   "start_url": "/home",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "browser"],
   "background_color": "#05060c",
   "theme_color": "#070913",
+  "categories": ["productivity", "business", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Open Unified Chat",
+      "short_name": "Chat",
+      "url": "/chat"
+    },
+    {
+      "name": "Open Assistant Tools",
+      "short_name": "Assistant",
+      "url": "/assistant"
+    },
+    {
+      "name": "Open Settings",
+      "short_name": "Settings",
+      "url": "/settings"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.svg",

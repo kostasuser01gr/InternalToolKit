@@ -8,7 +8,7 @@ Production-ready monorepo template for an internal operations dashboard:
 Core implemented modules:
 - Auth + sessions (`loginName + 4-digit PIN`, plus email/password compatibility)
 - RBAC-safe admin/users management
-- Team chat
+- Unified team chat workspace (threads + slash commands + artifacts + pinned context)
 - Shift planner (weekly board + drag/drop move + request flow + CSV import/export)
 - Fleet management (vehicles + status/km/fuel + event logging)
 - Washer operations (task queue + optional voice notes)
@@ -87,28 +87,37 @@ Database scripts (`apps/web`):
 Web (`apps/web`), see `apps/web/.env.example`:
 - `SESSION_SECRET` (required in hosted env, >=32 chars)
 - `DATABASE_URL` (required in hosted env; Supabase pooler URI recommended)
-- `DIRECT_URL` (required for migration workflows; Supabase direct URI)
+- `DIRECT_URL` (required for migration workflows; Supabase direct URI; runtime fallback target)
 - `NEXT_PUBLIC_API_URL`
-- `ASSISTANT_PROVIDER` (`mock` default)
-- `OPENAI_API_KEY` (required only when `ASSISTANT_PROVIDER=openai`)
+- `FREE_ONLY_MODE` (`1` required)
+- `AI_PROVIDER_MODE` (`cloud_free` or `mock`)
+- `AI_ALLOW_PAID` (`0` required)
 - `NEXT_PUBLIC_FEATURE_VOICE_INPUT` (`0` default)
+- `NEXT_PUBLIC_FEATURE_UNIFIED_CHAT` (`1` default)
+- `NEXT_PUBLIC_FEATURE_CUSTOM_SHORTCUTS` (`1` default)
+- `NEXT_PUBLIC_FEATURE_CLOUD_AI_GATEWAY` (`1` default)
 
 API worker (`apps/api`), see `apps/api/.dev.vars.example`:
 - `APP_VERSION`
 - `ENVIRONMENT` (`dev`/`prod`)
 - `ALLOWED_ORIGINS` (strict comma-separated allowlist; `*` rejected)
-- `OPENAI_API_KEY` (optional)
+- `FREE_ONLY_MODE` (`1` required)
+- `AI_PROVIDER_MODE` (`cloud_free` or `mock`)
+- `AI_ALLOW_PAID` (`0` required)
 - `ALLOW_LEGACY_MUTATIONS` (`0` default, keep off)
 
 Runtime validation:
 - Hosted runtime fails fast when `SESSION_SECRET` or `DATABASE_URL` is missing/blank.
 - Hosted runtime rejects `DATABASE_URL=file:...`; production must use persistent Postgres.
 - Hosted runtime requires `DATABASE_URL` to start with `postgresql://` or `postgres://`.
+- Hosted runtime requires structurally valid Postgres URIs; use raw URI values and URL-encode special password characters.
+- Free-only mode is enforced: `FREE_ONLY_MODE=1`, `AI_ALLOW_PAID=0`, and paid provider keys are rejected.
 - Local development defaults to `postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public`.
 - Supabase format examples:
   - `DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:6543/postgres?pgbouncer=true&connection_limit=1&sslmode=require`
   - `DIRECT_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?sslmode=require`
 - Vercel env inputs must be raw URI values only (no `DATABASE_URL=` prefix and no wrapping quotes).
+- Runtime prefers `DATABASE_URL` and automatically retries with `DIRECT_URL` once on DB connectivity errors.
 
 ## Runtime 500 Remediation (2026-02-19)
 - Symptom: production `POST /api/session/login` returned 500.
@@ -192,6 +201,15 @@ Rollback/restore note:
 4. Local manual deploy:
 ```bash
 pnpm --filter @internal-toolkit/api deploy
+```
+
+### Cloud Verification (Post-Deploy)
+```bash
+curl -s https://<your-domain>/api/health
+curl -s https://<your-domain>/v1/ai/models
+curl -s https://<your-domain>/v1/ai/usage
+curl -s https://<your-domain>/manifest.json
+curl -s https://<your-domain>/api/version
 ```
 
 ## OpenAI MCP Registration (Cloudflare Tunnel, Free)

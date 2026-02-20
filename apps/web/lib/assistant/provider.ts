@@ -1,3 +1,7 @@
+import { aiChatResponseSchema, type AiChatTask } from "@internal-toolkit/shared";
+
+import { getServerEnv } from "@/lib/env";
+
 export type AssistantTask = {
   type: "summarize_table" | "automation_draft" | "kpi_layout";
   prompt: string;
@@ -16,7 +20,7 @@ export interface ProviderAdapter {
 }
 
 class MockLocalProvider implements ProviderAdapter {
-  readonly id = "mock-local";
+  readonly id = "mock-fallback";
   readonly enabled = true;
 
   async generate(task: AssistantTask): Promise<AssistantResult> {
@@ -64,36 +68,77 @@ class MockLocalProvider implements ProviderAdapter {
   }
 }
 
-class OpenAIAdapter implements ProviderAdapter {
-  readonly id = "openai-stub";
+class CloudFreeGatewayProvider implements ProviderAdapter {
+  readonly id = "free-cloud-primary";
 
   get enabled() {
-    return (
-      Boolean(process.env.OPENAI_API_KEY) &&
-      process.env.ASSISTANT_PROVIDER === "openai"
-    );
+    return getServerEnv().AI_PROVIDER_MODE === "cloud_free";
   }
 
   async generate(task: AssistantTask): Promise<AssistantResult> {
     if (!this.enabled) {
-      throw new Error(
-        "OpenAI adapter is disabled. Set ASSISTANT_PROVIDER=openai and OPENAI_API_KEY to enable.",
-      );
+      throw new Error("Cloud-free gateway provider is disabled.");
     }
 
+    const env = getServerEnv();
+    const endpoint = `${env.NEXT_PUBLIC_API_URL}/v1/ai/chat`;
+    const payload = {
+      prompt: task.prompt,
+      task: task.type as AiChatTask,
+      stream: false,
+      ...(task.context ? { context: task.context } : {}),
+    };
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(6_000),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Cloud AI request failed with ${response.status}.`);
+    }
+
+    const parsed = aiChatResponseSchema.parse(await response.json());
+
     return {
-      provider: this.id,
-      content: `OpenAI adapter stub executed for task: ${task.type}.`,
+      provider: parsed.provider,
+      content: parsed.content,
     };
   }
 }
 
-export function getAssistantProvider(): ProviderAdapter {
-  const openAI = new OpenAIAdapter();
+class FallbackProviderChain implements ProviderAdapter {
+  readonly id = "free-cloud-chain";
 
-  if (openAI.enabled) {
-    return openAI;
+  constructor(
+    private readonly primary: ProviderAdapter,
+    private readonly fallback: ProviderAdapter,
+  ) {}
+
+  get enabled() {
+    return this.primary.enabled || this.fallback.enabled;
   }
 
-  return new MockLocalProvider();
+  async generate(task: AssistantTask): Promise<AssistantResult> {
+    if (this.primary.enabled) {
+      try {
+        return await this.primary.generate(task);
+      } catch {
+        return this.fallback.generate(task);
+      }
+    }
+
+    return this.fallback.generate(task);
+  }
+}
+
+export function getAssistantProvider(): ProviderAdapter {
+  return new FallbackProviderChain(
+    new CloudFreeGatewayProvider(),
+    new MockLocalProvider(),
+  );
 }

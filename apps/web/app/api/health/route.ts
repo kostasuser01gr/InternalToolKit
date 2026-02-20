@@ -1,4 +1,5 @@
 import { getServerEnv } from "@/lib/env";
+import { isDatabaseConnectivityError } from "@/lib/db-failover";
 
 export const dynamic = "force-dynamic";
 
@@ -36,11 +37,7 @@ function toErrorCode(error: unknown) {
     return "ENV_DIRECT_URL_INVALID";
   }
 
-  if (
-    /(can't reach database server|econnrefused|econnreset|timed out|p1001|invalid url)/i.test(
-      error.message,
-    )
-  ) {
+  if (isDatabaseConnectivityError(error)) {
     return "DB_UNREACHABLE";
   }
 

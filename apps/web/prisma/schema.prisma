@@ -48,6 +48,20 @@ enum ChatRole {
   SYSTEM
 }
 
+enum ChatMessageStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum ChatArtifactType {
+  MARKDOWN
+  JSON
+  TASK
+  AUTOMATION
+  REPORT
+}
+
 enum ThemePreference {
   DARK
   LIGHT
@@ -140,6 +154,11 @@ model User {
   inviteTokensCreated  InviteToken[]        @relation("InviteCreator")
   inviteTokensUsed     InviteToken[]        @relation("InviteConsumer")
   passwordResetTokens  PasswordResetToken[]
+  shortcuts            UserShortcut[]
+  actionButtons        UserActionButton[]
+  promptTemplates      PromptTemplate[]
+  aiUsageMeters        AiUsageMeter[]
+  chatArtifacts        ChatArtifact[]
 }
 
 model Workspace {
@@ -160,6 +179,11 @@ model Workspace {
   vehicleEvents VehicleEvent[]
   washerTasks   WasherTask[]
   inviteTokens  InviteToken[]
+  shortcuts     UserShortcut[]
+  actionButtons UserActionButton[]
+  promptTemplates PromptTemplate[]
+  aiUsageMeters  AiUsageMeter[]
+  chatArtifacts  ChatArtifact[]
 
   @@index([ownerId])
 }
@@ -314,13 +338,99 @@ model ChatMessage {
   authorUserId   String?
   role           ChatRole
   content        String
+  modelId        String?
+  latencyMs      Int?
+  tokenUsage     Int?
+  status         ChatMessageStatus @default(COMPLETED)
+  commandName    String?
+  isPinned       Boolean    @default(false)
   attachmentUrl  String?
   attachmentMime String?
   createdAt      DateTime   @default(now())
   thread         ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   author         User?      @relation("ChatMessageAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  artifacts      ChatArtifact[]
 
   @@index([threadId, createdAt])
+  @@index([threadId, isPinned, createdAt])
+}
+
+model ChatArtifact {
+  id           String          @id @default(cuid())
+  workspaceId  String
+  messageId    String?
+  createdById  String?
+  type         ChatArtifactType
+  title        String
+  content      String
+  createdAt    DateTime        @default(now())
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  message      ChatMessage?    @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  creator      User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([messageId])
+}
+
+model UserShortcut {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  label       String
+  command     String
+  keybinding  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, createdAt])
+}
+
+model UserActionButton {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  label       String
+  action      String
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, position])
+}
+
+model PromptTemplate {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  title       String
+  prompt      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, createdAt])
+}
+
+model AiUsageMeter {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  userId         String?
+  windowDate     DateTime
+  requestsUsed   Int       @default(0)
+  tokensUsed     Int       @default(0)
+  provider       String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, userId, windowDate, provider])
+  @@index([workspaceId, windowDate])
 }
 
 model Shift {
