@@ -32,6 +32,10 @@ function isAuthPath(pathname: string) {
   );
 }
 
+function isSafeRelativePath(value: string) {
+  return value.startsWith("/") && !value.startsWith("//");
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSessionCookie = request.cookies.has(SESSION_COOKIE_NAME);
@@ -47,7 +51,9 @@ export function middleware(request: NextRequest) {
     const callbackUrl = request.nextUrl.searchParams.get("callbackUrl");
     const target = request.nextUrl.clone();
     target.pathname =
-      callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/overview";
+      callbackUrl && isSafeRelativePath(callbackUrl)
+        ? callbackUrl
+        : "/overview";
     target.search = "";
     return NextResponse.redirect(target);
   }
