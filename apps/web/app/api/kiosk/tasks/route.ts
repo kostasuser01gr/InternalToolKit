@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { appendAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
+import { getRequestId, logWebRequest, withObservabilityHeaders } from "@/lib/http-observability";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest, logSecurityEvent } from "@/lib/security";
 
@@ -36,10 +37,13 @@ function validateKioskToken(request: Request): boolean {
 }
 
 export async function POST(request: Request) {
+  const startMs = Date.now();
+  const requestId = getRequestId(request);
+
   if (!isSameOriginRequest(request)) {
     return Response.json(
       { ok: false, error: "cross_origin_blocked" },
-      { status: 403 },
+      withObservabilityHeaders({ status: 403 }, requestId),
     );
   }
 
@@ -51,7 +55,7 @@ export async function POST(request: Request) {
     });
     return Response.json(
       { ok: false, error: "invalid_kiosk_token", message: "Read-only mode: invalid or missing kiosk token." },
-      { status: 403 },
+      withObservabilityHeaders({ status: 403 }, requestId),
     );
   }
 
@@ -61,7 +65,7 @@ export async function POST(request: Request) {
   } catch {
     return Response.json(
       { ok: false, error: "invalid_json" },
-      { status: 400 },
+      withObservabilityHeaders({ status: 400 }, requestId),
     );
   }
 
@@ -73,7 +77,7 @@ export async function POST(request: Request) {
         error: "validation_error",
         message: parsed.error.issues[0]?.message ?? "Invalid payload.",
       },
-      { status: 400 },
+      withObservabilityHeaders({ status: 400 }, requestId),
     );
   }
 
@@ -94,14 +98,14 @@ export async function POST(request: Request) {
         error: "rate_limited",
         retryAfterSeconds: rateLimitResult.retryAfterSeconds,
       },
-      { status: 429 },
+      withObservabilityHeaders({ status: 429 }, requestId),
     );
   }
 
   // Idempotency check: if same key exists, return existing record
   const existingByKey = await db.washerTask.findUnique({
     where: { idempotencyKey },
-    include: { vehicle: true },
+    select: { id: true, status: true, vehicleId: true, createdAt: true, updatedAt: true, stationId: true },
   });
 
   if (existingByKey) {
@@ -112,12 +116,12 @@ export async function POST(request: Request) {
       entityId: existingByKey.id,
       metaJson: { idempotencyKey, deviceId, stationId, severity: "normal" },
     });
-    return Response.json({
-      ok: true,
-      deduped: true,
-      message: "Existing task updated (deduped).",
-      task: existingByKey,
-    });
+    const durationMs = Date.now() - startMs;
+    logWebRequest({ event: "kiosk.task_dedupe_hit", requestId, route: "/api/kiosk/tasks", method: "POST", status: 200, durationMs, details: { idempotencyKey, deviceId, stationId } });
+    return Response.json(
+      { ok: true, deduped: true, message: "Existing task updated (deduped).", task: existingByKey },
+      withObservabilityHeaders({ status: 200 }, requestId),
+    );
   }
 
   // Check for active task on same vehicle today (prevent duplicates)
@@ -133,7 +137,7 @@ export async function POST(request: Request) {
       status: { in: [WasherTaskStatus.TODO, WasherTaskStatus.IN_PROGRESS] },
       createdAt: { gte: todayStart, lte: todayEnd },
     },
-    include: { vehicle: true },
+    select: { id: true, status: true, vehicleId: true, notes: true, voiceTranscript: true, exteriorDone: true, interiorDone: true, vacuumDone: true, createdAt: true, updatedAt: true, stationId: true },
   });
 
   if (activeTaskForVehicle) {
@@ -150,7 +154,7 @@ export async function POST(request: Request) {
         deviceId,
         stationId,
       },
-      include: { vehicle: true },
+      select: { id: true, status: true, vehicleId: true, createdAt: true, updatedAt: true, stationId: true },
     });
 
     await appendAuditLog({
@@ -167,12 +171,12 @@ export async function POST(request: Request) {
       },
     });
 
-    return Response.json({
-      ok: true,
-      deduped: true,
-      message: "Existing task updated (deduped).",
-      task: updatedTask,
-    });
+    const durationMs = Date.now() - startMs;
+    logWebRequest({ event: "kiosk.task_merged", requestId, route: "/api/kiosk/tasks", method: "POST", status: 200, durationMs, details: { vehicleId, deviceId, stationId } });
+    return Response.json(
+      { ok: true, deduped: true, message: "Existing task updated (deduped).", task: updatedTask },
+      withObservabilityHeaders({ status: 200 }, requestId),
+    );
   }
 
   // Create new task
@@ -190,7 +194,7 @@ export async function POST(request: Request) {
       deviceId,
       stationId,
     },
-    include: { vehicle: true },
+    select: { id: true, status: true, vehicleId: true, createdAt: true, updatedAt: true, stationId: true },
   });
 
   await appendAuditLog({
@@ -208,15 +212,17 @@ export async function POST(request: Request) {
     },
   });
 
-  return Response.json({
-    ok: true,
-    deduped: false,
-    message: "Task created.",
-    task,
-  });
+  const durationMs = Date.now() - startMs;
+  logWebRequest({ event: "kiosk.task_created", requestId, route: "/api/kiosk/tasks", method: "POST", status: 201, durationMs, details: { vehicleId, deviceId, stationId } });
+  return Response.json(
+    { ok: true, deduped: false, message: "Task created.", task },
+    withObservabilityHeaders({ status: 201 }, requestId),
+  );
 }
 
 export async function GET(request: Request) {
+  const startMs = Date.now();
+  const requestId = getRequestId(request);
   const url = new URL(request.url);
   const workspaceId = url.searchParams.get("workspaceId");
   const dateParam = url.searchParams.get("date");
@@ -224,7 +230,7 @@ export async function GET(request: Request) {
   if (!workspaceId) {
     return Response.json(
       { ok: false, error: "missing_workspace_id" },
-      { status: 400 },
+      withObservabilityHeaders({ status: 400 }, requestId),
     );
   }
 
@@ -243,5 +249,7 @@ export async function GET(request: Request) {
     orderBy: { createdAt: "desc" },
   });
 
-  return Response.json({ ok: true, tasks });
+  const durationMs = Date.now() - startMs;
+  logWebRequest({ event: "kiosk.tasks_listed", requestId, route: "/api/kiosk/tasks", method: "GET", status: 200, durationMs });
+  return Response.json({ ok: true, tasks }, withObservabilityHeaders({ status: 200 }, requestId));
 }

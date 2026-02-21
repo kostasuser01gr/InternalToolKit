@@ -24,6 +24,8 @@ Set these in Vercel project settings for `apps/web`:
   - `NEXT_PUBLIC_FEATURE_UNIFIED_CHAT=1`
   - `NEXT_PUBLIC_FEATURE_CUSTOM_SHORTCUTS=1`
   - `NEXT_PUBLIC_FEATURE_CLOUD_AI_GATEWAY=1`
+  - `KIOSK_TOKEN=<strong-random-secret>` (required for kiosk write access; see `docs/WASHER_KIOSK.md`)
+  - `KIOSK_STATION_ID=<station-name>` (optional; defaults to `"default"`)
 
 Supabase URI guidance:
 - `DATABASE_URL`: pooler URI (typically port `6543`) for runtime queries.
