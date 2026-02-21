@@ -6,10 +6,11 @@ const APP_SHELL_ROUTES = [
   "/assistant",
   "/settings",
   "/login",
+  "/washers/app",
   "/manifest.json",
 ];
 const READ_API_PREFIXES = ["/v1/ai/models", "/v1/ai/usage", "/v1/shortcuts"];
-const READ_PAGE_PREFIXES = ["/chat", "/assistant", "/settings", "/home"];
+const READ_PAGE_PREFIXES = ["/chat", "/assistant", "/settings", "/home", "/washers/app"];
 
 function shouldCacheGetRequest(url) {
   if (url.origin !== self.location.origin) {

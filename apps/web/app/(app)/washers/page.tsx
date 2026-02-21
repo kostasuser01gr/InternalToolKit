@@ -1,11 +1,15 @@
 import { WasherTaskStatus } from "@prisma/client";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay } from "date-fns";
+import Link from "next/link";
 
+import { DataTable } from "@/components/kit/data-table";
+import { ExportButton } from "@/components/kit/export-button";
 import { GlassCard } from "@/components/kit/glass-card";
 import { PrimaryButton } from "@/components/kit/primary-button";
 import { VoiceInput } from "@/components/kit/voice-input";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +24,7 @@ type WashersPageProps = {
     workspaceId?: string;
     error?: string;
     success?: string;
+    registerDate?: string;
   }>;
 };
 
@@ -78,11 +83,34 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
     }),
   ]);
 
+  // Daily register: date-filtered list
+  const registerDate = params.registerDate
+    ? new Date(params.registerDate)
+    : new Date();
+  const registerDateStr = format(registerDate, "yyyy-MM-dd");
+
+  const dailyTasks = await db.washerTask.findMany({
+    where: {
+      workspaceId: workspace.id,
+      createdAt: {
+        gte: startOfDay(registerDate),
+        lte: endOfDay(registerDate),
+      },
+    },
+    include: { vehicle: true, washer: true },
+    orderBy: { createdAt: "desc" },
+  });
+
   return (
     <div className="space-y-6" data-testid="washers-page">
       <PageHeader
         title="Washer Operations"
         subtitle="Fast clean-task logging for exterior/interior/vacuum with optional voice notes."
+        action={
+          <Button asChild variant="outline">
+            <Link href="/washers/app" target="_blank" rel="noopener noreferrer">Open Kiosk App</Link>
+          </Button>
+        }
       />
 
       <StatusBanner error={params.error} success={params.success} />
@@ -279,6 +307,58 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
           </div>
         </GlassCard>
       </div>
+
+      <GlassCard className="space-y-4" data-testid="daily-register">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="kpi-font text-xl font-semibold">Daily Register</h2>
+          <div className="flex items-center gap-2">
+            <form className="flex items-center gap-2">
+              <input type="hidden" name="workspaceId" value={workspace.id} />
+              <Input
+                type="date"
+                name="registerDate"
+                defaultValue={registerDateStr}
+                className="h-9 w-40"
+              />
+              <PrimaryButton type="submit" className="h-9 px-3 text-sm">
+                Go
+              </PrimaryButton>
+            </form>
+            <ExportButton
+              href={`/api/washers/export?workspaceId=${workspace.id}&date=${registerDateStr}`}
+              label="Export CSV"
+            />
+          </div>
+        </div>
+
+        <DataTable
+          columns={[
+            { key: "plate", label: "Vehicle" },
+            { key: "status", label: "Status" },
+            { key: "exterior", label: "Ext" },
+            { key: "interior", label: "Int" },
+            { key: "vacuum", label: "Vac" },
+            { key: "washer", label: "Washer" },
+            { key: "station", label: "Station" },
+            { key: "time", label: "Time" },
+          ]}
+          rows={dailyTasks.map((t) => ({
+            id: t.id,
+            cells: [
+              `${t.vehicle.plateNumber} · ${t.vehicle.model}`,
+              t.status,
+              t.exteriorDone ? "✓" : "—",
+              t.interiorDone ? "✓" : "—",
+              t.vacuumDone ? "✓" : "—",
+              t.washer?.name ?? "Kiosk",
+              t.stationId ?? "—",
+              format(t.createdAt, "HH:mm"),
+            ],
+          }))}
+          emptyTitle="No tasks for this day"
+          emptyDescription="Select a different date or create tasks via the form above or the kiosk."
+        />
+      </GlassCard>
     </div>
   );
 }
