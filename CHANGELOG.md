@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+### feat — High ROI Upgrades
+
+#### Phase 1 — Washer Kiosk: Quick Plate + Presets + Next-car Mode
+- Added Quick Plate autofocus input with live match preview and Enter-to-save (Next-car mode).
+- Added service presets: Basic, Full, Express, VIP with configurable checkbox mappings.
+- Added one-hand action buttons (Start/Done/Issue) for active tasks in the queue.
+- Improved status labels: "Created" vs "Updated (deduped)" for clear feedback.
+
+#### Phase 2 — Offline Queue + Idempotency
+- Enhanced offline queue to include preset/service data in queued tasks.
+- Existing idempotency and dedupe logic preserved and tested.
+
+#### Phase 3 — Fleet Turnaround Pipeline + QC + SLA Alerts
+- Added fleet state machine: RETURNED → NEEDS_CLEANING → CLEANING → QC → READY (+ BLOCKED/MAINTENANCE).
+- Added QC signoff role enforcement (ADMIN/EDITOR only) with fail reason codes.
+- Added SLA breach detection with configurable per-state time limits.
+- Added `slaMinutesRemaining()` helper for countdown displays.
+
+#### Phase 4 — Shifts: Publish/Lock + Swap Requests + Constraints
+- Added schedule lifecycle: DRAFT → REVIEW → PUBLISHED with lock enforcement.
+- Added swap request approval role checks (ADMIN/EDITOR only).
+- Added shift overlap detection for same-user conflicts.
+- Added overtime violation detection with configurable daily hour limits.
+
+#### Phase 5 — Ops Chat: Entity Threads + Mentions + Moderation
+- Added entity-linked thread schema (vehicle, washer_task, shift, shift_request).
+- Added mention user schema for @user notifications.
+- Added moderation action schema: delete, mute_author, lock_thread.
+
+#### Phase 6 — KPI / Dashboards
+- Added KPI calculation utilities: task counts, average turnaround, fleet readiness rate.
+- Added data quality score (0–100) for missing fields.
+- Added daily register CSV export generator.
+- Added staffing coverage by hour calculation.
+
+#### Phase 7 — Governance Safety + Feature Flags
+- Added 7 new feature flags: kioskPresets, offlineQueue, fleetQcStep, fleetSlaAlerts, shiftPublishLock, chatEntityThreads, coordinatorDashboard.
+- Extended RBAC matrix with `analytics` resource (read + export permissions).
+- Added 85 new unit tests across fleet pipeline, shifts workflow, KPIs, and governance.
+
+### docs
+- Added `docs/WASHERS_KIOSK.md` — Quick Plate, presets, offline queue, dedupe documentation.
+- Added `docs/FLEET_PIPELINE.md` — Fleet lifecycle states, QC step, SLA alerts.
+- Added `docs/SHIFTS_WORKFLOW.md` — Publish/lock workflow, swap requests, constraints.
+- Added `docs/OPS_CHAT.md` — Entity-linked threads, mentions, moderation.
+- Added `docs/ANALYTICS_KPIS.md` — KPI definitions and coordinator dashboard guide.
+
 ### fix
 - Hardened `/chat` against unified-chat schema drift by degrading optional panels and mapping schema-not-ready errors to actionable remediation guidance.
 - Migrated web runtime DB path from sqlite/libsql to Postgres (Supabase-compatible) and removed file-based sqlite production dependency.
