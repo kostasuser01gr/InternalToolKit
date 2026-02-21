@@ -41,7 +41,7 @@ const KONNA_EMAIL = "konna.tzanidaki@internal.local";
 
 async function main() {
   // ── Bootstrap: Platform Owner (God Mode) ──────────────────────────────────
-  await prisma.user.upsert({
+  const manos = await prisma.user.upsert({
     where: { email: MANOS_EMAIL },
     update: {
       loginName: "ManosPs",
@@ -61,7 +61,7 @@ async function main() {
   });
 
   // ── Bootstrap: Coordinator ────────────────────────────────────────────────
-  await prisma.user.upsert({
+  const konna = await prisma.user.upsert({
     where: { email: KONNA_EMAIL },
     update: {
       loginName: "KonnaTz",
@@ -234,6 +234,41 @@ async function main() {
       workspaceId: workspace.id,
       userId: washer.id,
       role: WorkspaceRole.WASHER,
+    },
+  });
+
+  // ── Bootstrap workspace memberships for platform owner and coordinator ─────
+  await prisma.workspaceMember.upsert({
+    where: {
+      workspaceId_userId: {
+        workspaceId: workspace.id,
+        userId: manos.id,
+      },
+    },
+    update: {
+      role: WorkspaceRole.ADMIN,
+    },
+    create: {
+      workspaceId: workspace.id,
+      userId: manos.id,
+      role: WorkspaceRole.ADMIN,
+    },
+  });
+
+  await prisma.workspaceMember.upsert({
+    where: {
+      workspaceId_userId: {
+        workspaceId: workspace.id,
+        userId: konna.id,
+      },
+    },
+    update: {
+      role: WorkspaceRole.ADMIN,
+    },
+    create: {
+      workspaceId: workspace.id,
+      userId: konna.id,
+      role: WorkspaceRole.ADMIN,
     },
   });
 
@@ -627,6 +662,8 @@ async function main() {
   });
 
   console.log("Seed complete", {
+    platformOwner: MANOS_EMAIL,
+    coordinator: KONNA_EMAIL,
     admin: ADMIN_EMAIL,
     viewer: VIEWER_EMAIL,
     employee: EMPLOYEE_EMAIL,
