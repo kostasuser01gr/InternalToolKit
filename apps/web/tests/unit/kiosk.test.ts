@@ -1,4 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -95,8 +96,6 @@ describe("kiosk rate limiting", () => {
 // ---------------------------------------------------------------------------
 
 describe("kiosk idempotency key validation", () => {
-  const { z } = require("zod");
-
   const idempotencyKeySchema = z.string().uuid();
 
   it("accepts valid UUIDs", () => {
@@ -120,8 +119,6 @@ describe("kiosk idempotency key validation", () => {
 // ---------------------------------------------------------------------------
 
 describe("washer task schema kiosk fields", () => {
-  const { z } = require("zod");
-
   const createKioskTaskSchema = z.object({
     workspaceId: z.string().min(1),
     vehicleId: z.string().min(1),

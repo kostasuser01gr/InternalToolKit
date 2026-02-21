@@ -7,7 +7,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest, logSecurityEvent } from "@/lib/security";
 
 const KIOSK_TOKEN = process.env.KIOSK_TOKEN ?? "";
-const KIOSK_STATION_ID = process.env.KIOSK_STATION_ID ?? "";
+const KIOSK_STATION_ID = process.env.KIOSK_STATION_ID ?? "default";
 
 const createKioskTaskSchema = z.object({
   workspaceId: z.string().min(1),
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
   }
 
   const { idempotencyKey, deviceId, workspaceId, vehicleId } = parsed.data;
-  const stationId = KIOSK_STATION_ID || "default";
+  const stationId = KIOSK_STATION_ID;
 
   // Rate limiting by deviceId + stationId
   const rateLimitResult = checkRateLimit({
