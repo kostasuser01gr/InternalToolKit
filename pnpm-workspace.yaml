@@ -1,3 +1,23 @@
 packages:
   - apps/*
   - packages/*
+
+onlyBuiltDependencies:
+  - /
+  - '@'
+  - '@prisma/engines'
+  - a
+  - better-sqlite3
+  - e
+  - esbuild
+  - g
+  - i
+  - m
+  - n
+  - p
+  - prisma
+  - r
+  - s
+  - sharp
+  - unrs-resolver
+  - workerd
