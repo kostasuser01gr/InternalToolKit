@@ -20,6 +20,7 @@ type ResourceActionMap = {
   washers: "read" | "write";
   calendar: "read" | "write";
   notifications: "read";
+  analytics: "read" | "export";
 };
 
 export type WorkspaceResource = keyof ResourceActionMap;
@@ -112,6 +113,15 @@ export const workspacePermissionMatrix: WorkspacePermission = {
       WorkspaceRole.WASHER,
       WorkspaceRole.VIEWER,
     ],
+  },
+  analytics: {
+    read: [
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.EDITOR,
+      WorkspaceRole.EMPLOYEE,
+      WorkspaceRole.VIEWER,
+    ],
+    export: [WorkspaceRole.ADMIN, WorkspaceRole.EDITOR],
   },
 };
 
