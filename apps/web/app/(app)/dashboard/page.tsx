@@ -18,7 +18,7 @@ export default async function DashboardPage() {
     const dataHealth = await db.$queryRaw<Array<{ ok: number }>>`SELECT 1 as ok`;
     dataStatus = dataHealth.length > 0 && dataHealth[0]?.ok === 1;
   } catch {
-    dataStatus = false;
+    // dataStatus stays false – dashboard renders "Database unavailable"
   }
   const apiBaseUrl = getApiBaseUrl();
 
