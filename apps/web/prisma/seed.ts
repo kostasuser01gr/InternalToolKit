@@ -34,7 +34,52 @@ const VIEWER_EMAIL = "viewer@internal.local";
 const EMPLOYEE_EMAIL = "employee@internal.local";
 const WASHER_EMAIL = "washer@internal.local";
 
+// Bootstrap platform users — seeded idempotently (upsert by loginName/email).
+// PINs are hashed; plaintext values are never logged.
+const MANOS_EMAIL = "manos.psistakis@internal.local";
+const KONNA_EMAIL = "konna.tzanidaki@internal.local";
+
 async function main() {
+  // ── Bootstrap: Platform Owner (God Mode) ──────────────────────────────────
+  await prisma.user.upsert({
+    where: { email: MANOS_EMAIL },
+    update: {
+      loginName: "ManosPs",
+      name: "Psistakis Manolis",
+      roleGlobal: GlobalRole.ADMIN,
+      passwordHash: hashSync("ManosPs@Internal!", 12),
+      pinHash: hashSync("2000", 12),
+    },
+    create: {
+      email: MANOS_EMAIL,
+      loginName: "ManosPs",
+      name: "Psistakis Manolis",
+      roleGlobal: GlobalRole.ADMIN,
+      passwordHash: hashSync("ManosPs@Internal!", 12),
+      pinHash: hashSync("2000", 12),
+    },
+  });
+
+  // ── Bootstrap: Coordinator ────────────────────────────────────────────────
+  await prisma.user.upsert({
+    where: { email: KONNA_EMAIL },
+    update: {
+      loginName: "KonnaTz",
+      name: "Konstantina Tzanidaki",
+      roleGlobal: GlobalRole.ADMIN,
+      passwordHash: hashSync("KonnaTz@Internal!", 12),
+      pinHash: hashSync("2001", 12),
+    },
+    create: {
+      email: KONNA_EMAIL,
+      loginName: "KonnaTz",
+      name: "Konstantina Tzanidaki",
+      roleGlobal: GlobalRole.ADMIN,
+      passwordHash: hashSync("KonnaTz@Internal!", 12),
+      pinHash: hashSync("2001", 12),
+    },
+  });
+
   const admin = await prisma.user.upsert({
     where: { email: ADMIN_EMAIL },
     update: {
