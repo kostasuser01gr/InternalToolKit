@@ -18,7 +18,7 @@ function getSafeMessage(error: unknown): string {
   }
 
   if (error instanceof Error) {
-    if (error.message.includes("ECONNREFUSED") || error.message.includes("connect")) {
+    if (error.message.includes("ECONNREFUSED") || error.message.includes("ENOTFOUND")) {
       return "Database connection failed. Please check your configuration.";
     }
 

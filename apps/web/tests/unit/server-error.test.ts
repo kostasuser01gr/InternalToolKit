@@ -45,6 +45,13 @@ describe("mapServerError", () => {
     expect(result.message).toBe(
       "Database connection failed. Please check your configuration.",
     );
+
+    const enotfound = new Error("ENOTFOUND some-host");
+    const result2 = await mapServerError(enotfound, "/settings");
+
+    expect(result2.message).toBe(
+      "Database connection failed. Please check your configuration.",
+    );
   });
 
   it("maps not-found errors to their message", async () => {
