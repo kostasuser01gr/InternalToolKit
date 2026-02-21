@@ -187,9 +187,9 @@ export function KioskClient({
             deviceId,
             status: "TODO",
             notes: "",
-            exterior: task.exterior,
-            interior: task.interior,
-            vacuum: task.vacuum,
+            exteriorDone: task.exterior,
+            interiorDone: task.interior,
+            vacuumDone: task.vacuum,
           }),
         });
         const data = await res.json();
@@ -298,9 +298,9 @@ export function KioskClient({
           deviceId,
           status: "TODO",
           notes: taskNotes || undefined,
-          exterior,
-          interior,
-          vacuum,
+          exteriorDone: exterior,
+          interiorDone: interior,
+          vacuumDone: vacuum,
         }),
       });
 
@@ -360,15 +360,14 @@ export function KioskClient({
   async function handleTaskAction(task: KioskTask, newStatus: string) {
     if (!task.id || readOnly) return;
     try {
-      const res = await fetch("/api/kiosk/tasks", {
-        method: "POST",
+      const res = await fetch(`/api/kiosk/tasks/${task.id}`, {
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           "x-kiosk-token": kioskToken,
         },
         body: JSON.stringify({
           workspaceId,
-          taskId: task.id,
           status: newStatus,
           deviceId,
         }),
