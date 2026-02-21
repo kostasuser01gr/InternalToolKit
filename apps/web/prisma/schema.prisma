@@ -525,12 +525,16 @@ model WasherTask {
   vacuumDone      Boolean          @default(false)
   notes           String?
   voiceTranscript String?
+  idempotencyKey  String?
+  deviceId        String?
+  stationId       String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   vehicle         Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   washer          User?            @relation("WasherTaskAssignee", fields: [washerUserId], references: [id], onDelete: SetNull)
 
+  @@unique([idempotencyKey])
   @@index([workspaceId, status, createdAt])
   @@index([vehicleId, createdAt])
 }
