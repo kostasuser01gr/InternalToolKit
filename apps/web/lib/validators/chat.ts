@@ -44,3 +44,23 @@ export const convertMessageSchema = z.object({
   messageId: z.string().min(1),
   target: z.enum(["automation", "report", "task"]),
 });
+
+export const createEntityThreadSchema = z.object({
+  workspaceId: z.string().min(1),
+  title: z.string().trim().min(2).max(100),
+  entityType: z.enum(["vehicle", "washer_task", "shift", "shift_request"]),
+  entityId: z.string().min(1),
+});
+
+export const mentionUserSchema = z.object({
+  workspaceId: z.string().min(1),
+  threadId: z.string().min(1),
+  mentionedUserId: z.string().min(1),
+});
+
+export const moderateMessageSchema = z.object({
+  workspaceId: z.string().min(1),
+  threadId: z.string().min(1),
+  messageId: z.string().min(1),
+  action: z.enum(["delete", "mute_author", "lock_thread"]),
+});
