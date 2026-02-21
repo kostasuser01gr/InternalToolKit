@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 type Vehicle = { id: string; plateNumber: string; model: string };
 
@@ -62,6 +62,23 @@ function saveQueue(queue: KioskTask[]) {
   }
 }
 
+function subscribeOnline(callback: () => void) {
+  window.addEventListener("online", callback);
+  window.addEventListener("offline", callback);
+  return () => {
+    window.removeEventListener("online", callback);
+    window.removeEventListener("offline", callback);
+  };
+}
+
+function getOnlineSnapshot() {
+  return navigator.onLine;
+}
+
+function getServerOnlineSnapshot() {
+  return true;
+}
+
 export function KioskClient({
   workspaceId,
   workspaceName,
@@ -70,41 +87,13 @@ export function KioskClient({
   readOnly,
   vehicles,
 }: KioskClientProps) {
-  const [deviceId, setDeviceId] = useState("");
-  const [online, setOnline] = useState(true);
+  const [deviceId] = useState(() => (typeof window !== "undefined" ? getDeviceId() : ""));
+  const online = useSyncExternalStore(subscribeOnline, getOnlineSnapshot, getServerOnlineSnapshot);
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [tasks, setTasks] = useState<KioskTask[]>([]);
+  const [tasks, setTasks] = useState<KioskTask[]>(() => loadQueue());
   const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const initializedRef = useRef(false);
-
-  useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-
-    // These are one-time browser-only initializations from external storage
-    const id = getDeviceId();
-    const queue = loadQueue();
-    const isOnline = navigator.onLine;
-
-    // Use a microtask to batch these state updates
-    queueMicrotask(() => {
-      setDeviceId(id);
-      setTasks(queue);
-      setOnline(isOnline);
-    });
-
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
 
   // Update sync status indicator
   useEffect(() => {
@@ -186,25 +175,21 @@ export function KioskClient({
     setTasks(updated);
   }, [online, readOnly, kioskToken, workspaceId, deviceId]);
 
-  // Auto-sync on coming online
+  // Auto-sync: use interval that also handles online state changes
   useEffect(() => {
-    if (online) {
-      // Use microtask to avoid direct setState in effect body
-      queueMicrotask(() => {
-        syncPendingTasks();
-      });
-    }
-  }, [online, syncPendingTasks]);
-
-  // Periodic sync retry
-  useEffect(() => {
-    syncTimerRef.current = setInterval(() => {
-      syncPendingTasks();
-    }, 15_000);
+    const doSync = () => {
+      if (!online || readOnly) return;
+      void syncPendingTasks();
+    };
+    // Initial sync attempt on mount/online change via interval
+    syncTimerRef.current = setInterval(doSync, 15_000);
+    // Also fire once after a short delay
+    const immediate = setTimeout(doSync, 500);
     return () => {
       if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+      clearTimeout(immediate);
     };
-  }, [syncPendingTasks]);
+  }, [syncPendingTasks, online, readOnly]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

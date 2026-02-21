@@ -108,7 +108,7 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
         subtitle="Fast clean-task logging for exterior/interior/vacuum with optional voice notes."
         action={
           <Button asChild variant="outline">
-            <Link href="/washers/app" target="_blank">Open Kiosk App</Link>
+            <Link href="/washers/app" target="_blank" rel="noopener noreferrer">Open Kiosk App</Link>
           </Button>
         }
       />
