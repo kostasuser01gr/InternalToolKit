@@ -28,10 +28,22 @@ const appRoutes = [
   "/calendar",
 ];
 
+const authPaths = ["/login", "/signup", "/forgot-password"];
+
 function isAppRoute(pathname: string) {
   return appRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
+}
+
+function isAuthPath(pathname: string) {
+  return authPaths.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+}
+
+function isSafeRelativePath(value: string) {
+  return value.startsWith("/") && !value.startsWith("//");
 }
 
 function createNonce() {
@@ -222,6 +234,18 @@ export async function proxy(request: NextRequest) {
     if (hasInvalidSessionCookie) {
       clearSessionCookie(response);
     }
+    setSecurityHeaders(response, nonce, requestId);
+    return response;
+  }
+
+  if (isAuthPath(pathname) && hasValidSessionCookie) {
+    const callbackUrl = request.nextUrl.searchParams.get("callbackUrl");
+    const target = new URL(
+      callbackUrl && isSafeRelativePath(callbackUrl) ? callbackUrl : "/overview",
+      request.url,
+    );
+    target.search = "";
+    response = NextResponse.redirect(target);
     setSecurityHeaders(response, nonce, requestId);
     return response;
   }
