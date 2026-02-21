@@ -54,6 +54,8 @@ function createNonce() {
 
 type SessionPayload = {
   uid: string;
+  sid: string;
+  st: string;
   iat: number;
   exp: number;
 };
@@ -102,6 +104,8 @@ async function isValidSessionCookie(token: string) {
 
   if (
     typeof payload.uid !== "string" ||
+    typeof payload.sid !== "string" ||
+    typeof payload.st !== "string" ||
     typeof payload.iat !== "number" ||
     typeof payload.exp !== "number"
   ) {
