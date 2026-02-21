@@ -9,6 +9,9 @@ import { checkRateLimit } from "@/lib/rate-limit";
  * - Rate limiting by deviceId + stationId
  * - Idempotency/dedupe schema validation
  * - Washer task schema fields
+ * - Preset application logic
+ * - Quick Plate vehicle lookup
+ * - Offline queue enqueue/dedupe
  */
 
 // ---------------------------------------------------------------------------
@@ -179,5 +182,241 @@ describe("washer task schema kiosk fields", () => {
     };
     const result = createKioskTaskSchema.parse(payload);
     expect(result.status).toBe("TODO");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Preset application logic
+// ---------------------------------------------------------------------------
+
+type Preset = {
+  label: string;
+  exterior: boolean;
+  interior: boolean;
+  vacuum: boolean;
+  priorityNotes: string | undefined;
+};
+
+const PRESETS: Preset[] = [
+  { label: "Basic", exterior: true, interior: false, vacuum: false, priorityNotes: undefined },
+  { label: "Full", exterior: true, interior: true, vacuum: true, priorityNotes: undefined },
+  { label: "Express", exterior: true, interior: false, vacuum: true, priorityNotes: undefined },
+  { label: "VIP", exterior: true, interior: true, vacuum: true, priorityNotes: "VIP — priority wash" },
+];
+
+function applyPreset(preset: Preset): { exterior: boolean; interior: boolean; vacuum: boolean; notes: string } {
+  return {
+    exterior: preset.exterior,
+    interior: preset.interior,
+    vacuum: preset.vacuum,
+    notes: preset.priorityNotes ?? "",
+  };
+}
+
+describe("kiosk preset application", () => {
+  it("Basic preset: exterior only", () => {
+    const result = applyPreset(PRESETS[0]!);
+    expect(result.exterior).toBe(true);
+    expect(result.interior).toBe(false);
+    expect(result.vacuum).toBe(false);
+    expect(result.notes).toBe("");
+  });
+
+  it("Full preset: exterior + interior + vacuum", () => {
+    const result = applyPreset(PRESETS[1]!);
+    expect(result.exterior).toBe(true);
+    expect(result.interior).toBe(true);
+    expect(result.vacuum).toBe(true);
+    expect(result.notes).toBe("");
+  });
+
+  it("Express preset: exterior + vacuum only", () => {
+    const result = applyPreset(PRESETS[2]!);
+    expect(result.exterior).toBe(true);
+    expect(result.interior).toBe(false);
+    expect(result.vacuum).toBe(true);
+    expect(result.notes).toBe("");
+  });
+
+  it("VIP preset: all services + priority note", () => {
+    const result = applyPreset(PRESETS[3]!);
+    expect(result.exterior).toBe(true);
+    expect(result.interior).toBe(true);
+    expect(result.vacuum).toBe(true);
+    expect(result.notes).toBe("VIP — priority wash");
+  });
+
+  it("all presets have valid labels", () => {
+    const labels = PRESETS.map((p) => p.label);
+    expect(labels).toEqual(["Basic", "Full", "Express", "VIP"]);
+  });
+
+  it("all presets have exterior enabled", () => {
+    for (const preset of PRESETS) {
+      expect(preset.exterior).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Quick Plate vehicle lookup
+// ---------------------------------------------------------------------------
+
+type Vehicle = { id: string; plateNumber: string; model: string };
+
+function findVehicleByPlate(query: string, vehicles: Vehicle[]): Vehicle | undefined {
+  const q = query.toUpperCase();
+  return vehicles.find((v) => v.plateNumber.toUpperCase() === q)
+    ?? vehicles.find((v) => v.plateNumber.toUpperCase().includes(q));
+}
+
+describe("quick plate vehicle lookup", () => {
+  const vehicles: Vehicle[] = [
+    { id: "v1", plateNumber: "ABC1234", model: "Toyota Yaris" },
+    { id: "v2", plateNumber: "XYZ9999", model: "BMW 320i" },
+    { id: "v3", plateNumber: "DEF5678", model: "Audi A4" },
+  ];
+
+  it("finds exact match case-insensitively", () => {
+    expect(findVehicleByPlate("abc1234", vehicles)?.id).toBe("v1");
+    expect(findVehicleByPlate("ABC1234", vehicles)?.id).toBe("v1");
+  });
+
+  it("finds partial match when no exact match", () => {
+    expect(findVehicleByPlate("ABC", vehicles)?.id).toBe("v1");
+    expect(findVehicleByPlate("DEF", vehicles)?.id).toBe("v3");
+  });
+
+  it("returns undefined when no match found", () => {
+    expect(findVehicleByPlate("ZZZ0000", vehicles)).toBeUndefined();
+  });
+
+  it("exact match takes priority over partial match", () => {
+    const overlappingVehicles: Vehicle[] = [
+      { id: "v10", plateNumber: "AB1", model: "Car A" },
+      { id: "v11", plateNumber: "AB123", model: "Car B" },
+    ];
+    // "AB1" is both exact for v10 and partial for v11
+    expect(findVehicleByPlate("AB1", overlappingVehicles)?.id).toBe("v10");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Offline queue: enqueue, dedupe, flush semantics
+// ---------------------------------------------------------------------------
+
+type QueuedTask = {
+  idempotencyKey: string;
+  vehicleId: string;
+  status: "pending" | "synced" | "failed";
+  createdAt: string;
+};
+
+function enqueueTask(queue: QueuedTask[], task: QueuedTask): QueuedTask[] {
+  // Prevent duplicate idempotencyKey entries
+  if (queue.some((t) => t.idempotencyKey === task.idempotencyKey)) {
+    return queue;
+  }
+  return [task, ...queue];
+}
+
+function markSynced(queue: QueuedTask[], idempotencyKey: string): QueuedTask[] {
+  return queue.map((t) =>
+    t.idempotencyKey === idempotencyKey ? { ...t, status: "synced" } : t,
+  );
+}
+
+function markFailed(queue: QueuedTask[], idempotencyKey: string): QueuedTask[] {
+  return queue.map((t) =>
+    t.idempotencyKey === idempotencyKey ? { ...t, status: "failed" } : t,
+  );
+}
+
+describe("offline queue logic", () => {
+  const makeTask = (key: string): QueuedTask => ({
+    idempotencyKey: key,
+    vehicleId: "v1",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  });
+
+  it("enqueues a new task at the front", () => {
+    const q = enqueueTask([], makeTask("key-1"));
+    expect(q).toHaveLength(1);
+    expect(q[0]!.idempotencyKey).toBe("key-1");
+  });
+
+  it("does not duplicate a task with the same idempotencyKey", () => {
+    let q: QueuedTask[] = [];
+    q = enqueueTask(q, makeTask("key-dup"));
+    q = enqueueTask(q, makeTask("key-dup"));
+    expect(q).toHaveLength(1);
+  });
+
+  it("allows multiple tasks with different keys", () => {
+    let q: QueuedTask[] = [];
+    q = enqueueTask(q, makeTask("key-a"));
+    q = enqueueTask(q, makeTask("key-b"));
+    expect(q).toHaveLength(2);
+  });
+
+  it("transitions pending -> synced on successful flush", () => {
+    let q = enqueueTask([], makeTask("key-sync"));
+    q = markSynced(q, "key-sync");
+    expect(q[0]!.status).toBe("synced");
+  });
+
+  it("transitions pending -> failed on error", () => {
+    let q = enqueueTask([], makeTask("key-fail"));
+    q = markFailed(q, "key-fail");
+    expect(q[0]!.status).toBe("failed");
+  });
+
+  it("retains other tasks when one transitions", () => {
+    let q: QueuedTask[] = [];
+    q = enqueueTask(q, makeTask("key-1"));
+    q = enqueueTask(q, makeTask("key-2"));
+    q = markSynced(q, "key-1");
+    expect(q.find((t) => t.idempotencyKey === "key-2")?.status).toBe("pending");
+    expect(q.find((t) => t.idempotencyKey === "key-1")?.status).toBe("synced");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Kiosk task update schema (PATCH endpoint)
+// ---------------------------------------------------------------------------
+
+describe("kiosk task update schema", () => {
+  const updateSchema = z.object({
+    workspaceId: z.string().min(1),
+    deviceId: z.string().min(1).max(120),
+    status: z.enum(["TODO", "IN_PROGRESS", "DONE", "BLOCKED"]),
+  });
+
+  it("accepts valid update payload", () => {
+    const result = updateSchema.safeParse({
+      workspaceId: "ws-1",
+      deviceId: "device-abc",
+      status: "IN_PROGRESS",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing workspaceId", () => {
+    expect(updateSchema.safeParse({ deviceId: "d", status: "DONE" }).success).toBe(false);
+  });
+
+  it("rejects invalid status value", () => {
+    expect(
+      updateSchema.safeParse({ workspaceId: "ws", deviceId: "d", status: "UNKNOWN" }).success,
+    ).toBe(false);
+  });
+
+  it("accepts all valid status values", () => {
+    for (const status of ["TODO", "IN_PROGRESS", "DONE", "BLOCKED"]) {
+      expect(
+        updateSchema.safeParse({ workspaceId: "ws", deviceId: "d", status }).success,
+      ).toBe(true);
+    }
   });
 });

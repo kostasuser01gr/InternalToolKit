@@ -2,6 +2,38 @@
 
 The Washer Kiosk provides a simplified, login-free interface for wash station operators to register vehicle cleaning tasks directly from a tablet or phone, without needing a username, PIN, or password.
 
+## Instant UX Features
+
+### Quick Plate (Next-Car Mode)
+
+1. The plate input is **auto-focused** when the kiosk loads
+2. Type any part of a plate number — a live match preview appears below
+3. Press **Enter** to instantly create a wash task for the matched vehicle
+4. The input is **automatically cleared and refocused** (next-car mode — no tap needed)
+5. The new task appears in the list immediately (**optimistic UI**)
+
+### Service Presets
+
+Tap a preset to apply a service combination in one tap:
+
+| Preset | Exterior | Interior | Vacuum | Notes |
+|---|---|---|---|---|
+| Basic | ✓ | — | — | — |
+| Full | ✓ | ✓ | ✓ | — |
+| Express | ✓ | — | ✓ | — |
+| VIP | ✓ | ✓ | ✓ | "VIP — priority wash" |
+
+Individual checkboxes can be toggled after selecting a preset.
+
+### One-Hand Action Buttons
+
+For each synced task, three large action buttons are shown:
+- **▶ Start** — marks task as `IN_PROGRESS`
+- **✓ Done** — marks task as `DONE`
+- **⚠ Issue** — marks task as `BLOCKED`
+
+These call `PATCH /api/kiosk/tasks/[id]` directly with the new status.
+
 ## Installing as a PWA on a Tablet
 
 1. Open the kiosk URL in Chrome/Edge on the tablet: `https://your-domain.com/washers/app`
@@ -26,6 +58,21 @@ KIOSK_TOKEN="my-secure-random-token-min-32-chars"
 KIOSK_STATION_ID="station-main"
 ```
 
+## Offline Support
+
+When the device loses connectivity:
+- The sync status badge changes to **"● Offline"**
+- New task submissions are **queued locally** (localStorage) with a `status: "pending"` indicator
+- Each queued task keeps its `idempotencyKey` so retries cannot create duplicates
+- When connectivity returns, pending tasks are **automatically flushed** (15-second interval)
+
+Sync status badge states:
+| Badge | Meaning |
+|---|---|
+| `● Online` (green) | Connected, all tasks synced |
+| `● Syncing (N)` (amber) | N tasks pending sync |
+| `● Offline` (red) | No connectivity |
+
 ## How Dedupe / Idempotency Works
 
 Every kiosk submission includes:
@@ -42,6 +89,20 @@ The server enforces three levels of deduplication:
 The UI shows the result:
 - **"Task created"** — a new task was created
 - **"Existing task updated (deduped)"** — an existing task was found and updated
+
+## API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/kiosk/tasks` | Create or merge a wash task |
+| `GET` | `/api/kiosk/tasks?workspaceId=&date=` | List tasks for a given date |
+| `PATCH` | `/api/kiosk/tasks/[id]` | Update task status (Start/Done/Issue) |
+
+All endpoints:
+- Require the `x-kiosk-token` header (constant-time comparison)
+- Return `X-Request-Id` for log correlation
+- Log structured timing JSON (`durationMs`)
+- Are rate-limited: 30 requests per minute per `deviceId + stationId`
 
 ## Read-Only Mode
 
@@ -92,14 +153,16 @@ Kiosk requests are rate-limited per `deviceId + stationId` combination:
 Browser (Kiosk PWA)
   ├─ Generates KIOSK_DEVICE_ID (localStorage)
   ├─ Generates idempotencyKey per submission (UUID)
-  ├─ Sends POST /api/kiosk/tasks with x-kiosk-token header
-  └─ Queues offline submissions in localStorage
+  ├─ Quick Plate: type plate → Enter → optimistic task → POST /api/kiosk/tasks
+  ├─ Action buttons: Start/Done/Issue → PATCH /api/kiosk/tasks/[id]
+  └─ Queues offline submissions in localStorage (flushes on reconnect)
 
 Server
   ├─ Validates KIOSK_TOKEN (constant-time comparison)
   ├─ Rate limits by deviceId + stationId
   ├─ Deduplicates by idempotencyKey + active vehicle check
-  ├─ Creates/updates WasherTask in database
+  ├─ Creates/updates WasherTask in database (minimal select — no overfetch)
+  ├─ Returns X-Request-Id + structured timing log
   └─ Writes audit log entries
 
 Main App (/washers)
@@ -107,3 +170,4 @@ Main App (/washers)
   ├─ Daily Register table with date picker
   └─ CSV export for any date
 ```
+
