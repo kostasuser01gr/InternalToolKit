@@ -24,6 +24,11 @@ export default function AppError({
         The dashboard could not complete that action. Retry or return to a
         stable route.
       </p>
+      {error.digest ? (
+        <p className="text-xs text-[var(--text-muted)] opacity-80">
+          Error ID: {error.digest}
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <PrimaryButton onClick={reset}>Retry</PrimaryButton>
         <PrimaryButton asChild className="bg-transparent text-[var(--text)] shadow-none ring-1 ring-[var(--border)] hover:bg-white/10">

@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { ThemePreference } from "@prisma/client";
 
 import { GlassCard } from "@/components/kit/glass-card";
@@ -19,6 +21,7 @@ import {
 import { getAppContext } from "@/lib/app-context";
 import { listActiveSessionsForUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { mapServerError } from "@/lib/server-error";
 
 import {
   createActionButtonAction,
@@ -49,9 +52,20 @@ export default async function SettingsPage({
   const params = await searchParams;
   const { user, workspace } = await getAppContext();
 
-  const profile = await db.user.findUniqueOrThrow({
+  const profile = await db.user.findUnique({
     where: { id: user.id },
   });
+
+  if (!profile) {
+    const { message, errorId, requestId } = await mapServerError(
+      new Error("User profile not found."),
+      "/settings",
+    );
+    redirect(
+      `/settings?error=${encodeURIComponent(message)}&errorId=${errorId}&requestId=${requestId}`,
+    );
+  }
+
   const activeSessions = await listActiveSessionsForUser(user.id);
   const [shortcuts, actionButtons, promptTemplates] = await Promise.all([
     db.userShortcut.findMany({
