@@ -18,6 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
+import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 
 import {
   generateAutomationDraftAction,
@@ -44,20 +45,27 @@ export default async function AssistantPage({
       where: { workspaceId: workspace.id },
       orderBy: { name: "asc" },
     }),
-    db.chatThread.findFirst({
-      where: {
-        workspaceId: workspace.id,
-        title: "Assistant",
-      },
-      include: {
-        messages: {
-          orderBy: {
-            createdAt: "asc",
-          },
-          take: 50,
+    // include:messages selects columns added in migration 20260220181000;
+    // fall back to null if schema is not yet applied.
+    db.chatThread
+      .findFirst({
+        where: {
+          workspaceId: workspace.id,
+          title: "Assistant",
         },
-      },
-    }),
+        include: {
+          messages: {
+            orderBy: {
+              createdAt: "asc",
+            },
+            take: 50,
+          },
+        },
+      })
+      .catch((err: unknown) => {
+        if (!isSchemaNotReadyError(err)) throw err;
+        return null;
+      }),
   ]);
   const defaultTableId = tables[0]?.id;
 

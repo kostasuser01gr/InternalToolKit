@@ -21,6 +21,7 @@ import {
 import { getAppContext } from "@/lib/app-context";
 import { listActiveSessionsForUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 import { mapServerError } from "@/lib/server-error";
 
 import {
@@ -67,28 +68,34 @@ export default async function SettingsPage({
   }
 
   const activeSessions = await listActiveSessionsForUser(user.id);
+  // Tables added in migration 20260220181000 may not exist yet in older databases.
+  // Fall back to empty arrays so the page renders instead of crashing.
+  function schemaFallback<T>(fallback: T) {
+    return (err: unknown): T => {
+      if (!isSchemaNotReadyError(err)) throw err;
+      return fallback;
+    };
+  }
+
   const [shortcuts, actionButtons, promptTemplates] = await Promise.all([
-    db.userShortcut.findMany({
-      where: {
-        userId: user.id,
-        workspaceId: workspace.id,
-      },
-      orderBy: [{ createdAt: "desc" }],
-    }),
-    db.userActionButton.findMany({
-      where: {
-        userId: user.id,
-        workspaceId: workspace.id,
-      },
-      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-    }),
-    db.promptTemplate.findMany({
-      where: {
-        userId: user.id,
-        workspaceId: workspace.id,
-      },
-      orderBy: [{ createdAt: "desc" }],
-    }),
+    db.userShortcut
+      .findMany({
+        where: { userId: user.id, workspaceId: workspace.id },
+        orderBy: [{ createdAt: "desc" }],
+      })
+      .catch(schemaFallback([])),
+    db.userActionButton
+      .findMany({
+        where: { userId: user.id, workspaceId: workspace.id },
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      })
+      .catch(schemaFallback([])),
+    db.promptTemplate
+      .findMany({
+        where: { userId: user.id, workspaceId: workspace.id },
+        orderBy: [{ createdAt: "desc" }],
+      })
+      .catch(schemaFallback([])),
   ]);
 
   return (

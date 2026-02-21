@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
+import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 import { hasWorkspacePermission } from "@/lib/rbac";
 
 import { createWasherTaskAction, updateWasherTaskAction } from "./actions";
@@ -68,19 +69,24 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
         },
       },
     }),
-    db.washerTask.findMany({
-      where: {
-        workspaceId: workspace.id,
-      },
-      include: {
-        vehicle: true,
-        washer: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 60,
-    }),
+    db.washerTask
+      .findMany({
+        where: {
+          workspaceId: workspace.id,
+        },
+        include: {
+          vehicle: true,
+          washer: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 60,
+      })
+      .catch((err: unknown) => {
+        if (!isSchemaNotReadyError(err)) throw err;
+        return [];
+      }),
   ]);
 
   // Daily register: date-filtered list
@@ -89,17 +95,22 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
     : new Date();
   const registerDateStr = format(registerDate, "yyyy-MM-dd");
 
-  const dailyTasks = await db.washerTask.findMany({
-    where: {
-      workspaceId: workspace.id,
-      createdAt: {
-        gte: startOfDay(registerDate),
-        lte: endOfDay(registerDate),
+  const dailyTasks = await db.washerTask
+    .findMany({
+      where: {
+        workspaceId: workspace.id,
+        createdAt: {
+          gte: startOfDay(registerDate),
+          lte: endOfDay(registerDate),
+        },
       },
-    },
-    include: { vehicle: true, washer: true },
-    orderBy: { createdAt: "desc" },
-  });
+      include: { vehicle: true, washer: true },
+      orderBy: { createdAt: "desc" },
+    })
+    .catch((err: unknown) => {
+      if (!isSchemaNotReadyError(err)) throw err;
+      return [];
+    });
 
   return (
     <div className="space-y-6" data-testid="washers-page">

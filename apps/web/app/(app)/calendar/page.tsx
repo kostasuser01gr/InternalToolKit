@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
+import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 import { hasWorkspacePermission } from "@/lib/rbac";
 import { calendarRangeSchema } from "@/lib/validators/calendar";
 
@@ -110,22 +111,27 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
         createdAt: "asc",
       },
     }),
-    db.washerTask.findMany({
-      where: {
-        workspaceId: workspace.id,
-        createdAt: {
-          gte: fromDate,
-          lte: toDate,
+    db.washerTask
+      .findMany({
+        where: {
+          workspaceId: workspace.id,
+          createdAt: {
+            gte: fromDate,
+            lte: toDate,
+          },
         },
-      },
-      include: {
-        vehicle: true,
-        washer: true,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    }),
+        include: {
+          vehicle: true,
+          washer: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      })
+      .catch((err: unknown) => {
+        if (!isSchemaNotReadyError(err)) throw err;
+        return [];
+      }),
   ]);
 
   const events: CalendarEventItem[] = [
