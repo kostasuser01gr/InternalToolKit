@@ -27,4 +27,11 @@ export const features = {
     process.env.NEXT_PUBLIC_FEATURE_WINDOW_CONTROLS_OVERLAY,
     false,
   ),
+  kioskPresets: isEnabled(process.env.NEXT_PUBLIC_FEATURE_KIOSK_PRESETS, true),
+  offlineQueue: isEnabled(process.env.NEXT_PUBLIC_FEATURE_OFFLINE_QUEUE, true),
+  fleetQcStep: isEnabled(process.env.NEXT_PUBLIC_FEATURE_FLEET_QC_STEP, true),
+  fleetSlaAlerts: isEnabled(process.env.NEXT_PUBLIC_FEATURE_FLEET_SLA_ALERTS, true),
+  shiftPublishLock: isEnabled(process.env.NEXT_PUBLIC_FEATURE_SHIFT_PUBLISH_LOCK, true),
+  chatEntityThreads: isEnabled(process.env.NEXT_PUBLIC_FEATURE_CHAT_ENTITY_THREADS, true),
+  coordinatorDashboard: isEnabled(process.env.NEXT_PUBLIC_FEATURE_COORDINATOR_DASHBOARD, true),
 };
