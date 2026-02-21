@@ -618,8 +618,8 @@ export function KioskClient({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleTaskAction(task, "ISSUE")}
-                    disabled={readOnly || task.taskStatus === "ISSUE"}
+                    onClick={() => handleTaskAction(task, "BLOCKED")}
+                    disabled={readOnly || task.taskStatus === "BLOCKED"}
                     className="h-10 rounded-lg border border-rose-400/40 bg-rose-500/20 text-sm font-semibold text-rose-200 transition-all hover:bg-rose-500/30 disabled:opacity-40"
                     data-testid={`action-issue-${task.idempotencyKey}`}
                   >
