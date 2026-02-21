@@ -13,8 +13,13 @@ export default async function DashboardPage() {
   const headerStore = await headers();
   const requestId = headerStore.get("x-request-id") ?? "n/a";
   const health = await fetchApiHealth();
-  const dataHealth = await db.$queryRaw<Array<{ ok: number }>>`SELECT 1 as ok`;
-  const dataStatus = dataHealth.length > 0 && dataHealth[0]?.ok === 1;
+  let dataStatus = false;
+  try {
+    const dataHealth = await db.$queryRaw<Array<{ ok: number }>>`SELECT 1 as ok`;
+    dataStatus = dataHealth.length > 0 && dataHealth[0]?.ok === 1;
+  } catch {
+    dataStatus = false;
+  }
   const apiBaseUrl = getApiBaseUrl();
 
   return (
