@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { requireSession } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
 
 import { LoginForm } from "./login-form";
 
@@ -19,10 +19,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     params.callbackUrl && params.callbackUrl.startsWith("/")
       ? params.callbackUrl
       : "/overview";
-  const session = await requireSession();
 
-  if (session?.user?.id) {
-    redirect(safeCallbackUrl);
+  try {
+    const session = await getSession();
+    if (session?.user?.id) {
+      redirect(safeCallbackUrl);
+    }
+  } catch {
+    // If session lookup fails (e.g. DB unreachable), show login form anyway.
   }
 
   return (
