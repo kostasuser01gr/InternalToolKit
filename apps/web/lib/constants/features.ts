@@ -37,4 +37,12 @@ export const features = {
   chatFirstUi: isEnabled(process.env.NEXT_PUBLIC_FEATURE_CHAT_FIRST_UI, true),
   multiModelRouter: isEnabled(process.env.NEXT_PUBLIC_FEATURE_MULTI_MODEL_ROUTER, true),
   settingsEverywhere: isEnabled(process.env.NEXT_PUBLIC_FEATURE_SETTINGS_EVERYWHERE, true),
+  workforceOps: isEnabled(process.env.NEXT_PUBLIC_FEATURE_WORKFORCE_OPS, false),
+  inventory: isEnabled(process.env.NEXT_PUBLIC_FEATURE_INVENTORY, false),
+  incidents: isEnabled(process.env.NEXT_PUBLIC_FEATURE_INCIDENTS, false),
+  automations2: isEnabled(process.env.NEXT_PUBLIC_FEATURE_AUTOMATIONS_2, false),
+  realtimeBoards: isEnabled(process.env.NEXT_PUBLIC_FEATURE_REALTIME_BOARDS, false),
+  advancedSearch: isEnabled(process.env.NEXT_PUBLIC_FEATURE_ADVANCED_SEARCH, false),
+  compliance: isEnabled(process.env.NEXT_PUBLIC_FEATURE_COMPLIANCE, false),
+  multiStation: isEnabled(process.env.NEXT_PUBLIC_FEATURE_MULTI_STATION, false),
 };
