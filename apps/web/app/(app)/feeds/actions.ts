@@ -68,7 +68,7 @@ export async function scanFeedSourceAction(formData: FormData) {
 
   try {
     await getAppContext(workspaceId);
-    const source = await db.feedSource.findUnique({ where: { id: sourceId } });
+    const source = await db.feedSource.findUnique({ where: { id: sourceId }, select: { id: true, workspaceId: true, url: true, lastEtag: true, keywordsJson: true } });
     if (!source || source.workspaceId !== workspaceId) redirect("/feeds?error=Source+not+found");
 
     const { xml, etag, notModified } = await fetchFeedRaw(source.url, source.lastEtag);
@@ -79,7 +79,8 @@ export async function scanFeedSourceAction(formData: FormData) {
     }
 
     const rawItems = parseRssFeed(xml);
-    const scored = processFeedItems(rawItems);
+    const sourceKw = source.keywordsJson as { boost?: string[]; suppress?: string[] } | null;
+    const scored = processFeedItems(rawItems, sourceKw);
     let newCount = 0;
     for (const item of scored) {
       const existing = await db.feedItem.findUnique({

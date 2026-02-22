@@ -65,4 +65,33 @@ describe("Wave 10 — Fleet Bulk + Ops Badge + Feed Keywords", () => {
       expect(isValidTransition(VehicleStatus.RETURNED, VehicleStatus.READY)).toBe(false);
     });
   });
+
+  describe("W10-F: Feed Source Keyword Scoring Integration", () => {
+    it("categorizeAndScore applies boost keywords to increase score", async () => {
+      const { categorizeAndScore } = await import("@/lib/feeds/scanner");
+      const base = categorizeAndScore("Random weather news", "Nothing special here");
+      const boosted = categorizeAndScore("Random weather news", "Nothing special here", {
+        boost: ["weather", "random"],
+      });
+      expect(boosted.score).toBeGreaterThan(base.score);
+      expect(boosted.keywords).toContain("+weather");
+    });
+
+    it("categorizeAndScore applies suppress keywords to decrease score", async () => {
+      const { categorizeAndScore } = await import("@/lib/feeds/scanner");
+      const base = categorizeAndScore("Hertz fleet expansion", "Enterprise rental car hire growth");
+      const suppressed = categorizeAndScore("Hertz fleet expansion", "Enterprise rental car hire growth", {
+        suppress: ["hertz", "enterprise"],
+      });
+      expect(suppressed.score).toBeLessThan(base.score);
+    });
+
+    it("processFeedItems passes source keywords through", async () => {
+      const { processFeedItems } = await import("@/lib/feeds/scanner");
+      const raw = [{ title: "Test item", summary: "airport news", url: "https://example.com/1", publishedAt: null }];
+      const withoutKw = processFeedItems(raw);
+      const withKw = processFeedItems(raw, { boost: ["airport"] });
+      expect(withKw[0]!.relevanceScore).toBeGreaterThan(withoutKw[0]!.relevanceScore);
+    });
+  });
 });

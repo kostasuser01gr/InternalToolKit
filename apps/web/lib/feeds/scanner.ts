@@ -43,7 +43,11 @@ export function hashUrl(url: string): string {
   return createHash("sha256").update(url).digest("hex").slice(0, 32);
 }
 
-export function categorizeAndScore(title: string, summary: string): {
+export function categorizeAndScore(
+  title: string,
+  summary: string,
+  sourceKeywords?: { boost?: string[]; suppress?: string[] } | null,
+): {
   category: ScoredFeedItem["category"];
   score: number;
   keywords: string[];
@@ -63,6 +67,27 @@ export function categorizeAndScore(title: string, summary: string): {
     scores[cat] = catScore;
   }
 
+  // Apply per-source boost keywords
+  let boostScore = 0;
+  if (sourceKeywords?.boost) {
+    for (const word of sourceKeywords.boost) {
+      if (word && text.includes(word.toLowerCase())) {
+        boostScore += 1;
+        matched.push(`+${word}`);
+      }
+    }
+  }
+
+  // Apply per-source suppress keywords
+  let suppressScore = 0;
+  if (sourceKeywords?.suppress) {
+    for (const word of sourceKeywords.suppress) {
+      if (word && text.includes(word.toLowerCase())) {
+        suppressScore += 1;
+      }
+    }
+  }
+
   // Find highest scoring category
   let bestCat: ScoredFeedItem["category"] = "GENERAL";
   let bestScore = 0;
@@ -73,8 +98,8 @@ export function categorizeAndScore(title: string, summary: string): {
     }
   }
 
-  // Normalize score 0-1
-  const normalized = Math.min(bestScore / 5, 1);
+  // Normalize score 0-1, applying boost and suppress
+  const normalized = Math.min(Math.max((bestScore + boostScore - suppressScore) / 5, 0), 1);
 
   return { category: bestCat, score: normalized, keywords: matched };
 }
@@ -171,9 +196,12 @@ export async function fetchFeedRaw(
 }
 
 /** Full pipeline: fetch → parse → categorize → dedupe hash */
-export function processFeedItems(rawItems: RawFeedItem[]): ScoredFeedItem[] {
+export function processFeedItems(
+  rawItems: RawFeedItem[],
+  sourceKeywords?: { boost?: string[]; suppress?: string[] } | null,
+): ScoredFeedItem[] {
   return rawItems.map((item) => {
-    const { category, score, keywords } = categorizeAndScore(item.title, item.summary);
+    const { category, score, keywords } = categorizeAndScore(item.title, item.summary, sourceKeywords);
     return {
       ...item,
       category,
