@@ -15,6 +15,8 @@
  * - Multi-channel: mirror #washers-only + optionally #ops-general
  */
 
+import { db } from "@/lib/db";
+
 const VIBER_BOT_API_URL = "https://chatapi.viber.com/pa/send_message";
 const VIBER_CHANNEL_POST_URL = "https://chatapi.viber.com/pa/post";
 
@@ -43,10 +45,8 @@ export type DeadLetterEntry = {
   lastAttempt: Date;
 };
 
-// In-memory rate limiter + dead-letter queue
+// In-memory rate limiter (dead-letter now persisted to DB)
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
-const deadLetterQueue: DeadLetterEntry[] = [];
-const MAX_DEAD_LETTERS = 100;
 const RATE_LIMIT = 20; // messages per minute
 const RATE_WINDOW_MS = 60_000;
 
@@ -179,7 +179,7 @@ export async function mirrorToViber(message: BridgeMessage): Promise<{ success: 
   }
 
   if (!checkBridgeRateLimit(message.channelSlug)) {
-    addToDeadLetter(message, "Rate limit exceeded");
+    await addToDeadLetter(message, "Rate limit exceeded");
     return { success: false, error: "Rate limit exceeded" };
   }
 
@@ -202,7 +202,7 @@ export async function mirrorToViber(message: BridgeMessage): Promise<{ success: 
   }
 
   if (!result.ok) {
-    addToDeadLetter(message, result.error ?? "Unknown");
+    await addToDeadLetter(message, result.error ?? "Unknown");
     return { success: false, error: result.error };
   }
 
@@ -214,50 +214,65 @@ export async function mirrorToViber(message: BridgeMessage): Promise<{ success: 
   return { success: true };
 }
 
-function addToDeadLetter(message: BridgeMessage, error: string) {
-  // Check if already in queue
-  const existing = deadLetterQueue.find((e) => e.message.id === message.id);
-  if (existing) {
-    existing.attempts++;
-    existing.lastAttempt = new Date();
-    existing.error = error;
-    return;
+async function addToDeadLetter(message: BridgeMessage, error: string) {
+  try {
+    const existing = await db.deadLetterEntry.findFirst({
+      where: { type: "viber", payload: { contains: message.id }, resolvedAt: null },
+    });
+    if (existing) {
+      await db.deadLetterEntry.update({
+        where: { id: existing.id },
+        data: { attempts: existing.attempts + 1, lastAttempt: new Date(), error },
+      });
+      return;
+    }
+    await db.deadLetterEntry.create({
+      data: {
+        type: "viber",
+        payload: JSON.stringify(message),
+        error,
+        attempts: 1,
+      },
+    });
+  } catch {
+    // DB write failure should not break the bridge
   }
-
-  if (deadLetterQueue.length >= MAX_DEAD_LETTERS) {
-    deadLetterQueue.shift(); // remove oldest
-  }
-
-  deadLetterQueue.push({
-    message,
-    error,
-    attempts: 1,
-    lastAttempt: new Date(),
-  });
 }
 
-/** Retry failed deliveries */
+/** Retry failed deliveries from persistent dead-letter table */
 export async function retryDeadLetters(): Promise<{ retried: number; succeeded: number }> {
   let retried = 0;
   let succeeded = 0;
 
-  const toRetry = [...deadLetterQueue].filter((e) => e.attempts < 5);
+  try {
+    const entries = await db.deadLetterEntry.findMany({
+      where: { type: "viber", resolvedAt: null, attempts: { lt: 5 } },
+      orderBy: { createdAt: "asc" },
+      take: 20,
+    });
 
-  for (const entry of toRetry) {
-    retried++;
-    const result = await mirrorToViber(entry.message);
-    if (result.success) {
-      succeeded++;
-      const idx = deadLetterQueue.indexOf(entry);
-      if (idx >= 0) deadLetterQueue.splice(idx, 1);
+    for (const entry of entries) {
+      retried++;
+      const message = JSON.parse(entry.payload) as BridgeMessage;
+      message.timestamp = new Date(message.timestamp);
+      const result = await mirrorToViber(message);
+      if (result.success) {
+        succeeded++;
+        await db.deadLetterEntry.update({
+          where: { id: entry.id },
+          data: { resolvedAt: new Date() },
+        });
+      }
     }
+  } catch {
+    // non-critical
   }
 
   return { retried, succeeded };
 }
 
 /** Get bridge status for admin view */
-export function getBridgeStatus(): {
+export async function getBridgeStatus(): Promise<{
   enabled: boolean;
   ready: boolean;
   mode: string;
@@ -265,12 +280,34 @@ export function getBridgeStatus(): {
   channelApiConfigured: boolean;
   botApiConfigured: boolean;
   deadLetterCount: number;
-  recentFailures: DeadLetterEntry[];
+  recentFailures: Array<{ payload: string; error: string; attempts: number; lastAttempt: Date }>;
   lastSuccessAt: Date | null;
   lastSuccessItem: string | null;
   successCount: number;
-} {
+}> {
   const config = getViberBridgeConfig();
+
+  let deadLetterCount = 0;
+  let recentFailures: Array<{ payload: string; error: string; attempts: number; lastAttempt: Date }> = [];
+  try {
+    deadLetterCount = await db.deadLetterEntry.count({
+      where: { type: "viber", resolvedAt: null },
+    });
+    const recent = await db.deadLetterEntry.findMany({
+      where: { type: "viber", resolvedAt: null },
+      orderBy: { lastAttempt: "desc" },
+      take: 5,
+    });
+    recentFailures = recent.map((e) => ({
+      payload: e.payload.slice(0, 200),
+      error: e.error,
+      attempts: e.attempts,
+      lastAttempt: e.lastAttempt,
+    }));
+  } catch {
+    // schema may not be ready
+  }
+
   return {
     enabled: config.enabled,
     ready: isViberBridgeReady(),
@@ -278,8 +315,8 @@ export function getBridgeStatus(): {
     mirroredChannels: config.mirroredChannels,
     channelApiConfigured: config.channelToken.length > 0,
     botApiConfigured: config.botToken.length > 0 && config.targetGroupId.length > 0,
-    deadLetterCount: deadLetterQueue.length,
-    recentFailures: deadLetterQueue.slice(-5),
+    deadLetterCount,
+    recentFailures,
     lastSuccessAt,
     lastSuccessItem,
     successCount,

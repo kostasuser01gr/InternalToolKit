@@ -4,7 +4,7 @@ import { getBridgeStatus, retryDeadLetters } from "@/lib/viber/bridge";
 export async function GET(request: Request) {
   const requestId = getRequestId(request);
 
-  const status = getBridgeStatus();
+  const status = await getBridgeStatus();
   return Response.json(status, withObservabilityHeaders({ status: 200 }, requestId));
 }
 

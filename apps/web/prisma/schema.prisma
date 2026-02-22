@@ -1194,3 +1194,34 @@ model FeedItem {
   @@index([workspaceId, category])
   @@index([workspaceId, fetchedAt])
 }
+
+// ─── Wave 7: Cron + Dead-letter persistence ─────────────────────────────────
+
+model CronRun {
+  id              String    @id @default(cuid())
+  workspaceId     String?
+  job             String
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  status          String    @default("running")
+  itemsProcessed  Int       @default(0)
+  errorSummary    String?
+  createdAt       DateTime  @default(now())
+
+  @@index([job, createdAt])
+}
+
+model DeadLetterEntry {
+  id          String    @id @default(cuid())
+  workspaceId String?
+  type        String
+  payload     String
+  error       String
+  attempts    Int       @default(1)
+  lastAttempt DateTime  @default(now())
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([type, resolvedAt])
+  @@index([createdAt])
+}

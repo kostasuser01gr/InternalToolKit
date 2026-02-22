@@ -70,7 +70,7 @@ describe("Viber Bridge — Channel Mirror", () => {
     vi.stubEnv("VIBER_CHANNEL_AUTH_TOKEN", "ch-tok");
 
     const { getBridgeStatus } = await import("@/lib/viber/bridge");
-    const status = getBridgeStatus();
+    const status = await getBridgeStatus();
 
     expect(status).toHaveProperty("channelApiConfigured");
     expect(status).toHaveProperty("botApiConfigured");
