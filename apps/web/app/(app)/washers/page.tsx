@@ -2,7 +2,6 @@ import { WasherTaskStatus } from "@prisma/client";
 import { format, startOfDay, endOfDay } from "date-fns";
 import Link from "next/link";
 
-import { DataTable } from "@/components/kit/data-table";
 import { ExportButton } from "@/components/kit/export-button";
 import { GlassCard } from "@/components/kit/glass-card";
 import { PrimaryButton } from "@/components/kit/primary-button";
@@ -19,6 +18,7 @@ import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 import { hasWorkspacePermission } from "@/lib/rbac";
 
 import { createWasherTaskAction, updateWasherTaskAction } from "./actions";
+import { DailyRegisterClient } from "./daily-register-client";
 
 type WashersPageProps = {
   searchParams: Promise<{
@@ -342,32 +342,21 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
           </div>
         </div>
 
-        <DataTable
-          columns={[
-            { key: "plate", label: "Vehicle" },
-            { key: "status", label: "Status" },
-            { key: "exterior", label: "Ext" },
-            { key: "interior", label: "Int" },
-            { key: "vacuum", label: "Vac" },
-            { key: "washer", label: "Washer" },
-            { key: "station", label: "Station" },
-            { key: "time", label: "Time" },
-          ]}
-          rows={dailyTasks.map((t) => ({
+        <DailyRegisterClient
+          workspaceId={workspace.id}
+          canWrite={canWrite}
+          tasks={dailyTasks.map((t) => ({
             id: t.id,
-            cells: [
-              `${t.vehicle.plateNumber} · ${t.vehicle.model}`,
-              t.status,
-              t.exteriorDone ? "✓" : "—",
-              t.interiorDone ? "✓" : "—",
-              t.vacuumDone ? "✓" : "—",
-              t.washer?.name ?? "Kiosk",
-              t.stationId ?? "—",
-              format(t.createdAt, "HH:mm"),
-            ],
+            plate: t.vehicle.plateNumber,
+            model: t.vehicle.model,
+            status: t.status,
+            exteriorDone: t.exteriorDone,
+            interiorDone: t.interiorDone,
+            vacuumDone: t.vacuumDone,
+            washer: t.washer?.name ?? "Kiosk",
+            station: t.stationId ?? "—",
+            time: format(t.createdAt, "HH:mm"),
           }))}
-          emptyTitle="No tasks for this day"
-          emptyDescription="Select a different date or create tasks via the form above or the kiosk."
         />
       </GlassCard>
     </div>
