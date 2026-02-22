@@ -2,12 +2,13 @@
 
 import { ShiftStatus } from "@prisma/client";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 
 import { pushUndo } from "@/components/kit/inline-edit";
 import { PrimaryButton } from "@/components/kit/primary-button";
 
 import { bulkUpdateShiftsAction } from "./bulk-actions";
+import { ShiftInlineField } from "./shift-inline-field";
 
 type ShiftRow = {
   id: string;
@@ -21,19 +22,26 @@ type ShiftRow = {
 type BulkShiftBarProps = {
   shifts: ShiftRow[];
   workspaceId: string;
+  canWrite?: boolean | undefined;
 };
 
-export function BulkShiftBar({ shifts, workspaceId }: BulkShiftBarProps) {
+export function BulkShiftBar({ shifts, workspaceId, canWrite }: BulkShiftBarProps) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
+  const [optimisticShifts, setOptimisticShifts] = useOptimistic(
+    shifts,
+    (state, update: { ids: string[]; status: string }) =>
+      state.map((s) => (update.ids.includes(s.id) ? { ...s, status: update.status } : s)),
+  );
+
   const toggleAll = () => {
-    if (selected.size === shifts.length) {
+    if (selected.size === optimisticShifts.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(shifts.map((s) => s.id)));
+      setSelected(new Set(optimisticShifts.map((s) => s.id)));
     }
   };
 
@@ -50,6 +58,8 @@ export function BulkShiftBar({ shifts, workspaceId }: BulkShiftBarProps) {
   const bulkAction = (targetStatus: ShiftStatus) => {
     const ids = Array.from(selected);
     startTransition(async () => {
+      setOptimisticShifts({ ids, status: targetStatus });
+
       const result = await bulkUpdateShiftsAction({
         workspaceId,
         shiftIds: ids,
@@ -136,7 +146,7 @@ export function BulkShiftBar({ shifts, workspaceId }: BulkShiftBarProps) {
               <th className="w-10 px-3 py-2">
                 <input
                   type="checkbox"
-                  checked={selected.size === shifts.length && shifts.length > 0}
+                  checked={selected.size === optimisticShifts.length && optimisticShifts.length > 0}
                   onChange={toggleAll}
                   className="focus-ring size-4 rounded border-[var(--border)] bg-white/10"
                 />
@@ -148,7 +158,7 @@ export function BulkShiftBar({ shifts, workspaceId }: BulkShiftBarProps) {
             </tr>
           </thead>
           <tbody>
-            {shifts.map((shift) => (
+            {optimisticShifts.map((shift) => (
               <tr
                 key={shift.id}
                 className={`border-b border-[var(--border)]/50 ${selected.has(shift.id) ? "bg-[var(--accent)]/10" : "hover:bg-white/5"}`}
@@ -161,7 +171,19 @@ export function BulkShiftBar({ shifts, workspaceId }: BulkShiftBarProps) {
                     className="focus-ring size-4 rounded border-[var(--border)] bg-white/10"
                   />
                 </td>
-                <td className="px-3 py-2 font-medium text-[var(--text)]">{shift.title}</td>
+                <td className="px-3 py-2 font-medium text-[var(--text)]">
+                  {canWrite ? (
+                    <ShiftInlineField
+                      workspaceId={workspaceId}
+                      shiftId={shift.id}
+                      field="title"
+                      value={shift.title}
+                      placeholder="Shift title"
+                    />
+                  ) : (
+                    shift.title
+                  )}
+                </td>
                 <td className="px-3 py-2 text-[var(--text-muted)]">{shift.assignedTo}</td>
                 <td className="px-3 py-2">
                   <StatusChip status={shift.status} />
@@ -171,7 +193,7 @@ export function BulkShiftBar({ shifts, workspaceId }: BulkShiftBarProps) {
                 </td>
               </tr>
             ))}
-            {shifts.length === 0 ? (
+            {optimisticShifts.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-3 py-6 text-center text-sm text-[var(--text-muted)]">
                   No shifts yet.

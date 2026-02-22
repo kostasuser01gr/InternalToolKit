@@ -11,14 +11,14 @@ import { StatusBanner } from "@/components/layout/status-banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 import { hasWorkspacePermission } from "@/lib/rbac";
 
-import { createWasherTaskAction, updateWasherTaskAction } from "./actions";
+import { createWasherTaskAction } from "./actions";
 import { DailyRegisterClient } from "./daily-register-client";
+import { TaskQueueTable } from "./task-queue-table";
 
 type WashersPageProps = {
   searchParams: Promise<{
@@ -324,103 +324,22 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
 
         <GlassCard className="space-y-4">
           <h2 className="kpi-font text-xl font-semibold">Task Queue</h2>
-          <div className="space-y-3">
-            {tasks.map((task) => (
-              <article
-                key={task.id}
-                className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3"
-              >
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium text-[var(--text)]">
-                    {task.vehicle.plateNumber} · {task.vehicle.model}
-                  </p>
-                  <p className="text-xs text-[var(--text-muted)]">{task.status}</p>
-                </div>
-                <p className="text-xs text-[var(--text-muted)]">
-                  Washer: {task.washer?.name ?? "Unassigned"} · {format(task.createdAt, "dd MMM HH:mm")}
-                </p>
-
-                <form action={updateWasherTaskAction} className="mt-3 space-y-3">
-                  <input type="hidden" name="workspaceId" value={workspace.id} />
-                  <input type="hidden" name="taskId" value={task.id} />
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label htmlFor={`task-status-${task.id}`}>Status</Label>
-                      <select
-                        id={`task-status-${task.id}`}
-                        name="status"
-                        defaultValue={task.status}
-                        className="focus-ring h-10 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/6 px-3 text-sm text-[var(--text)]"
-                        disabled={!canWrite}
-                      >
-                        {Object.values(WasherTaskStatus).map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`task-notes-${task.id}`}>Notes</Label>
-                      <Input
-                        id={`task-notes-${task.id}`}
-                        name="notes"
-                        defaultValue={task.notes ?? ""}
-                        disabled={!canWrite}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                      <input
-                        type="checkbox"
-                        name="exteriorDone"
-                        defaultChecked={task.exteriorDone}
-                        className="focus-ring size-4"
-                      />
-                      Exterior
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                      <input
-                        type="checkbox"
-                        name="interiorDone"
-                        defaultChecked={task.interiorDone}
-                        className="focus-ring size-4"
-                      />
-                      Interior
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                      <input
-                        type="checkbox"
-                        name="vacuumDone"
-                        defaultChecked={task.vacuumDone}
-                        className="focus-ring size-4"
-                      />
-                      Vacuum
-                    </label>
-                  </div>
-
-                  <Textarea
-                    name="voiceTranscript"
-                    defaultValue={task.voiceTranscript ?? ""}
-                    rows={2}
-                    placeholder="Voice transcript (optional)"
-                    disabled={!canWrite}
-                  />
-
-                  <PrimaryButton type="submit" disabled={!canWrite}>
-                    Update task
-                  </PrimaryButton>
-                </form>
-              </article>
-            ))}
-
-            {tasks.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)]">No washer tasks yet.</p>
-            ) : null}
-          </div>
+          <TaskQueueTable
+            workspaceId={workspace.id}
+            canWrite={canWrite}
+            tasks={tasks.map((task) => ({
+              id: task.id,
+              plate: task.vehicle.plateNumber,
+              model: task.vehicle.model,
+              status: task.status,
+              washer: task.washer?.name ?? "Unassigned",
+              time: format(task.createdAt, "HH:mm"),
+              exteriorDone: task.exteriorDone,
+              interiorDone: task.interiorDone,
+              vacuumDone: task.vacuumDone,
+              notes: task.notes ?? "",
+            }))}
+          />
         </GlassCard>
       </div>
 

@@ -231,6 +231,7 @@ export default async function ShiftsPage({ searchParams }: ShiftsPageProps) {
                   endsAt: shift.endsAt.toISOString(),
                 }))}
                 workspaceId={workspace.id}
+                canWrite={canWrite}
               />
             ) : (
               <div className="space-y-2">
