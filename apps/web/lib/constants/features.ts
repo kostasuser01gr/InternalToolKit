@@ -49,4 +49,5 @@ export const features = {
   fileImports: isEnabled(process.env.NEXT_PUBLIC_FEATURE_FILE_IMPORTS, true),
   viberBridge: isEnabled(process.env.NEXT_PUBLIC_FEATURE_VIBER_BRIDGE, false),
   aiSetupWizard: isEnabled(process.env.NEXT_PUBLIC_FEATURE_AI_SETUP_WIZARD, true),
+  opsInbox: isEnabled(process.env.NEXT_PUBLIC_FEATURE_OPS_INBOX, true),
 };

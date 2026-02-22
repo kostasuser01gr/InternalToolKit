@@ -20,6 +20,7 @@ import {
   importShiftsCsvAction,
   reviewShiftRequestAction,
 } from "./actions";
+import { BulkShiftBar } from "./bulk-shift-bar";
 
 type ShiftsPageProps = {
   searchParams: Promise<{
@@ -217,21 +218,35 @@ export default async function ShiftsPage({ searchParams }: ShiftsPageProps) {
             </PrimaryButton>
           </form>
 
-          <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/4 p-3 text-sm">
-            <h3 className="mb-2 font-medium text-[var(--text)]">Recent shifts</h3>
-            <div className="space-y-2">
-              {shifts.slice(0, 8).map((shift) => (
-                <article key={shift.id} className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-white/5 px-2 py-1.5">
-                  <p className="font-medium text-[var(--text)]">{shift.title}</p>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {format(shift.startsAt, "EEE d MMM HH:mm")} - {format(shift.endsAt, "HH:mm")}
-                  </p>
-                </article>
-              ))}
-              {shifts.length === 0 ? (
-                <p className="text-xs text-[var(--text-muted)]">No shifts yet.</p>
-              ) : null}
-            </div>
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-[var(--text)]">Shifts ({shifts.length})</h3>
+            {canWrite ? (
+              <BulkShiftBar
+                shifts={shifts.slice(0, 50).map((shift) => ({
+                  id: shift.id,
+                  title: shift.title,
+                  status: shift.status,
+                  assignedTo: shift.assignee?.name ?? shift.assignee?.loginName ?? "Unassigned",
+                  startsAt: shift.startsAt.toISOString(),
+                  endsAt: shift.endsAt.toISOString(),
+                }))}
+                workspaceId={workspace.id}
+              />
+            ) : (
+              <div className="space-y-2">
+                {shifts.slice(0, 8).map((shift) => (
+                  <article key={shift.id} className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-white/5 px-2 py-1.5">
+                    <p className="font-medium text-[var(--text)]">{shift.title}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {format(shift.startsAt, "EEE d MMM HH:mm")} - {format(shift.endsAt, "HH:mm")}
+                    </p>
+                  </article>
+                ))}
+                {shifts.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)]">No shifts yet.</p>
+                ) : null}
+              </div>
+            )}
           </div>
         </GlassCard>
       </div>

@@ -11,6 +11,7 @@ import { StatusBanner } from "@/components/layout/status-banner";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UiPreferencesPanel } from "@/components/layout/ui-preferences-panel";
 import { IntegrationsWizard } from "@/components/settings/integrations-wizard";
+import { StationCoordsEditor } from "@/components/settings/station-coords-editor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -79,7 +80,7 @@ export default async function SettingsPage({
     };
   }
 
-  const [shortcuts, actionButtons, promptTemplates] = await Promise.all([
+  const [shortcuts, actionButtons, promptTemplates, stations] = await Promise.all([
     db.userShortcut
       .findMany({
         where: { userId: user.id, workspaceId: workspace.id },
@@ -96,6 +97,12 @@ export default async function SettingsPage({
       .findMany({
         where: { userId: user.id, workspaceId: workspace.id },
         orderBy: [{ createdAt: "desc" }],
+      })
+      .catch(schemaFallback([])),
+    db.station
+      .findMany({
+        where: { workspaceId: workspace.id },
+        orderBy: [{ name: "asc" }],
       })
       .catch(schemaFallback([])),
   ]);
@@ -439,6 +446,24 @@ export default async function SettingsPage({
           </div>
         )}
       </GlassCard>
+
+      {workspaceRole === "ADMIN" ? (
+        <StationCoordsEditor
+          stations={stations.map((s) => {
+            const config = s.configJson && typeof s.configJson === "object"
+              ? (s.configJson as Record<string, unknown>)
+              : {};
+            return {
+              id: s.id,
+              name: s.name,
+              code: s.code,
+              lat: typeof config.lat === "number" ? config.lat : null,
+              lon: typeof config.lon === "number" ? config.lon : null,
+            };
+          })}
+          workspaceId={workspace.id}
+        />
+      ) : null}
 
       {workspaceRole === "ADMIN" ? <IntegrationsWizard /> : null}
     </div>
