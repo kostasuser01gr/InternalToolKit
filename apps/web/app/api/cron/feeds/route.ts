@@ -7,9 +7,11 @@ import {
   processFeedItems,
 } from "@/lib/feeds/scanner";
 import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { retryDeadLetters } from "@/lib/viber/bridge";
 
 const MAX_SOURCES_PER_RUN = 20;
 const FETCH_TIMEOUT_MS = 15_000;
+const FEED_ITEM_RETENTION_DAYS = 90;
 
 function verifyCronSecret(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -100,10 +102,32 @@ export async function GET(request: Request) {
     }
 
     const totalNew = results.reduce((sum, r) => sum + r.newItems, 0);
+
+    // Housekeeping: purge old unpinned feed items
+    let purgedCount = 0;
+    try {
+      const retentionCutoff = new Date(Date.now() - FEED_ITEM_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+      const purged = await db.feedItem.deleteMany({
+        where: { fetchedAt: { lt: retentionCutoff }, isPinned: false },
+      });
+      purgedCount = purged.count;
+    } catch {
+      // non-critical
+    }
+
+    // Housekeeping: retry Viber dead letters
+    let viberRetry = { retried: 0, succeeded: 0 };
+    try {
+      viberRetry = await retryDeadLetters();
+    } catch {
+      // non-critical
+    }
+
     return NextResponse.json({
       ok: true,
       sourcesScanned: results.length,
       totalNewItems: totalNew,
+      housekeeping: { purgedFeedItems: purgedCount, viberRetried: viberRetry.retried, viberSucceeded: viberRetry.succeeded },
       results,
     });
   } catch (err) {

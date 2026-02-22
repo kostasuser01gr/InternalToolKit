@@ -139,6 +139,7 @@ export async function pinFeedItemAction(formData: FormData) {
 export async function sendFeedToChatAction(formData: FormData) {
   const itemId = formData.get("itemId") as string;
   const workspaceId = formData.get("workspaceId") as string;
+  const targetChannel = (formData.get("channel") as string) || "ops-general";
   if (!itemId || !workspaceId) redirect("/feeds?error=Missing+fields");
 
   try {
@@ -146,16 +147,16 @@ export async function sendFeedToChatAction(formData: FormData) {
     const item = await db.feedItem.findUnique({ where: { id: itemId } });
     if (!item || item.workspaceId !== workspaceId) redirect("/feeds?error=Not+found");
 
-    // Find or create #ops-general channel
+    // Find or create target channel
     let channel = await db.chatChannel.findFirst({
-      where: { workspaceId, slug: "ops-general" },
+      where: { workspaceId, slug: targetChannel },
     });
     if (!channel) {
       channel = await db.chatChannel.create({
         data: {
           workspaceId,
-          name: "#ops-general",
-          slug: "ops-general",
+          name: `#${targetChannel}`,
+          slug: targetChannel,
           type: "PUBLIC",
           createdBy: user.id,
         },
@@ -191,14 +192,14 @@ export async function sendFeedToChatAction(formData: FormData) {
       actorUserId: user.id,
       entityType: "feed_item",
       entityId: itemId,
-      metaJson: { title: item.title, channelSlug: "ops-general" },
+      metaJson: { title: item.title, channelSlug: targetChannel },
     });
   } catch (err) {
     if (isSchemaNotReadyError(err)) redirect("/feeds?error=Chat+module+not+ready");
     throw err;
   }
   revalidatePath("/feeds");
-  redirect("/feeds?success=Sent+to+%23ops-general");
+  redirect(`/feeds?success=Sent+to+%23${targetChannel}`);
 }
 
 export async function deleteFeedSourceAction(formData: FormData) {

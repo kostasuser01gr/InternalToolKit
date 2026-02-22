@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { CommandPalette } from "@/components/layout/command-palette";
 import { CreateSheet } from "@/components/layout/create-sheet";
@@ -41,6 +41,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { logoutSession } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
+
+// Polyfill requestIdleCallback for environments that don't support it
+const requestIdleCallback = typeof window !== "undefined" && window.requestIdleCallback
+  ? window.requestIdleCallback
+  : (cb: () => void) => setTimeout(cb, 1) as unknown as number;
+const cancelIdleCallback = typeof window !== "undefined" && window.cancelIdleCallback
+  ? window.cancelIdleCallback
+  : (id: number) => clearTimeout(id);
 
 type ChatFirstShellProps = {
   children: React.ReactNode;
@@ -82,6 +90,17 @@ function ChatFirstShell({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const toggleDrawer = useCallback(() => setDrawerOpen((v) => !v), []);
+
+  // Prefetch core routes on idle for instant navigation
+  useEffect(() => {
+    const coreRoutes = ["/home", "/chat", "/washers", "/fleet", "/shifts", "/feeds", "/settings"];
+    const id = requestIdleCallback(() => {
+      for (const route of coreRoutes) {
+        if (route !== pathname) router.prefetch(route);
+      }
+    });
+    return () => cancelIdleCallback(id);
+  }, [pathname, router]);
 
   return (
     <div

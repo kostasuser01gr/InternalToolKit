@@ -1,26 +1,31 @@
 /**
- * Viber Bridge — One-way mirror from #washers-only to Viber group/community
+ * Viber Bridge — Mirror internal channels to Viber Channel/Group
  *
  * Feature flag: FEATURE_VIBER_BRIDGE=1
  * Required env: VIBER_BOT_TOKEN, VIBER_TARGET_GROUP_ID
- * Optional: VIBER_WEBHOOK_SECRET (for inbound two-way)
+ * Optional: VIBER_CHANNEL_AUTH_TOKEN (Channel Post API)
+ *            VIBER_WEBHOOK_SECRET (for inbound two-way)
  *
  * Architecture:
- * - Default: one-way internal → Viber (safe, reliable)
- * - Optional: two-way with graceful fallback to one-way
+ * - Primary: Channel Post API for public announcements (preferred)
+ * - Fallback: Bot send_message API for group delivery
  * - Rate-limited per channel
  * - Dead-letter queue for failed deliveries
  * - PII redaction before forwarding
+ * - Multi-channel: mirror #washers-only + optionally #ops-general
  */
 
-const VIBER_API_URL = "https://chatapi.viber.com/pa/send_message";
+const VIBER_BOT_API_URL = "https://chatapi.viber.com/pa/send_message";
+const VIBER_CHANNEL_POST_URL = "https://chatapi.viber.com/pa/post";
 
 export type ViberBridgeConfig = {
   enabled: boolean;
   botToken: string;
   targetGroupId: string;
+  channelToken: string;
   webhookSecret: string;
   mode: "one-way" | "two-way";
+  mirroredChannels: string[];
 };
 
 export type BridgeMessage = {
@@ -45,20 +50,28 @@ const MAX_DEAD_LETTERS = 100;
 const RATE_LIMIT = 20; // messages per minute
 const RATE_WINDOW_MS = 60_000;
 
+// Admin status tracking
+let lastSuccessAt: Date | null = null;
+let lastSuccessItem: string | null = null;
+let successCount = 0;
+
 export function getViberBridgeConfig(): ViberBridgeConfig {
   const enabled = process.env.FEATURE_VIBER_BRIDGE === "1";
+  const mirroredRaw = process.env.VIBER_MIRRORED_CHANNELS ?? "washers-only";
   return {
     enabled,
     botToken: process.env.VIBER_BOT_TOKEN ?? "",
     targetGroupId: process.env.VIBER_TARGET_GROUP_ID ?? "",
+    channelToken: process.env.VIBER_CHANNEL_AUTH_TOKEN ?? "",
     webhookSecret: process.env.VIBER_WEBHOOK_SECRET ?? "",
     mode: process.env.VIBER_BRIDGE_MODE === "two-way" ? "two-way" : "one-way",
+    mirroredChannels: mirroredRaw.split(",").map((s) => s.trim()).filter(Boolean),
   };
 }
 
 export function isViberBridgeReady(): boolean {
   const config = getViberBridgeConfig();
-  return config.enabled && config.botToken.length > 0 && config.targetGroupId.length > 0;
+  return config.enabled && (config.channelToken.length > 0 || (config.botToken.length > 0 && config.targetGroupId.length > 0));
 }
 
 /** Redact potentially sensitive patterns before forwarding */
@@ -90,10 +103,34 @@ function checkBridgeRateLimit(channelSlug: string): boolean {
   return true;
 }
 
-/** Send a message to Viber group via Bot API */
+/** Send via Viber Channel Post API (preferred for public announcements) */
+async function sendViaChannel(config: ViberBridgeConfig, text: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(VIBER_CHANNEL_POST_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Viber-Auth-Token": config.channelToken,
+      },
+      body: JSON.stringify({
+        type: "text",
+        text,
+        sender: { name: "OPS Bridge" },
+      }),
+    });
+    if (!res.ok) return { ok: false, error: `Channel HTTP ${res.status}` };
+    const data = await res.json();
+    if (data.status !== 0) return { ok: false, error: `Channel error ${data.status}: ${data.status_message}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown channel error" };
+  }
+}
+
+/** Send a message to Viber group via Bot API (fallback) */
 async function sendToViber(config: ViberBridgeConfig, text: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch(VIBER_API_URL, {
+    const res = await fetch(VIBER_BOT_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -132,13 +169,13 @@ export async function mirrorToViber(message: BridgeMessage): Promise<{ success: 
     return { success: false, error: "Bridge disabled" };
   }
 
-  if (!config.botToken || !config.targetGroupId) {
-    return { success: false, error: "Missing VIBER_BOT_TOKEN or VIBER_TARGET_GROUP_ID" };
+  // Check if this channel is configured for mirroring
+  if (!config.mirroredChannels.includes(message.channelSlug)) {
+    return { success: false, error: `Channel #${message.channelSlug} not in mirrored list` };
   }
 
-  // Only bridge #washers-only
-  if (message.channelSlug !== "washers-only") {
-    return { success: false, error: "Bridge only supports #washers-only channel" };
+  if (!config.channelToken && !config.botToken) {
+    return { success: false, error: "Missing VIBER_CHANNEL_AUTH_TOKEN and VIBER_BOT_TOKEN" };
   }
 
   if (!checkBridgeRateLimit(message.channelSlug)) {
@@ -147,14 +184,32 @@ export async function mirrorToViber(message: BridgeMessage): Promise<{ success: 
   }
 
   const redacted = redactSensitiveContent(message.content);
-  const formatted = `[${message.authorName}] ${redacted}`;
+  const formatted = `[#${message.channelSlug}] ${message.authorName}: ${redacted}`;
 
-  const result = await sendToViber(config, formatted);
+  // Prefer Channel Post API, fallback to Bot API
+  let result: { ok: boolean; error?: string };
+  if (config.channelToken) {
+    result = await sendViaChannel(config, formatted);
+    // Fallback to bot API if channel post fails
+    if (!result.ok && config.botToken && config.targetGroupId) {
+      result = await sendToViber(config, formatted);
+    }
+  } else {
+    if (!config.targetGroupId) {
+      return { success: false, error: "Missing VIBER_TARGET_GROUP_ID for Bot API" };
+    }
+    result = await sendToViber(config, formatted);
+  }
 
   if (!result.ok) {
     addToDeadLetter(message, result.error ?? "Unknown");
     return { success: false, error: result.error };
   }
+
+  // Track success for admin status
+  lastSuccessAt = new Date();
+  lastSuccessItem = message.content.slice(0, 100);
+  successCount++;
 
   return { success: true };
 }
@@ -206,15 +261,27 @@ export function getBridgeStatus(): {
   enabled: boolean;
   ready: boolean;
   mode: string;
+  mirroredChannels: string[];
+  channelApiConfigured: boolean;
+  botApiConfigured: boolean;
   deadLetterCount: number;
   recentFailures: DeadLetterEntry[];
+  lastSuccessAt: Date | null;
+  lastSuccessItem: string | null;
+  successCount: number;
 } {
   const config = getViberBridgeConfig();
   return {
     enabled: config.enabled,
     ready: isViberBridgeReady(),
     mode: config.mode,
+    mirroredChannels: config.mirroredChannels,
+    channelApiConfigured: config.channelToken.length > 0,
+    botApiConfigured: config.botToken.length > 0 && config.targetGroupId.length > 0,
     deadLetterCount: deadLetterQueue.length,
     recentFailures: deadLetterQueue.slice(-5),
+    lastSuccessAt,
+    lastSuccessItem,
+    successCount,
   };
 }

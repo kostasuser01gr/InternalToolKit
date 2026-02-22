@@ -40,7 +40,7 @@ Relevance score: 0.0–1.0, based on keyword match count (capped at 5 matches = 
 - `seedDefaultSourcesAction` — Seed workspace with default sources
 - `scanFeedSourceAction` — Manually trigger scan of a source
 - `pinFeedItemAction` — Toggle pin on feed item
-- `sendFeedToChatAction` — Post feed item summary to #ops-general channel
+- `sendFeedToChatAction` — Post feed item summary to any channel (#ops-general or #washers-only)
 - `deleteFeedSourceAction` — Remove source and its items
 
 ## UI (`/feeds`)
@@ -48,17 +48,20 @@ Relevance score: 0.0–1.0, based on keyword match count (capped at 5 matches = 
 - Sources sidebar with item counts, scan buttons, and delete buttons
 - Feed cards showing title, summary, category badge, relevance score, source, date
 - Pin/unpin feed items
-- "💬 Chat" button — sends feed item summary to #ops-general
+- "💬 Ops" button — sends feed item summary to #ops-general
+- "🧽 Washers" button — sends feed item summary to #washers-only
 - Add custom source form
 - Seed defaults button
 
 ## Scheduling (Automated)
-Cron endpoint: `GET /api/cron/feeds` (Vercel Cron, every 30 minutes)
+Cron endpoint: `GET /api/cron/feeds` (Vercel Cron, daily at 06:00 UTC)
 - Scans up to 20 sources per run
 - Skips sources scanned within last 10 minutes
 - 15-second timeout per source fetch
 - Protected by `CRON_SECRET` header in production
-- Results: `{ sourcesScanned, totalNewItems, results[] }`
+- Includes housekeeping: purges feed items older than 90 days (unpinned only)
+- Retries Viber bridge dead letters
+- Results: `{ sourcesScanned, totalNewItems, housekeeping, results[] }`
 
 ## Rate Limiting & ToS
 - User-Agent: `InternalToolKit-FeedReader/1.0`

@@ -10,6 +10,7 @@ import { SignOutButton } from "@/components/layout/signout-button";
 import { StatusBanner } from "@/components/layout/status-banner";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UiPreferencesPanel } from "@/components/layout/ui-preferences-panel";
+import { IntegrationsWizard } from "@/components/settings/integrations-wizard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -438,6 +439,8 @@ export default async function SettingsPage({
           </div>
         )}
       </GlassCard>
+
+      {workspaceRole === "ADMIN" ? <IntegrationsWizard /> : null}
     </div>
   );
 }
