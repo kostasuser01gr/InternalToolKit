@@ -30,6 +30,7 @@ import { useCallback, useState } from "react";
 
 import { CommandPalette } from "@/components/layout/command-palette";
 import { CreateSheet } from "@/components/layout/create-sheet";
+import { QuickBar } from "@/components/layout/quick-bar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -122,6 +123,9 @@ function ChatFirstShell({
               />
             </div>
           </div>
+
+          {/* Quick Bar */}
+          <QuickBar />
 
           {/* Actions */}
           <div className="flex items-center gap-1.5 shrink-0">

@@ -13,9 +13,11 @@ import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 
 import {
   addFeedSourceAction,
+  deleteFeedSourceAction,
   pinFeedItemAction,
   scanFeedSourceAction,
   seedDefaultSourcesAction,
+  sendFeedToChatAction,
 } from "./actions";
 
 type FeedsPageProps = {
@@ -132,13 +134,22 @@ export default async function FeedsPage({ searchParams }: FeedsPageProps) {
               <p className="text-xs text-[var(--text-muted)] truncate">{src.url}</p>
               <div className="mt-1 flex items-center justify-between text-xs text-[var(--text-muted)]">
                 <span>{src._count.items} items</span>
-                <form action={scanFeedSourceAction}>
-                  <input type="hidden" name="sourceId" value={src.id} />
-                  <input type="hidden" name="workspaceId" value={workspace.id} />
-                  <button type="submit" className="text-[var(--accent)] hover:underline">
-                    Scan Now
-                  </button>
-                </form>
+                <div className="flex gap-2">
+                  <form action={deleteFeedSourceAction}>
+                    <input type="hidden" name="sourceId" value={src.id} />
+                    <input type="hidden" name="workspaceId" value={workspace.id} />
+                    <button type="submit" className="text-rose-400 hover:underline">
+                      Delete
+                    </button>
+                  </form>
+                  <form action={scanFeedSourceAction}>
+                    <input type="hidden" name="sourceId" value={src.id} />
+                    <input type="hidden" name="workspaceId" value={workspace.id} />
+                    <button type="submit" className="text-[var(--accent)] hover:underline">
+                      Scan Now
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
           ))}
@@ -203,16 +214,28 @@ export default async function FeedsPage({ searchParams }: FeedsPageProps) {
                       )}
                     </div>
                   </div>
-                  <form action={pinFeedItemAction}>
-                    <input type="hidden" name="itemId" value={item.id} />
-                    <input type="hidden" name="workspaceId" value={workspace.id} />
-                    <button
-                      type="submit"
-                      className="shrink-0 rounded border border-[var(--border)] bg-white/5 px-2 py-1 text-xs text-[var(--text-muted)] hover:bg-white/10"
-                    >
-                      {item.isPinned ? "Unpin" : "📌 Pin"}
-                    </button>
-                  </form>
+                  <div className="flex shrink-0 gap-1">
+                    <form action={sendFeedToChatAction}>
+                      <input type="hidden" name="itemId" value={item.id} />
+                      <input type="hidden" name="workspaceId" value={workspace.id} />
+                      <button
+                        type="submit"
+                        className="rounded border border-[var(--border)] bg-white/5 px-2 py-1 text-xs text-[var(--text-muted)] hover:bg-white/10"
+                      >
+                        💬 Chat
+                      </button>
+                    </form>
+                    <form action={pinFeedItemAction}>
+                      <input type="hidden" name="itemId" value={item.id} />
+                      <input type="hidden" name="workspaceId" value={workspace.id} />
+                      <button
+                        type="submit"
+                        className="rounded border border-[var(--border)] bg-white/5 px-2 py-1 text-xs text-[var(--text-muted)] hover:bg-white/10"
+                      >
+                        {item.isPinned ? "Unpin" : "📌 Pin"}
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </GlassCard>
             );

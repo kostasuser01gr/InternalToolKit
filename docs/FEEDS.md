@@ -40,17 +40,25 @@ Relevance score: 0.0–1.0, based on keyword match count (capped at 5 matches = 
 - `seedDefaultSourcesAction` — Seed workspace with default sources
 - `scanFeedSourceAction` — Manually trigger scan of a source
 - `pinFeedItemAction` — Toggle pin on feed item
+- `sendFeedToChatAction` — Post feed item summary to #ops-general channel
+- `deleteFeedSourceAction` — Remove source and its items
 
 ## UI (`/feeds`)
 - Category filter chips (all categories + "All")
-- Sources sidebar with item counts and scan buttons
+- Sources sidebar with item counts, scan buttons, and delete buttons
 - Feed cards showing title, summary, category badge, relevance score, source, date
 - Pin/unpin feed items
+- "💬 Chat" button — sends feed item summary to #ops-general
 - Add custom source form
 - Seed defaults button
 
-## Scheduling (Future)
-Currently manual scan only. Planned: cron-based scanning every 10–30 minutes via Vercel Cron or external scheduler.
+## Scheduling (Automated)
+Cron endpoint: `GET /api/cron/feeds` (Vercel Cron, every 30 minutes)
+- Scans up to 20 sources per run
+- Skips sources scanned within last 10 minutes
+- 15-second timeout per source fetch
+- Protected by `CRON_SECRET` header in production
+- Results: `{ sourcesScanned, totalNewItems, results[] }`
 
 ## Rate Limiting & ToS
 - User-Agent: `InternalToolKit-FeedReader/1.0`

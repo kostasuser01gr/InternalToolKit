@@ -125,6 +125,81 @@ export async function GET(request: Request) {
       if (!isSchemaNotReadyError(err)) throw err;
     }
 
+    // Search shifts
+    try {
+      const shifts = await db.shift.findMany({
+        where: {
+          ...(wId ? { workspaceId: wId } : {}),
+          title: { contains: q, mode: "insensitive" as const },
+        },
+        take: 5,
+        orderBy: { startsAt: "desc" },
+        select: { id: true, title: true, startsAt: true, status: true },
+      });
+      for (const s of shifts) {
+        results.push({
+          type: "shift",
+          id: s.id,
+          title: `Shift: ${s.title}`,
+          subtitle: `${s.status} · ${s.startsAt.toLocaleDateString()}`,
+          url: "/shifts",
+        });
+      }
+    } catch (err) {
+      if (!isSchemaNotReadyError(err)) throw err;
+    }
+
+    // Search feed items
+    try {
+      const feedItems = await db.feedItem.findMany({
+        where: {
+          ...(wId ? { workspaceId: wId } : {}),
+          OR: [
+            { title: { contains: q, mode: "insensitive" as const } },
+            { summary: { contains: q, mode: "insensitive" as const } },
+          ],
+        },
+        take: 5,
+        orderBy: { fetchedAt: "desc" },
+        select: { id: true, title: true, category: true },
+      });
+      for (const f of feedItems) {
+        results.push({
+          type: "feed",
+          id: f.id,
+          title: `Feed: ${f.title}`,
+          subtitle: f.category,
+          url: "/feeds",
+        });
+      }
+    } catch (err) {
+      if (!isSchemaNotReadyError(err)) throw err;
+    }
+
+    // Search chat messages (content)
+    try {
+      const messages = await db.chatMessage.findMany({
+        where: {
+          content: { contains: q, mode: "insensitive" as const },
+          ...(wId ? { thread: { workspaceId: wId } } : {}),
+        },
+        take: 5,
+        orderBy: { createdAt: "desc" },
+        select: { id: true, content: true, threadId: true, thread: { select: { title: true } } },
+      });
+      for (const m of messages) {
+        results.push({
+          type: "message",
+          id: m.id,
+          title: `Message in "${m.thread.title}"`,
+          subtitle: m.content.slice(0, 80),
+          url: "/chat",
+        });
+      }
+    } catch (err) {
+      if (!isSchemaNotReadyError(err)) throw err;
+    }
+
     return Response.json(
       { results: results.slice(0, MAX_RESULTS), query: q },
       withObservabilityHeaders({ status: 200 }, requestId),
