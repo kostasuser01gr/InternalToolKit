@@ -238,10 +238,80 @@ vercel deploy --prod --yes
 
 ---
 
-## 12. Remaining Risks & Next Improvements
+## 12. Fleet Turnaround Pipeline (Phase 6) — DONE
+
+### Schema Migration Applied
+```sql
+ALTER TYPE "VehicleStatus" ADD VALUE 'RETURNED';
+ALTER TYPE "VehicleStatus" ADD VALUE 'CLEANING';
+ALTER TYPE "VehicleStatus" ADD VALUE 'QC_PENDING';
+ALTER TYPE "VehicleEventType" ADD VALUE 'PIPELINE_TRANSITION';
+ALTER TYPE "VehicleEventType" ADD VALUE 'QC_PASS';
+ALTER TYPE "VehicleEventType" ADD VALUE 'QC_FAIL';
+ALTER TYPE "VehicleEventType" ADD VALUE 'SLA_BREACH';
+ALTER TABLE "Vehicle" ADD COLUMN "slaDeadlineAt", "qcSignoffBy", "qcResult", "qcFailReason";
+```
+Migration: `20260222105021_fleet_pipeline_shifts_v2` — applied to production DB.
+
+### Pipeline States
+`RETURNED → NEEDS_CLEANING → CLEANING → QC_PENDING → READY`
+Side branches: `IN_SERVICE`, `OUT_OF_SERVICE`
+
+### Features Implemented
+- **`lib/fleet-pipeline.ts`**: State machine with `isValidTransition()`, `allowedTransitions()`, `pipelineStageIndex()`, SLA calculation (`computeSlaDeadline`, `isSlaBreached`, `slaMinutesRemaining`)
+- **`transitionVehicleAction`**: Pipeline stage transitions with validation, SLA deadline setting, audit logging, event recording
+- **`qcSignoffAction`**: QC pass/fail with role-based permission (ADMIN/EDITOR only), auto-transition to READY or NEEDS_CLEANING
+- **30 unit tests** covering transitions, QC permissions, SLA logic
+
+---
+
+## 13. Shifts V2 — Publish/Lock Workflow (Phase 7) — DONE
+
+### Schema Changes
+```sql
+ALTER TYPE "ShiftStatus" ADD VALUE 'REVIEW';
+ALTER TYPE "ShiftStatus" ADD VALUE 'LOCKED';
+ALTER TABLE "Shift" ADD COLUMN "version" DEFAULT 1, "publishedAt", "lockedAt", "lockedBy", "snapshotJson";
+ALTER TABLE "ShiftRequest" ADD COLUMN "reviewedBy", "reviewedAt", "reviewNote";
+```
+
+### Workflow States
+`DRAFT → REVIEW → PUBLISHED → LOCKED`
+- LOCKED requires coordinator override
+- CANCELLED can be reactivated to DRAFT
+
+### Features Implemented
+- **`lib/shifts-workflow.ts`**: Updated state machine with REVIEW/LOCKED, `isScheduleVisible()`, `createShiftSnapshot()` for rollback
+- **`transitionShiftAction`**: State transitions with version bumping, snapshot creation on publish/lock
+- **`rollbackShiftAction`**: Restore from snapshot, increment version, clear lock
+- **Enhanced `reviewShiftRequestAction`**: Tracks reviewer ID, timestamp, and review notes
+- **38 unit tests** covering lifecycle, visibility, locking, conflict detection, snapshot/rollback
+
+---
+
+## 14. CI & Deployment Verification
+
+| Commit | Message | CI Status |
+|--------|---------|-----------|
+| `2005442` | feat: fleet turnaround pipeline + shifts v2 | ✅ Green |
+| `bcdcd2b` | docs: proof pack v2 | ✅ Green |
+| `c364485` | feat: washers bulk edit + undo | ✅ Green |
+| `5ce5be3` | feat: AI router + settings governance | ✅ Green |
+
+**Production URL**: https://internal-tool-kit-web.vercel.app
+**Total Unit Tests**: 213 (all passing)
+**Lint**: Clean (0 warnings)
+**Build**: Successful
+
+---
+
+## 15. Remaining Risks & Next Improvements
 
 1. **OpenRouter API key**: Multi-model router requires `OPENROUTER_API_KEY` in Vercel env vars to enable live model calls. Without it, falls back to CloudFree → Mock chain.
 2. **No `docs/ui/north-star.png`**: Chat-first UI was built from textual spec. Visual adjustments may be needed when reference image is provided.
 3. **Offline queue uses localStorage**: Consider migrating to IndexedDB for larger offline buffers.
 4. **E2E coverage**: Smoke-level only. Full interaction tests (tool drawer, bulk edit, undo) would strengthen confidence.
 5. **Chat → Action**: UI template ready; actual natural language → form prefill requires AI backend integration.
+6. **Fleet pipeline UI**: Server actions and logic complete; fleet page UI needs pipeline stage visualization, timeline view, and SLA indicators.
+7. **Shifts v2 UI**: Workflow logic complete; shifts page needs publish/lock controls, version history panel, and rollback UI.
+8. **PWA manifest**: Kiosk app would benefit from `manifest.json` + service worker for installability.
