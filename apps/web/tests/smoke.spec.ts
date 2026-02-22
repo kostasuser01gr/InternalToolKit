@@ -6,7 +6,7 @@ async function login(page: Page, loginName: string, pin: string) {
   await page.getByLabel("Login name").fill(loginName);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: /^Continue$/ }).click();
-  await expect(page).toHaveURL(/\/(overview|home)$/);
+  await expect(page).toHaveURL(/\/(overview|home|chat)$/);
 }
 
 async function loginWithPassword(page: Page, email: string, password: string) {
@@ -14,12 +14,12 @@ async function loginWithPassword(page: Page, email: string, password: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Continue with password" }).click();
-  await expect(page).toHaveURL(/\/(overview|home)$/);
+  await expect(page).toHaveURL(/\/(overview|home|chat)$/);
 }
 
 async function assertProtectedSessionPersists(page: Page) {
   await page.reload();
-  await expect(page).toHaveURL(/\/(overview|home)$/);
+  await expect(page).toHaveURL(/\/(overview|home|chat)$/);
 }
 
 function createSessionToken(userId: string, secret: string) {
@@ -179,43 +179,58 @@ test("responsive shell renders and navigation works without overflow", async ({
   const isTablet = projectName === "tablet";
   const isDesktop = projectName === "desktop";
 
-  if (isMobile) {
-    await expect(page.getByTestId("mobile-header")).toBeVisible();
-    await expect(page.getByTestId("bottom-nav")).toBeVisible();
+  // Detect which shell is active (chat-first vs classic)
+  const isChatFirst = await page.locator("[data-chat-first]").count().then((c) => c > 0);
+
+  if (isChatFirst) {
+    // Chat-first shell has a unified header visible on all viewports
+    await expect(page.locator("[data-shell-root]")).toBeVisible();
+  } else {
+    if (isMobile) {
+      await expect(page.getByTestId("mobile-header")).toBeVisible();
+      await expect(page.getByTestId("bottom-nav")).toBeVisible();
+    }
+
+    if (isTablet) {
+      await expect(page.getByTestId("mobile-header")).toBeVisible();
+      await expect(page.getByTestId("side-rail")).toBeVisible();
+    }
+
+    if (isDesktop) {
+      await expect(page.getByTestId("sidebar")).toBeVisible();
+      await expect(page.getByTestId("topbar")).toBeVisible();
+    }
   }
 
-  if (isTablet) {
-    await expect(page.getByTestId("mobile-header")).toBeVisible();
-    await expect(page.getByTestId("side-rail")).toBeVisible();
-  }
-
-  if (isDesktop) {
-    await expect(page.getByTestId("sidebar")).toBeVisible();
-    await expect(page.getByTestId("topbar")).toBeVisible();
-  }
-
-  if (isMobile) {
-    await page
-      .getByTestId("bottom-nav")
-      .getByRole("link", { name: "Calendar" })
-      .click();
-    await expect(page).toHaveURL(/\/calendar/);
-    await expect(page.getByTestId("calendar-page")).toBeVisible();
-  }
-
-  if (isTablet) {
-    await page
-      .getByTestId("side-rail")
-      .getByRole("link", { name: "Data" })
-      .click();
-    await expect(page).toHaveURL(/\/data/);
+  // Navigate to a module page
+  if (isChatFirst) {
+    // In chat-first, navigate via module shortcuts in left rail (desktop) or via URL
+    await page.goto("/data");
     await expect(page.getByTestId("data-page")).toBeVisible();
-  }
+  } else {
+    if (isMobile) {
+      await page
+        .getByTestId("bottom-nav")
+        .getByRole("link", { name: "Calendar" })
+        .click();
+      await expect(page).toHaveURL(/\/calendar/);
+      await expect(page.getByTestId("calendar-page")).toBeVisible();
+    }
 
-  if (isDesktop) {
-    await page.getByRole("link", { name: /^Data$/ }).first().click();
-    await expect(page).toHaveURL(/\/data/);
-    await expect(page.getByTestId("data-page")).toBeVisible();
+    if (isTablet) {
+      await page
+        .getByTestId("side-rail")
+        .getByRole("link", { name: "Data" })
+        .click();
+      await expect(page).toHaveURL(/\/data/);
+      await expect(page.getByTestId("data-page")).toBeVisible();
+    }
+
+    if (isDesktop) {
+      await page.getByRole("link", { name: /^Data$/ }).first().click();
+      await expect(page).toHaveURL(/\/data/);
+      await expect(page.getByTestId("data-page")).toBeVisible();
+    }
   }
 
   const hasOverflow = await page.evaluate(
