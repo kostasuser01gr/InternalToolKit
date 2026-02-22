@@ -123,8 +123,8 @@ describe("Cron Secret Protection", () => {
   });
 
   it("verifyCronSecret rejects incorrect secret", () => {
-    const secret = "my-cron-secret";
-    const header = "Bearer wrong-secret";
+    const secret: string = "my-cron-secret";
+    const header: string = "Bearer wrong-secret";
     const allowed = header === `Bearer ${secret}`;
     expect(allowed).toBe(false);
   });
