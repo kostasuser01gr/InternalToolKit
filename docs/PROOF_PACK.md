@@ -796,7 +796,7 @@ curl https://internal-tool-kit-web.vercel.app/api/ai/setup
 ## Wave 7 — CronRun + DeadLetter Persistence, Production Hardening
 
 ### Commit
-- `(pending)` — wave 7: CronRun + DeadLetter DB persistence
+- `c70b9ae` — wave 7: CronRun + DeadLetter DB persistence
 
 ### Migration
 - `20260222180645_wave7_cron_deadletter` — Applied to production Supabase
@@ -830,3 +830,6 @@ All 9 phases from the mission are now fully implemented:
 - Phase 7: Performance (VirtualTable + InlineEdit + Optimistic UI) ✅
 - Phase 8: Setup Wizard ✅
 - Phase 9: Persistence + Hardening ✅
+
+### CI
+- Run `22282583918` — ✅ green
