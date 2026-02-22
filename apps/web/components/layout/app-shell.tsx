@@ -5,10 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { BottomNav } from "@/components/layout/bottom-nav";
+import { ChatFirstShell } from "@/components/layout/chat-first-shell";
 import { OfflineBanner } from "@/components/layout/offline-banner";
 import { SideRail } from "@/components/layout/side-rail";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/topbar";
+import { features } from "@/lib/constants/features";
 import { sidebarNavItems } from "@/lib/constants/navigation";
 
 type AppShellProps = {
@@ -19,6 +21,18 @@ type AppShellProps = {
 
 function AppShell({ children, workspaceName, userName }: AppShellProps) {
   const pathname = usePathname();
+
+  if (features.chatFirstUi) {
+    return (
+      <ChatFirstShell
+        workspaceName={workspaceName}
+        userName={userName}
+      >
+        {children}
+      </ChatFirstShell>
+    );
+  }
+
   const activeTitle =
     sidebarNavItems.find(
       (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),

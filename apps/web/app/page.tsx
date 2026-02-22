@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { requireSession } from "@/lib/auth/session";
+import { features } from "@/lib/constants/features";
 
 export default async function RootPage() {
   const session = await requireSession();
@@ -9,5 +10,5 @@ export default async function RootPage() {
     redirect("/login");
   }
 
-  redirect("/overview");
+  redirect(features.chatFirstUi ? "/chat" : "/overview");
 }
