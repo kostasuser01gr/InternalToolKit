@@ -916,3 +916,39 @@ All 9 phases from the mission are now fully implemented:
 
 ### CI
 - Run `22284343534` — pending (just pushed)
+
+---
+
+## Wave 11 — Browser Geolocation Weather + FTS Trigram Search
+
+### Commit
+`71ea7c4` — `feat: wave 11 — browser geolocation weather, pg_trgm search, E2E fix`
+
+### W11-A: Browser Geolocation Weather Widget
+- `WeatherWidgetGeo` client component uses `navigator.geolocation.getCurrentPosition()`
+- Strategy: cached geo coords → browser geolocation → station fallback
+- SessionStorage cache: coords (30 min TTL), weather data (10 min TTL)
+- Shows "stale" badge when using cached data after API failure
+- Replaces server-side `WeatherWidget` on home page (original still available)
+
+### W11-B: Postgres FTS + Trigram Search
+- Migration `20260222201100`: `CREATE EXTENSION pg_trgm` + 7 GIN indexes
+- Indexed columns: Vehicle (plate, model), User (name), Shift (title), FeedItem (title), ChatThread (title), ChatMessage (content)
+- `trigramSearch()` helper uses `similarity()` + `ILIKE` fallback
+- Results scored by relevance, sorted descending
+- RBAC preserved for chat messages
+
+### W11-C: Fleet E2E Fix
+- Fixed `getByText(plate)` strict mode violation by using `.first()`
+
+### Gates
+
+| gate | result |
+|---|---|
+| typecheck | ✅ clean |
+| lint | ✅ clean (max-warnings=0) |
+| unit tests | ✅ 471 passed (9 new wave11 tests) |
+| build | ✅ success |
+
+### CI
+- Run pending (just pushed)
