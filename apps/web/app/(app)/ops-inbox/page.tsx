@@ -8,6 +8,13 @@ import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 
+import {
+  AckFeedButton,
+  CreateIncidentForm,
+  DismissNotificationButton,
+  ResolveIncidentButton,
+} from "./ops-inbox-actions-ui";
+
 function schemaFallback<T>(fallback: T) {
   return (err: unknown): T => {
     if (!isSchemaNotReadyError(err)) throw err;
@@ -151,10 +158,13 @@ export default async function OpsInboxPage({ searchParams }: OpsInboxProps) {
           <h2 className="kpi-font text-lg font-semibold">
             🚨 Open Incidents
           </h2>
-          <Badge variant={recentIncidents.length > 0 ? "danger" : "default"}>
-            {recentIncidents.length}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={recentIncidents.length > 0 ? "danger" : "default"}>
+              {recentIncidents.length}
+            </Badge>
+          </div>
         </div>
+        <CreateIncidentForm workspaceId={workspace.id} />
         {recentIncidents.length > 0 ? (
           <div className="space-y-2">
             {recentIncidents.map((incident) => (
@@ -166,7 +176,10 @@ export default async function OpsInboxPage({ searchParams }: OpsInboxProps) {
                   <p className="text-sm font-medium text-[var(--text)]">
                     {incident.title}
                   </p>
-                  <Badge variant="danger">{incident.severity}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="danger">{incident.severity}</Badge>
+                    <ResolveIncidentButton workspaceId={workspace.id} incidentId={incident.id} />
+                  </div>
                 </div>
                 <p className="text-xs text-[var(--text-muted)]">
                   {incident.description?.slice(0, 120)}
@@ -223,6 +236,9 @@ export default async function OpsInboxPage({ searchParams }: OpsInboxProps) {
                   <span className="text-xs text-[var(--text-muted)]">
                     {formatDistanceToNow(item.createdAt, { addSuffix: true })}
                   </span>
+                  {item.isPinned ? (
+                    <AckFeedButton workspaceId={workspace.id} feedItemId={item.id} />
+                  ) : null}
                 </div>
               </a>
             ))}
@@ -247,17 +263,19 @@ export default async function OpsInboxPage({ searchParams }: OpsInboxProps) {
         {unreadNotifications.length > 0 ? (
           <div className="space-y-2">
             {unreadNotifications.map((notif) => (
-              <a
+              <div
                 key={notif.id}
-                href={`/notifications`}
-                className="focus-ring block rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3 hover:bg-white/8"
+                className="focus-ring flex items-start justify-between rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3"
               >
-                <p className="text-sm font-medium text-[var(--text)]">{notif.title}</p>
-                <p className="text-xs text-[var(--text-muted)]">{notif.body}</p>
-                <span className="text-xs text-[var(--text-muted)]">
-                  {formatDistanceToNow(notif.createdAt, { addSuffix: true })}
-                </span>
-              </a>
+                <a href="/notifications" className="flex-1">
+                  <p className="text-sm font-medium text-[var(--text)]">{notif.title}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{notif.body}</p>
+                  <span className="text-xs text-[var(--text-muted)]">
+                    {formatDistanceToNow(notif.createdAt, { addSuffix: true })}
+                  </span>
+                </a>
+                <DismissNotificationButton workspaceId={workspace.id} notificationId={notif.id} />
+              </div>
             ))}
           </div>
         ) : (
