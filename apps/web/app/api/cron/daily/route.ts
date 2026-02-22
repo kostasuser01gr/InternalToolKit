@@ -118,6 +118,15 @@ export async function GET(request: Request) {
           { lastScannedAt: { lt: cutoff } },
         ],
       },
+      select: {
+        id: true,
+        workspaceId: true,
+        name: true,
+        url: true,
+        lastEtag: true,
+        lastScannedAt: true,
+        keywordsJson: true,
+      },
       take: MAX_SOURCES_PER_RUN,
       orderBy: { lastScannedAt: "asc" },
     });
@@ -145,7 +154,8 @@ export async function GET(request: Request) {
         }
 
         const rawItems = parseRssFeed(xml);
-        const scored = processFeedItems(rawItems);
+        const sourceKw = source.keywordsJson as { boost?: string[]; suppress?: string[] } | null;
+        const scored = processFeedItems(rawItems, sourceKw);
 
         let newCount = 0;
         for (const item of scored) {
