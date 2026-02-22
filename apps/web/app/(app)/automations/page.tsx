@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
+import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 
 import { createAutomationAction, runAutomationNowAction } from "./actions";
 
@@ -48,12 +49,19 @@ export default async function AutomationsPage({
   const { workspace, workspaceRole } = await getAppContext(params.workspaceId);
   const canEdit = workspaceRole !== WorkspaceRole.VIEWER;
 
+  function safeFindMany<T>(p: Promise<T[]>) {
+    return p.catch((err: unknown): T[] => {
+      if (!isSchemaNotReadyError(err)) throw err;
+      return [];
+    });
+  }
+
   const [tables, users, automations, runs] = await Promise.all([
-    db.table.findMany({
+    safeFindMany(db.table.findMany({
       where: { workspaceId: workspace.id },
       orderBy: { name: "asc" },
-    }),
-    db.user.findMany({
+    })),
+    safeFindMany(db.user.findMany({
       where: {
         workspaceMemberships: {
           some: {
@@ -62,12 +70,12 @@ export default async function AutomationsPage({
         },
       },
       orderBy: { email: "asc" },
-    }),
-    db.automation.findMany({
+    })),
+    safeFindMany(db.automation.findMany({
       where: { workspaceId: workspace.id },
       orderBy: { createdAt: "desc" },
-    }),
-    db.automationRun.findMany({
+    })),
+    safeFindMany(db.automationRun.findMany({
       where: {
         automation: {
           workspaceId: workspace.id,
@@ -78,7 +86,7 @@ export default async function AutomationsPage({
       },
       orderBy: { startedAt: "desc" },
       take: 30,
-    }),
+    })),
   ]);
 
   return (
