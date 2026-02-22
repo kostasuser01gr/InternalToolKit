@@ -211,14 +211,14 @@ describe("Viber Bridge", () => {
   });
 
   describe("getBridgeStatus", () => {
-    it("returns disabled when env not set", () => {
-      const status = getBridgeStatus();
+    it("returns disabled when env not set", async () => {
+      const status = await getBridgeStatus();
       expect(status.enabled).toBe(false);
       expect(status.ready).toBe(false);
     });
 
-    it("returns correct structure", () => {
-      const status = getBridgeStatus();
+    it("returns correct structure", async () => {
+      const status = await getBridgeStatus();
       expect(status).toHaveProperty("deadLetterCount");
       expect(status).toHaveProperty("recentFailures");
       expect(status).toHaveProperty("mode");

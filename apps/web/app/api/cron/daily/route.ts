@@ -20,19 +20,42 @@ import { DEFAULT_STATIONS, fetchWeatherSafe } from "@/lib/weather/client";
 const MAX_SOURCES_PER_RUN = 20;
 const FETCH_TIMEOUT_MS = 15_000;
 const FEED_ITEM_RETENTION_DAYS = 90;
+const CRON_LOG_RETENTION_DAYS = 30;
 
-// In-memory cron run log (survives until cold start)
-type CronRunEntry = { job: string; startedAt: string; finishedAt: string; status: string; summary: string };
-const cronRunLog: CronRunEntry[] = [];
-const MAX_LOG_ENTRIES = 50;
-
-function logRun(entry: CronRunEntry) {
-  cronRunLog.push(entry);
-  if (cronRunLog.length > MAX_LOG_ENTRIES) cronRunLog.shift();
+// Persist cron run to database (replaces in-memory log)
+async function logRunToDB(entry: {
+  job: string;
+  startedAt: Date;
+  finishedAt: Date;
+  status: string;
+  itemsProcessed: number;
+  errorSummary?: string;
+}) {
+  try {
+    await db.cronRun.create({
+      data: {
+        job: entry.job,
+        startedAt: entry.startedAt,
+        finishedAt: entry.finishedAt,
+        status: entry.status,
+        itemsProcessed: entry.itemsProcessed,
+        errorSummary: entry.errorSummary ?? null,
+      },
+    });
+  } catch {
+    // non-critical: DB write failure shouldn't break cron
+  }
 }
 
-export function getCronRunLog(): CronRunEntry[] {
-  return [...cronRunLog];
+export async function getCronRunLog() {
+  try {
+    return await db.cronRun.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+  } catch {
+    return [];
+  }
 }
 
 function verifyCronSecret(request: Request): boolean {
@@ -156,11 +179,11 @@ export async function GET(request: Request) {
 
     const totalNew = results.reduce((sum, r) => sum + r.newItems, 0);
     jobs.feeds = { sourcesScanned: results.length, totalNewItems: totalNew, results };
-    logRun({ job: "feeds", startedAt: runStart.toISOString(), finishedAt: new Date().toISOString(), status: "ok", summary: `${results.length} sources, ${totalNew} new items` });
+    await logRunToDB({ job: "feeds", startedAt: runStart, finishedAt: new Date(), status: "ok", itemsProcessed: totalNew });
   } catch (err) {
     const msg = isSchemaNotReadyError(err) ? "Schema not ready" : (err instanceof Error ? err.message : "Failed");
     jobs.feeds = { error: msg };
-    logRun({ job: "feeds", startedAt: runStart.toISOString(), finishedAt: new Date().toISOString(), status: "error", summary: msg });
+    await logRunToDB({ job: "feeds", startedAt: runStart, finishedAt: new Date(), status: "error", itemsProcessed: 0, errorSummary: msg });
   }
 
   // ── Job 2: Weather Cache Warm ──
@@ -172,10 +195,10 @@ export async function GET(request: Request) {
       if (data) warmed++;
     }
     jobs.weather = { stationsWarmed: warmed, total: stationIds.length };
-    logRun({ job: "weather", startedAt: runStart.toISOString(), finishedAt: new Date().toISOString(), status: "ok", summary: `${warmed}/${stationIds.length} stations` });
+    await logRunToDB({ job: "weather", startedAt: runStart, finishedAt: new Date(), status: "ok", itemsProcessed: warmed });
   } catch (err) {
     jobs.weather = { error: err instanceof Error ? err.message : "Failed" };
-    logRun({ job: "weather", startedAt: runStart.toISOString(), finishedAt: new Date().toISOString(), status: "error", summary: "Failed" });
+    await logRunToDB({ job: "weather", startedAt: runStart, finishedAt: new Date(), status: "error", itemsProcessed: 0, errorSummary: "Failed" });
   }
 
   // ── Job 3: Housekeeping ──
@@ -197,12 +220,28 @@ export async function GET(request: Request) {
     // non-critical
   }
 
+  // Purge old cron logs and resolved dead-letter entries
+  let cronLogsPurged = 0;
+  try {
+    const cronCutoff = new Date(Date.now() - CRON_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const purgedLogs = await db.cronRun.deleteMany({
+      where: { createdAt: { lt: cronCutoff } },
+    });
+    cronLogsPurged = purgedLogs.count;
+    await db.deadLetterEntry.deleteMany({
+      where: { resolvedAt: { not: null }, createdAt: { lt: cronCutoff } },
+    });
+  } catch {
+    // non-critical
+  }
+
   jobs.housekeeping = {
     purgedFeedItems: purgedCount,
     viberRetried: viberRetry.retried,
     viberSucceeded: viberRetry.succeeded,
+    purgedCronLogs: cronLogsPurged,
   };
-  logRun({ job: "housekeeping", startedAt: runStart.toISOString(), finishedAt: new Date().toISOString(), status: "ok", summary: `purged=${purgedCount} viber_retry=${viberRetry.retried}` });
+  await logRunToDB({ job: "housekeeping", startedAt: runStart, finishedAt: new Date(), status: "ok", itemsProcessed: purgedCount + cronLogsPurged });
 
   return NextResponse.json({
     ok: true,

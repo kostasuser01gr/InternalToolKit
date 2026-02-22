@@ -3,10 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Consolidated Daily Cron ──
 
 describe("Daily Cron — CronRun Log", () => {
-  it("logRun stores entries up to MAX_LOG_ENTRIES", async () => {
+  it("getCronRunLog returns an array", async () => {
     const { getCronRunLog } = await import("@/app/api/cron/daily/route");
-    // Log should be an array
-    const log = getCronRunLog();
+    const log = await getCronRunLog();
     expect(Array.isArray(log)).toBe(true);
   });
 });

@@ -790,3 +790,43 @@ curl https://internal-tool-kit-web.vercel.app/api/ai/setup
 6. **Feed Auto-pin** — cron auto-pins items with relevanceScore >= 0.8, creates FEED_HIGH_RELEVANCE notifications
 7. **Notification for Admins** — ADMIN + EDITOR users get notified of high-relevance feed items (non-blocking try/catch)
 8. **QuickBar Defaults** — Fixed role fallbacks to match actual schema (EMPLOYEE instead of STAFF)
+
+---
+
+## Wave 7 — CronRun + DeadLetter Persistence, Production Hardening
+
+### Commit
+- `(pending)` — wave 7: CronRun + DeadLetter DB persistence
+
+### Migration
+- `20260222180645_wave7_cron_deadletter` — Applied to production Supabase
+- CronRun: job, startedAt, finishedAt, status, itemsProcessed, errorSummary
+- DeadLetterEntry: type, payload, error, attempts, lastAttempt, resolvedAt
+
+### Changes
+1. **CronRun persistence** — Daily cron now writes run logs to DB (was in-memory FIFO, lost on cold starts)
+2. **DeadLetter persistence** — Viber bridge dead-letter entries persisted to DB (was in-memory, max 100)
+3. **Housekeeping cleanup** — Purges CronRun entries > 30 days, resolved DeadLetterEntry > 30 days
+4. **getBridgeStatus → async** — Now queries DB for dead-letter count + recent failures
+5. **retryDeadLetters → DB-backed** — Reads unresolved entries from DB, marks resolved on success
+6. **NEXT_STEPS_GAPS.md** — Updated with comprehensive feature map (all 19 modules ✅)
+
+### Gates
+| Gate | Result |
+|------|--------|
+| typecheck | ✅ clean |
+| lint | ✅ 0 warnings |
+| unit tests | ✅ 424 passed (11 new wave7 tests) |
+| build | ✅ success |
+
+### Feature Completeness
+All 9 phases from the mission are now fully implemented:
+- Phase 1: Vercel Cron ✅
+- Phase 2: Weather Feed ✅
+- Phase 3: Feeds Module ✅
+- Phase 4: Viber Mirror ✅
+- Phase 5: Global Search ✅
+- Phase 6: User Shortcuts ✅
+- Phase 7: Performance (VirtualTable + InlineEdit + Optimistic UI) ✅
+- Phase 8: Setup Wizard ✅
+- Phase 9: Persistence + Hardening ✅
