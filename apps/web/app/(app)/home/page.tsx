@@ -8,6 +8,7 @@ import { StatusBanner } from "@/components/layout/status-banner";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db";
 import { getAppContext } from "@/lib/app-context";
+import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 
 type HomePageProps = {
   searchParams: Promise<{ error?: string; success?: string }>;
@@ -17,6 +18,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
   const { workspace } = await getAppContext();
 
+  function safeCount(p: Promise<number>) {
+    return p.catch((err: unknown) => {
+      if (!isSchemaNotReadyError(err)) throw err;
+      return 0;
+    });
+  }
+  function safeFindMany<T>(p: Promise<T[]>) {
+    return p.catch((err: unknown): T[] => {
+      if (!isSchemaNotReadyError(err)) throw err;
+      return [];
+    });
+  }
+
   const [
     tableCount,
     recordCount,
@@ -25,11 +39,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     recentNotifications,
     recentAudit,
   ] = await Promise.all([
-    db.table.count({ where: { workspaceId: workspace.id } }),
-    db.record.count({ where: { table: { workspaceId: workspace.id } } }),
-    db.automation.count({ where: { workspaceId: workspace.id } }),
-    db.chatThread.count({ where: { workspaceId: workspace.id } }),
-    db.notification.findMany({
+    safeCount(db.table.count({ where: { workspaceId: workspace.id } })),
+    safeCount(db.record.count({ where: { table: { workspaceId: workspace.id } } })),
+    safeCount(db.automation.count({ where: { workspaceId: workspace.id } })),
+    safeCount(db.chatThread.count({ where: { workspaceId: workspace.id } })),
+    safeFindMany(db.notification.findMany({
       where: {
         user: {
           workspaceMemberships: {
@@ -41,12 +55,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       },
       orderBy: { createdAt: "desc" },
       take: 4,
-    }),
-    db.auditLog.findMany({
+    })),
+    safeFindMany(db.auditLog.findMany({
       where: { workspaceId: workspace.id },
       orderBy: { createdAt: "desc" },
       take: 4,
-    }),
+    })),
   ]);
 
   return (

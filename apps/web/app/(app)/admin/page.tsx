@@ -19,6 +19,7 @@ import { USAGE_LIMITS } from "@/lib/constants/limits";
 import { db } from "@/lib/db";
 import { getAppContext } from "@/lib/app-context";
 import { hasRecentAdminStepUp } from "@/lib/auth/session";
+import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 
 import {
   inviteMemberAction,
@@ -83,8 +84,21 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     ...(params.entity ? { entityType: { contains: params.entity } } : {}),
   };
 
+  function safeCount(p: Promise<number>) {
+    return p.catch((err: unknown) => {
+      if (!isSchemaNotReadyError(err)) throw err;
+      return 0;
+    });
+  }
+  function safeFindMany<T>(p: Promise<T[]>) {
+    return p.catch((err: unknown): T[] => {
+      if (!isSchemaNotReadyError(err)) throw err;
+      return [];
+    });
+  }
+
   const [members, counts, auditLogs] = await Promise.all([
-    db.workspaceMember.findMany({
+    safeFindMany(db.workspaceMember.findMany({
       where: { workspaceId: workspace.id },
       include: {
         user: true,
@@ -92,20 +106,20 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       orderBy: {
         createdAt: "asc",
       },
-    }),
+    })),
     Promise.all([
-      db.table.count({ where: { workspaceId: workspace.id } }),
-      db.record.count({ where: { table: { workspaceId: workspace.id } } }),
-      db.automation.count({ where: { workspaceId: workspace.id } }),
+      safeCount(db.table.count({ where: { workspaceId: workspace.id } })),
+      safeCount(db.record.count({ where: { table: { workspaceId: workspace.id } } })),
+      safeCount(db.automation.count({ where: { workspaceId: workspace.id } })),
     ]),
-    db.auditLog.findMany({
+    safeFindMany(db.auditLog.findMany({
       where: auditWhere,
       include: {
         actor: true,
       },
       orderBy: { createdAt: "desc" },
       take: 60,
-    }),
+    })),
   ]);
 
   const [tableCount, recordCount, automationCount] = counts;

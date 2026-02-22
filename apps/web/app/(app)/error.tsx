@@ -17,12 +17,18 @@ export default function AppError({
     console.error(error);
   }, [error]);
 
+  const isAuthError = error.message?.includes("Authentication") || error.message?.includes("session");
+  const isDbError = error.message?.includes("database") || error.message?.includes("connect");
+
   return (
     <GlassCard className="mx-auto max-w-xl space-y-4">
       <h1 className="kpi-font text-2xl font-semibold">Something went wrong</h1>
       <p className="text-sm text-[var(--text-muted)]">
-        The dashboard could not complete that action. Retry or return to a
-        stable route.
+        {isAuthError
+          ? "Your session may have expired. Please sign in again."
+          : isDbError
+            ? "A temporary service issue occurred. Please retry in a moment."
+            : "The dashboard could not complete that action. Retry or return to a stable route."}
       </p>
       {error.digest ? (
         <p className="text-xs text-[var(--text-muted)] opacity-80">
@@ -31,6 +37,11 @@ export default function AppError({
       ) : null}
       <div className="flex flex-wrap gap-2">
         <PrimaryButton onClick={reset}>Retry</PrimaryButton>
+        {isAuthError ? (
+          <PrimaryButton asChild className="bg-transparent text-[var(--text)] shadow-none ring-1 ring-[var(--border)] hover:bg-white/10">
+            <Link href="/login">Sign in</Link>
+          </PrimaryButton>
+        ) : null}
         <PrimaryButton asChild className="bg-transparent text-[var(--text)] shadow-none ring-1 ring-[var(--border)] hover:bg-white/10">
           <Link href="/overview">Go to Overview</Link>
         </PrimaryButton>

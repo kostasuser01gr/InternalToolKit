@@ -6,27 +6,35 @@ import { StatCard } from "@/components/kit/stat-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
+import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 
 export default async function AnalyticsPage() {
   const { workspace } = await getAppContext();
 
+  function safeCount(p: Promise<number>) {
+    return p.catch((err: unknown) => {
+      if (!isSchemaNotReadyError(err)) throw err;
+      return 0;
+    });
+  }
+
   const [tableCount, records, automationCount] = await Promise.all([
-    db.table.count({ where: { workspaceId: workspace.id } }),
-    db.record.count({
+    safeCount(db.table.count({ where: { workspaceId: workspace.id } })),
+    safeCount(db.record.count({
       where: {
         table: { workspaceId: workspace.id },
       },
-    }),
-    db.automation.count({ where: { workspaceId: workspace.id } }),
+    })),
+    safeCount(db.automation.count({ where: { workspaceId: workspace.id } })),
   ]);
 
   const recordCount = records;
-  const openIncidentCount = await db.record.count({
+  const openIncidentCount = await safeCount(db.record.count({
     where: {
       table: { workspaceId: workspace.id },
       openIndicator: true,
     },
-  });
+  }));
 
   return (
     <div className="space-y-6" data-testid="analytics-page">

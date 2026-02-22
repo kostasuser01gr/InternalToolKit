@@ -65,52 +65,70 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
   const fromDate = parseDateInput(parsedRange.from, defaultFrom);
   const toDate = parseDateInput(parsedRange.to, defaultTo);
 
+  function schemaFallback<T>(fallback: T) {
+    return (err: unknown): T => {
+      if (!isSchemaNotReadyError(err)) throw err;
+      return fallback;
+    };
+  }
+
+  type ShiftWithAssignee = Awaited<ReturnType<typeof db.shift.findMany<{ include: { assignee: true } }>>>;
+  type ShiftRequestWithRequester = Awaited<ReturnType<typeof db.shiftRequest.findMany<{ include: { requester: true } }>>>;
+  type VehicleEventWithVehicle = Awaited<ReturnType<typeof db.vehicleEvent.findMany<{ include: { vehicle: true } }>>>;
+  type WasherTaskWithRelations = Awaited<ReturnType<typeof db.washerTask.findMany<{ include: { vehicle: true; washer: true } }>>>;
+
   const [shifts, requests, vehicleEvents, washerTasks] = await Promise.all([
-    db.shift.findMany({
-      where: {
-        workspaceId: workspace.id,
-        startsAt: {
-          gte: fromDate,
-          lte: toDate,
+    db.shift
+      .findMany({
+        where: {
+          workspaceId: workspace.id,
+          startsAt: {
+            gte: fromDate,
+            lte: toDate,
+          },
         },
-      },
-      include: {
-        assignee: true,
-      },
-      orderBy: {
-        startsAt: "asc",
-      },
-    }),
-    db.shiftRequest.findMany({
-      where: {
-        workspaceId: workspace.id,
-        startsAt: {
-          gte: fromDate,
-          lte: toDate,
+        include: {
+          assignee: true,
         },
-      },
-      include: {
-        requester: true,
-      },
-      orderBy: {
-        startsAt: "asc",
-      },
-    }),
-    db.vehicleEvent.findMany({
-      where: {
-        workspaceId: workspace.id,
-        createdAt: {
-          gte: fromDate,
-          lte: toDate,
+        orderBy: {
+          startsAt: "asc",
         },
-      },
-      include: {
-        vehicle: true,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    }),
+      })
+      .catch(schemaFallback([] as ShiftWithAssignee)),
+    db.shiftRequest
+      .findMany({
+        where: {
+          workspaceId: workspace.id,
+          startsAt: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+        include: {
+          requester: true,
+        },
+        orderBy: {
+          startsAt: "asc",
+        },
+      })
+      .catch(schemaFallback([] as ShiftRequestWithRequester)),
+    db.vehicleEvent
+      .findMany({
+        where: {
+          workspaceId: workspace.id,
+          createdAt: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+        include: {
+          vehicle: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      })
+      .catch(schemaFallback([] as VehicleEventWithVehicle)),
     db.washerTask
       .findMany({
         where: {
@@ -128,10 +146,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
           createdAt: "asc",
         },
       })
-      .catch((err: unknown) => {
-        if (!isSchemaNotReadyError(err)) throw err;
-        return [];
-      }),
+      .catch(schemaFallback([] as WasherTaskWithRelations)),
   ]);
 
   const events: CalendarEventItem[] = [

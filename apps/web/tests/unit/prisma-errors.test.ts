@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isConnectionError,
   isPrismaKnownErrorCode,
   isSchemaNotReadyError,
 } from "@/lib/prisma-errors";
@@ -20,6 +21,20 @@ describe("isPrismaKnownErrorCode", () => {
     });
 
     expect(isPrismaKnownErrorCode(error, "P2021")).toBe(false);
+  });
+});
+
+describe("isConnectionError", () => {
+  it("detects ECONNREFUSED", () => {
+    expect(isConnectionError(new Error("connect ECONNREFUSED 127.0.0.1:5432"))).toBe(true);
+  });
+
+  it("detects ETIMEDOUT", () => {
+    expect(isConnectionError(new Error("connect ETIMEDOUT"))).toBe(true);
+  });
+
+  it("ignores schema errors", () => {
+    expect(isConnectionError(new Error('relation "Foo" does not exist'))).toBe(false);
   });
 });
 
@@ -49,6 +64,13 @@ describe("isSchemaNotReadyError", () => {
   it("ignores unrelated errors", () => {
     const error = new Error("connection timeout");
 
+    expect(isSchemaNotReadyError(error)).toBe(false);
+  });
+
+  it("returns false for connection errors even with P2021 code", () => {
+    const error = Object.assign(new Error("connect ECONNREFUSED"), {
+      code: "P2021",
+    });
     expect(isSchemaNotReadyError(error)).toBe(false);
   });
 });

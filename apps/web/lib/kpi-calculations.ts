@@ -108,8 +108,8 @@ export function staffingCoverageByHour(
     if (!s.assignedUserId) continue;
     const start = new Date(s.startsAt);
     const end = new Date(s.endsAt);
-    const startH = start.getHours();
-    const endH = end.getHours() + (end.getMinutes() > 0 ? 1 : 0);
+    const startH = start.getUTCHours();
+    const endH = end.getUTCHours() + (end.getUTCMinutes() > 0 ? 1 : 0);
     for (let h = startH; h < Math.min(endH, 24); h++) {
       coverage[h]!.count++;
     }
