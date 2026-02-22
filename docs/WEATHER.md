@@ -29,10 +29,15 @@ Open-Meteo API → lib/weather/client.ts (10min cache) → /api/weather → Weat
 Custom coordinates supported via API: `/api/weather?lat=37.9&lon=23.7`
 
 ### Widget
-- Server component rendered on Home page via Suspense
-- Shows current temperature, conditions, wind speed
-- 7-day forecast cards with high/low temps and weather icons
-- WMO weather code → description + emoji mapping
+- **`WeatherWidgetGeo`** — Client component with browser geolocation (wave 11)
+  - Uses `navigator.geolocation.getCurrentPosition()` for auto-detection
+  - Strategy: cached geo coords → browser geolocation → station fallback
+  - SessionStorage cache: coords (30 min TTL), weather data (10 min TTL)
+  - Shows "stale" badge when using cached data after API failure
+  - Requires HTTPS (secure context) for geolocation
+- **`WeatherWidget`** — Original server component (still available as fallback)
+  - Rendered via Suspense, uses station coords only
+- Current + 7-day forecast with WMO weather code → emoji mapping
 
 ### API Endpoint
 `GET /api/weather`

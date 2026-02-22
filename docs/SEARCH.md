@@ -27,15 +27,27 @@ Real-time search across all entities in the Operations OS. Accessible via the co
 
 ## Performance
 
-- Server-side Prisma queries with `contains` + case-insensitive mode
-- Results limited to 5 per entity type
+- **Postgres pg_trgm indexes** (wave 11) — GIN trigram indexes on 7 columns for fast partial and typo-tolerant matching
+- `trigramSearch()` uses `similarity()` scoring + `ILIKE` fallback
+- Results scored by relevance and sorted descending
+- Results limited to 5 per entity type, 20 total
 - Debounced client-side (300ms delay before API call)
-- Timer-based state cleanup (no synchronous setState in effects)
+
+### Indexes (migration `20260222201100_wave11_fts_trigram`)
+| Table | Column | Index |
+|-------|--------|-------|
+| Vehicle | plateNumber | GIN gin_trgm_ops |
+| Vehicle | model | GIN gin_trgm_ops |
+| User | name | GIN gin_trgm_ops |
+| Shift | title | GIN gin_trgm_ops |
+| FeedItem | title | GIN gin_trgm_ops |
+| ChatThread | title | GIN gin_trgm_ops |
+| ChatMessage | content | GIN gin_trgm_ops |
 
 ## Permission Model
 
 - Search scoped to workspace when `workspaceId` provided
-- Chat messages filtered by workspace thread ownership
+- Chat messages RBAC-filtered: only public channels + user's member channels + channelless threads
 - User search is cross-workspace (names/emails only, no sensitive data)
 
 ## Command Palette Integration
