@@ -15,10 +15,16 @@ import {
   requireWorkspaceRole,
 } from "@/lib/rbac";
 import {
+  isValidScheduleTransition,
+  createShiftSnapshot,
+} from "@/lib/shifts-workflow";
+import {
   createShiftRequestSchema,
   createShiftSchema,
   importShiftsCsvSchema,
   reviewShiftRequestSchema,
+  rollbackShiftSchema,
+  transitionShiftSchema,
 } from "@/lib/validators/shifts";
 
 function buildShiftsUrl(params: Record<string, string | undefined>) {
@@ -350,6 +356,7 @@ export async function reviewShiftRequestAction(formData: FormData) {
     workspaceId: formData.get("workspaceId"),
     requestId: formData.get("requestId"),
     decision: formData.get("decision"),
+    reviewNote: formData.get("reviewNote") || undefined,
   });
 
   try {
@@ -368,6 +375,9 @@ export async function reviewShiftRequestAction(formData: FormData) {
       where: { id: parsed.requestId },
       data: {
         status: nextStatus,
+        reviewedBy: user.id,
+        reviewedAt: new Date(),
+        reviewNote: parsed.reviewNote ?? null,
       },
       include: {
         requester: true,
@@ -391,12 +401,172 @@ export async function reviewShiftRequestAction(formData: FormData) {
       entityId: request.id,
       metaJson: {
         status: nextStatus,
+        reviewNote: parsed.reviewNote,
       },
     });
 
     revalidatePath("/shifts");
     revalidatePath("/calendar");
     redirect(buildShiftsUrl({ success: `Request ${nextStatus.toLowerCase()}.` }));
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
+  }
+}
+
+export async function transitionShiftAction(formData: FormData) {
+  const parsed = transitionShiftSchema.parse({
+    workspaceId: formData.get("workspaceId"),
+    shiftId: formData.get("shiftId"),
+    targetStatus: formData.get("targetStatus"),
+    notes: formData.get("notes") || undefined,
+  });
+
+  try {
+    const { user } = await requireWorkspacePermission(
+      parsed.workspaceId,
+      "shifts",
+      "write",
+    );
+
+    const shift = await db.shift.findUniqueOrThrow({
+      where: { id: parsed.shiftId },
+      select: {
+        status: true,
+        title: true,
+        assignedUserId: true,
+        startsAt: true,
+        endsAt: true,
+        notes: true,
+        version: true,
+      },
+    });
+
+    if (!isValidScheduleTransition(shift.status, parsed.targetStatus)) {
+      throw new Error(
+        `Invalid shift transition from ${shift.status} to ${parsed.targetStatus}.`,
+      );
+    }
+
+    const snapshot =
+      parsed.targetStatus === ShiftStatus.PUBLISHED ||
+      parsed.targetStatus === ShiftStatus.LOCKED
+        ? createShiftSnapshot(shift)
+        : undefined;
+
+    const bumpVersion =
+      parsed.targetStatus === ShiftStatus.PUBLISHED ||
+      parsed.targetStatus === ShiftStatus.LOCKED;
+
+    await db.shift.update({
+      where: { id: parsed.shiftId },
+      data: {
+        status: parsed.targetStatus,
+        notes: parsed.notes ?? shift.notes,
+        ...(parsed.targetStatus === ShiftStatus.PUBLISHED
+          ? { publishedAt: new Date() }
+          : {}),
+        ...(parsed.targetStatus === ShiftStatus.LOCKED
+          ? { lockedAt: new Date(), lockedBy: user.id }
+          : {}),
+        ...(bumpVersion ? { version: shift.version + 1 } : {}),
+        ...(snapshot ? { snapshotJson: snapshot } : {}),
+      },
+    });
+
+    await appendAuditLog({
+      workspaceId: parsed.workspaceId,
+      actorUserId: user.id,
+      action: "shift.transition",
+      entityType: "shift",
+      entityId: parsed.shiftId,
+      metaJson: {
+        from: shift.status,
+        to: parsed.targetStatus,
+        title: shift.title,
+        version: bumpVersion ? shift.version + 1 : shift.version,
+      },
+    });
+
+    revalidatePath("/shifts");
+    revalidatePath("/calendar");
+    redirect(
+      buildShiftsUrl({
+        success: `${shift.title}: ${shift.status} → ${parsed.targetStatus}`,
+      }),
+    );
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
+  }
+}
+
+export async function rollbackShiftAction(formData: FormData) {
+  const parsed = rollbackShiftSchema.parse({
+    workspaceId: formData.get("workspaceId"),
+    shiftId: formData.get("shiftId"),
+  });
+
+  try {
+    const { user } = await requireWorkspacePermission(
+      parsed.workspaceId,
+      "shifts",
+      "write",
+    );
+
+    const shift = await db.shift.findUniqueOrThrow({
+      where: { id: parsed.shiftId },
+      select: { snapshotJson: true, title: true, version: true },
+    });
+
+    if (!shift.snapshotJson) {
+      throw new Error("No previous version available for rollback.");
+    }
+
+    const snapshot = JSON.parse(shift.snapshotJson) as {
+      title: string;
+      assignedUserId: string | null;
+      startsAt: string;
+      endsAt: string;
+      notes: string | null;
+      status: string;
+    };
+
+    await db.shift.update({
+      where: { id: parsed.shiftId },
+      data: {
+        title: snapshot.title,
+        assignedUserId: snapshot.assignedUserId,
+        startsAt: new Date(snapshot.startsAt),
+        endsAt: new Date(snapshot.endsAt),
+        notes: snapshot.notes,
+        status: snapshot.status as ShiftStatus,
+        version: shift.version + 1,
+        snapshotJson: null,
+        lockedAt: null,
+        lockedBy: null,
+      },
+    });
+
+    await appendAuditLog({
+      workspaceId: parsed.workspaceId,
+      actorUserId: user.id,
+      action: "shift.rollback",
+      entityType: "shift",
+      entityId: parsed.shiftId,
+      metaJson: {
+        title: shift.title,
+        restoredVersion: shift.version,
+      },
+    });
+
+    revalidatePath("/shifts");
+    revalidatePath("/calendar");
+    redirect(
+      buildShiftsUrl({
+        success: `"${shift.title}" rolled back to previous version.`,
+      }),
+    );
   } catch (error) {
     rethrowIfRedirectError(error);
     redirect(buildShiftsUrl({ error: getErrorMessage(error) }));

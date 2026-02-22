@@ -40,3 +40,5 @@
 
 # generated
 next-env.d.ts
+supabase/.temp/
+apps/web/supabase/.temp/

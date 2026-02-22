@@ -7,11 +7,18 @@ import { z } from "zod";
 
 import { appendAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
+import {
+  isValidTransition,
+  canSignoffQc,
+  computeSlaDeadline,
+} from "@/lib/fleet-pipeline";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
 import { AuthError, requireWorkspacePermission } from "@/lib/rbac";
 import {
   createVehicleEventSchema,
   createVehicleSchema,
+  qcSignoffSchema,
+  transitionVehicleSchema,
   updateVehicleSchema,
 } from "@/lib/validators/fleet";
 
@@ -193,6 +200,168 @@ export async function addVehicleEventAction(formData: FormData) {
     revalidatePath("/fleet");
     revalidatePath("/calendar");
     redirect(buildFleetUrl({ success: "Vehicle event added." }));
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    redirect(buildFleetUrl({ error: getErrorMessage(error) }));
+  }
+}
+
+export async function transitionVehicleAction(formData: FormData) {
+  const parsed = transitionVehicleSchema.parse({
+    workspaceId: formData.get("workspaceId"),
+    vehicleId: formData.get("vehicleId"),
+    targetStatus: formData.get("targetStatus"),
+    notes: formData.get("notes") || undefined,
+  });
+
+  try {
+    const { user } = await requireWorkspacePermission(
+      parsed.workspaceId,
+      "fleet",
+      "write",
+    );
+
+    const vehicle = await db.vehicle.findUniqueOrThrow({
+      where: { id: parsed.vehicleId },
+      select: { status: true, plateNumber: true },
+    });
+
+    if (!isValidTransition(vehicle.status, parsed.targetStatus)) {
+      throw new Error(
+        `Invalid transition from ${vehicle.status} to ${parsed.targetStatus}.`,
+      );
+    }
+
+    const slaDeadline = computeSlaDeadline(parsed.targetStatus);
+
+    const updated = await db.vehicle.update({
+      where: { id: parsed.vehicleId },
+      data: {
+        status: parsed.targetStatus,
+        slaDeadlineAt: slaDeadline,
+        ...(parsed.targetStatus !== ("QC_PENDING" as VehicleStatus)
+          ? { qcResult: null, qcFailReason: null, qcSignoffBy: null }
+          : {}),
+      },
+    });
+
+    await db.vehicleEvent.create({
+      data: {
+        workspaceId: parsed.workspaceId,
+        vehicleId: parsed.vehicleId,
+        actorUserId: user.id,
+        type: VehicleEventType.PIPELINE_TRANSITION,
+        valueText: `${vehicle.status} → ${parsed.targetStatus}`,
+        notes: parsed.notes ?? null,
+      },
+    });
+
+    await appendAuditLog({
+      workspaceId: parsed.workspaceId,
+      actorUserId: user.id,
+      action: "fleet.pipeline_transition",
+      entityType: "vehicle",
+      entityId: updated.id,
+      metaJson: {
+        from: vehicle.status,
+        to: parsed.targetStatus,
+        plateNumber: vehicle.plateNumber,
+      },
+    });
+
+    revalidatePath("/fleet");
+    revalidatePath("/calendar");
+    redirect(
+      buildFleetUrl({
+        success: `${vehicle.plateNumber}: ${vehicle.status} → ${parsed.targetStatus}`,
+      }),
+    );
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    redirect(buildFleetUrl({ error: getErrorMessage(error) }));
+  }
+}
+
+export async function qcSignoffAction(formData: FormData) {
+  const parsed = qcSignoffSchema.parse({
+    workspaceId: formData.get("workspaceId"),
+    vehicleId: formData.get("vehicleId"),
+    result: formData.get("result"),
+    failReason: formData.get("failReason") || undefined,
+    notes: formData.get("notes") || undefined,
+  });
+
+  try {
+    const { user, membership } = await requireWorkspacePermission(
+      parsed.workspaceId,
+      "fleet",
+      "write",
+    );
+
+    if (!canSignoffQc(membership.role)) {
+      throw new AuthError("Only coordinators can perform QC signoff.");
+    }
+
+    const vehicle = await db.vehicle.findUniqueOrThrow({
+      where: { id: parsed.vehicleId },
+      select: { status: true, plateNumber: true },
+    });
+
+    if (vehicle.status !== ("QC_PENDING" as VehicleStatus)) {
+      throw new Error("Vehicle must be in QC_PENDING status for signoff.");
+    }
+
+    const nextStatus: VehicleStatus =
+      parsed.result === "PASS"
+        ? ("READY" as VehicleStatus)
+        : ("NEEDS_CLEANING" as VehicleStatus);
+
+    const eventType: VehicleEventType =
+      parsed.result === "PASS"
+        ? VehicleEventType.QC_PASS
+        : VehicleEventType.QC_FAIL;
+
+    await db.vehicle.update({
+      where: { id: parsed.vehicleId },
+      data: {
+        status: nextStatus,
+        qcSignoffBy: user.id,
+        qcResult: parsed.result,
+        qcFailReason: parsed.result === "FAIL" ? (parsed.failReason ?? null) : null,
+        slaDeadlineAt: parsed.result === "FAIL" ? computeSlaDeadline(nextStatus) : null,
+      },
+    });
+
+    await db.vehicleEvent.create({
+      data: {
+        workspaceId: parsed.workspaceId,
+        vehicleId: parsed.vehicleId,
+        actorUserId: user.id,
+        type: eventType,
+        valueText: parsed.result === "FAIL" ? (parsed.failReason ?? null) : "PASS",
+        notes: parsed.notes ?? null,
+      },
+    });
+
+    await appendAuditLog({
+      workspaceId: parsed.workspaceId,
+      actorUserId: user.id,
+      action: `fleet.qc_${parsed.result.toLowerCase()}`,
+      entityType: "vehicle",
+      entityId: parsed.vehicleId,
+      metaJson: {
+        plateNumber: vehicle.plateNumber,
+        result: parsed.result,
+        failReason: parsed.failReason,
+      },
+    });
+
+    revalidatePath("/fleet");
+    redirect(
+      buildFleetUrl({
+        success: `QC ${parsed.result}: ${vehicle.plateNumber} → ${nextStatus}`,
+      }),
+    );
   } catch (error) {
     rethrowIfRedirectError(error);
     redirect(buildFleetUrl({ error: getErrorMessage(error) }));
