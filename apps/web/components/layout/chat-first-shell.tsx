@@ -31,6 +31,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { CreateSheet } from "@/components/layout/create-sheet";
 import { QuickBar } from "@/components/layout/quick-bar";
+import { UndoToast } from "@/components/kit/undo-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +55,7 @@ type ChatFirstShellProps = {
   children: React.ReactNode;
   workspaceName: string;
   userName: string;
+  userRole?: string | undefined;
 };
 
 const moduleShortcuts = [
@@ -83,6 +85,7 @@ function ChatFirstShell({
   children,
   workspaceName,
   userName,
+  userRole,
 }: ChatFirstShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -144,7 +147,7 @@ function ChatFirstShell({
           </div>
 
           {/* Quick Bar */}
-          <QuickBar />
+          <QuickBar userRole={userRole} />
 
           {/* Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
@@ -294,6 +297,7 @@ function ChatFirstShell({
           <div className="mx-auto max-w-[900px] px-4 py-5 lg:px-8 lg:py-6">
             {children}
           </div>
+          <UndoToast />
         </main>
 
         {/* Right Tool Drawer */}

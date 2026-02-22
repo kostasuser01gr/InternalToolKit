@@ -49,14 +49,23 @@ The Quick Bar appears in the top navigation bar (desktop only) showing up to 6 a
 | `/slash-command` | Open chat with command |
 | Other text | Copy to clipboard |
 
-## Role-Recommended Shortcuts (Future)
+## Role-Recommended Shortcuts
 
-Coordinators will be able to publish recommended shortcut sets per role:
-- Washers: New Task, Daily Register, Queue
-- Supervisors: Shifts, Fleet, Analytics
-- Coordinators: All + Settings, Imports
+Coordinators publish recommended shortcut sets per role. The Quick Bar shows a "+" button when recommendations are available.
 
-Users can adopt recommended shortcuts with one click.
+### Built-in Role Defaults
+| Role | Recommended Shortcuts |
+|------|----------------------|
+| ADMIN | Settings, Analytics, Imports |
+| STAFF | My Tasks, My Shifts |
+
+### How It Works
+1. Quick Bar loads user shortcuts from `/v1/shortcuts`
+2. Role defaults are compared against user's current bar
+3. Missing recommendations appear as "+" button
+4. User clicks "+" → sees recommended list
+5. Click any recommendation → instantly adopted
+6. Coordinators can customize role defaults via API (future: Settings UI)
 
 ## Keyboard Shortcuts
 

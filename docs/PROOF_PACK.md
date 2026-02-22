@@ -619,3 +619,68 @@ curl https://internal-tool-kit-web.vercel.app/api/ai/setup
 | `components/layout/chat-first-shell.tsx` | Route prefetching on idle |
 | `docs/FEEDS.md` | Updated cron schedule + housekeeping |
 | `docs/INTEGRATIONS_SETUP.md` | Updated Viber vars + wizard description |
+
+---
+
+## Session 8 — Wave 3: Consolidated Cron, Virtual Tables, Inline Edit, Role Shortcuts, Undo
+
+### Changes Made
+
+#### Consolidated Daily Cron (`/api/cron/daily`)
+- Merged feeds scanning + weather cache warming + housekeeping into one endpoint
+- In-memory CronRun log tracking (job, status, duration, summary)
+- Vercel Hobby plan blocker documented (1 cron, daily only)
+- Old `/api/cron/feeds` endpoint kept for backward compatibility
+
+#### Virtual Tables (`@tanstack/react-virtual`)
+- Installed `@tanstack/react-virtual` v3
+- Created `VirtualTable<T>` generic component with:
+  - Column definitions with custom renderers
+  - Row click handlers
+  - Configurable row height and max height
+  - Overscan of 10 rows for smooth scrolling
+  - Row count footer
+
+#### Inline Edit + Undo Stack
+- `InlineEdit` component with optimistic UI (shows new value immediately)
+- Click-to-edit, Enter to save, Escape to cancel, blur to save
+- Global undo stack with 15-second TTL
+- `pushUndo()` / `popUndo()` / `getUndoCount()` API
+- `UndoToast` floating component in app shell
+
+#### Role-Recommended Shortcuts
+- QuickBar now accepts `userRole` prop from layout
+- Built-in role defaults: ADMIN (Settings, Analytics, Imports), STAFF (Tasks, Shifts)
+- "+" button shows available role recommendations not yet in user's bar
+- One-click adopt adds recommendation to Quick Bar
+- `userRole` flows from layout → AppShell → ChatFirstShell → QuickBar
+
+### Tests
+- 364 unit tests passing (25 files, +13 new)
+- Lint: 0 warnings
+- Build: succeeds
+- New test file: `tests/unit/wave3.test.ts` covering:
+  - CronRun log, VirtualTable export, InlineEdit undo stack
+  - QuickBar role support, UndoToast export
+  - Viber multi-channel config, cron secret verification, feed retention
+
+### Files Created
+| File | Purpose |
+|---|---|
+| `app/api/cron/daily/route.ts` | Consolidated daily cron (feeds + weather + housekeeping) |
+| `components/kit/virtual-table.tsx` | Virtualized table with @tanstack/react-virtual |
+| `components/kit/inline-edit.tsx` | Inline edit + undo stack |
+| `components/kit/undo-toast.tsx` | Floating undo button |
+| `tests/unit/wave3.test.ts` | 13 wave 3 tests |
+| `docs/NEXT_STEPS_GAPS.md` | Gap analysis document |
+
+### Files Modified
+| File | Change |
+|---|---|
+| `app/api/cron/feeds/route.ts` | Marked as legacy, kept for backward compat |
+| `components/layout/quick-bar.tsx` | Role defaults, recommended adopt, userRole prop |
+| `components/layout/chat-first-shell.tsx` | UndoToast, userRole prop, type fixes |
+| `components/layout/app-shell.tsx` | Pass userRole through |
+| `app/(app)/layout.tsx` | Pass membership.role to AppShell |
+| `vercel.json` | Cron path updated to /api/cron/daily |
+| `docs/SHORTCUTS.md` | Role-recommended shortcuts documented |

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Zap } from "lucide-react";
+import { Check, Plus, Zap } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { features } from "@/lib/constants/features";
@@ -11,6 +11,7 @@ type QuickAction = {
   id: string;
   label: string;
   command: string;
+  isRecommended?: boolean;
 };
 
 /** Default recommended actions available to all users */
@@ -23,11 +24,25 @@ const DEFAULT_ACTIONS: QuickAction[] = [
   { id: "qa-imports", label: "Imports", command: "route /imports" },
 ];
 
-export function QuickBar() {
+/** Role-based default shortcuts (coordinator can override via API) */
+const ROLE_DEFAULTS: Record<string, QuickAction[]> = {
+  ADMIN: [
+    { id: "rq-settings", label: "Settings", command: "route /settings" },
+    { id: "rq-analytics", label: "Analytics", command: "route /analytics" },
+    { id: "rq-imports", label: "Imports", command: "route /imports" },
+  ],
+  STAFF: [
+    { id: "rq-tasks", label: "My Tasks", command: "route /washers" },
+    { id: "rq-shifts", label: "My Shifts", command: "route /shifts" },
+  ],
+};
+
+export function QuickBar({ userRole }: { userRole?: string | undefined }) {
   const router = useRouter();
   const [actions, setActions] = useState<QuickAction[]>(DEFAULT_ACTIONS.slice(0, 4));
+  const [recommended, setRecommended] = useState<QuickAction[]>([]);
+  const [showRecommended, setShowRecommended] = useState(false);
 
-  // Load user-defined shortcuts and merge with defaults
   useEffect(() => {
     if (!features.customShortcuts) return;
     let active = true;
@@ -39,14 +54,21 @@ export function QuickBar() {
         const data = await res.json() as { ok?: boolean; items?: QuickAction[] };
         if (!data.ok || !Array.isArray(data.items) || !active) return;
 
-        // User shortcuts first, then fill with defaults up to 6
         const userActions = data.items.map((s) => ({
           id: s.id,
           label: s.label,
           command: s.command,
         }));
+
+        // Merge: user shortcuts → role defaults → global defaults
+        const roleDefaults = ROLE_DEFAULTS[userRole ?? "STAFF"] ?? [];
         const merged = [...userActions, ...DEFAULT_ACTIONS].slice(0, 6);
         setActions(merged);
+
+        // Show role recommendations that aren't already in user's bar
+        const existingIds = new Set(merged.map((a) => a.id));
+        const recs = roleDefaults.filter((r) => !existingIds.has(r.id));
+        setRecommended(recs);
       } catch {
         // best effort
       }
@@ -54,7 +76,7 @@ export function QuickBar() {
 
     void load();
     return () => { active = false; };
-  }, []);
+  }, [userRole]);
 
   const executeAction = useCallback((action: QuickAction) => {
     const cmd = action.command.trim();
@@ -67,6 +89,14 @@ export function QuickBar() {
       router.push(cmd.startsWith("/") ? cmd : "/home");
     }
   }, [router]);
+
+  const adoptRecommended = useCallback((action: QuickAction) => {
+    setActions((prev) => {
+      if (prev.length >= 6) return prev;
+      return [...prev, { ...action, isRecommended: true }];
+    });
+    setRecommended((prev) => prev.filter((r) => r.id !== action.id));
+  }, []);
 
   return (
     <div className="hidden items-center gap-1 lg:flex" data-testid="quick-bar">
@@ -84,6 +114,35 @@ export function QuickBar() {
           {action.label}
         </button>
       ))}
+      {recommended.length > 0 ? (
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowRecommended((v) => !v)}
+            className="rounded-md border border-dashed border-[var(--accent)]/40 bg-[var(--accent)]/5 px-2 py-1 text-[11px] font-medium text-[var(--accent)] hover:bg-[var(--accent)]/10"
+            title="Recommended shortcuts for your role"
+          >
+            <Plus className="size-3" />
+          </button>
+          {showRecommended ? (
+            <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-lg border border-[var(--border)] bg-[rgb(15_16_22)] p-1 shadow-xl">
+              <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Recommended
+              </p>
+              {recommended.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => { adoptRecommended(r); setShowRecommended(false); }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-[var(--text)] hover:bg-white/10"
+                >
+                  <Check className="size-3 text-emerald-400" />
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

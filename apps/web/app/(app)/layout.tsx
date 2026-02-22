@@ -25,6 +25,7 @@ export default async function MainAppLayout({
     <AppShell
       workspaceName={membership.workspace.name}
       userName={session.user.name ?? "Operator"}
+      userRole={membership.role}
     >
       {children}
     </AppShell>
