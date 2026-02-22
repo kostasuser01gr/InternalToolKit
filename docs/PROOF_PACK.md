@@ -684,3 +684,47 @@ curl https://internal-tool-kit-web.vercel.app/api/ai/setup
 | `app/(app)/layout.tsx` | Pass membership.role to AppShell |
 | `vercel.json` | Cron path updated to /api/cron/daily |
 | `docs/SHORTCUTS.md` | Role-recommended shortcuts documented |
+
+---
+
+## Session 8 — Wave 4: Integration & Polish (`5217403`)
+
+### What Changed
+
+| File | Change |
+|------|--------|
+| `app/(app)/fleet/page.tsx` | Replaced vehicle list with VirtualTable + InlineEdit fields |
+| `app/(app)/fleet/fleet-vehicle-list.tsx` | NEW — VirtualTable wrapper for vehicle sidebar |
+| `app/(app)/fleet/fleet-inline-field.tsx` | NEW — InlineEdit wrapper with undo for vehicle fields |
+| `app/(app)/fleet/inline-actions.ts` | NEW — Server action for inline vehicle field updates |
+| `app/(app)/ops-inbox/page.tsx` | NEW — Unified Ops Inbox (shifts, incidents, feeds, notifications) |
+| `app/(app)/ops-inbox/loading.tsx` | NEW — Skeleton for ops-inbox |
+| `app/(app)/settings/page.tsx` | Added StationCoordsEditor for station lat/lon |
+| `app/(app)/settings/station-actions.ts` | NEW — Server action for station coordinate updates |
+| `app/(app)/shifts/page.tsx` | Replaced static list with BulkShiftBar |
+| `app/(app)/shifts/bulk-actions.ts` | NEW — Bulk shift status updates with undo snapshots |
+| `app/(app)/shifts/bulk-shift-bar.tsx` | NEW — Checkbox selection + bulk publish/lock/cancel |
+| `components/settings/station-coords-editor.tsx` | NEW — Per-station lat/lon editor |
+| `components/kit/inline-edit.tsx` | Fixed exactOptionalPropertyTypes |
+| `components/layout/chat-first-shell.tsx` | Added Ops Inbox to nav + prefetch |
+| `lib/constants/features.ts` | Added `opsInbox` feature flag |
+| `tests/unit/wave4.test.ts` | NEW — 16 tests for wave 4 |
+| `tests/smoke.spec.ts` | Fixed fleet E2E test for VirtualTable DOM |
+
+### CI Proof
+- **Commit**: `5217403` (main)
+- **CI Run**: `22281384495` ✅ green
+- **Unit tests**: 380 passing (26 files)
+- **E2E**: 14 passed, 18 skipped, 0 failed
+- **Lint**: 0 warnings
+- **Typecheck**: clean
+- **Build**: success
+- **Vercel**: deployed live
+
+### Features Delivered
+1. **Fleet VirtualTable** — vehicle sidebar uses virtualized rendering (400px viewport, 40px rows)
+2. **Fleet InlineEdit** — mileage, fuel%, notes editable in-place with undo
+3. **Station Coordinates** — lat/lon editing in Settings for weather feed integration
+4. **Bulk Shifts** — checkbox selection + bulk publish/lock/cancel with undo
+5. **Ops Inbox** — unified page aggregating pending shifts, incidents, high-relevance feeds, unread notifications
+6. **Feature flag** — `opsInbox` (default: true)
