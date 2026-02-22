@@ -80,7 +80,9 @@ enum QuantumTheme {
 
 enum ShiftStatus {
   DRAFT
+  REVIEW
   PUBLISHED
+  LOCKED
   COMPLETED
   CANCELLED
 }
@@ -99,7 +101,10 @@ enum ShiftRequestStatus {
 
 enum VehicleStatus {
   READY
+  RETURNED
   NEEDS_CLEANING
+  CLEANING
+  QC_PENDING
   IN_SERVICE
   OUT_OF_SERVICE
 }
@@ -110,6 +115,10 @@ enum VehicleEventType {
   MAINTENANCE_NOTE
   CLEANING_NOTE
   STATUS_CHANGE
+  PIPELINE_TRANSITION
+  QC_PASS
+  QC_FAIL
+  SLA_BREACH
 }
 
 enum WasherTaskStatus {
@@ -147,8 +156,11 @@ model User {
   authoredMessages     ChatMessage[]        @relation("ChatMessageAuthor")
   assignedShifts       Shift[]              @relation("ShiftAssignee")
   createdShifts        Shift[]              @relation("ShiftCreator")
+  lockedShifts         Shift[]              @relation("ShiftLocker")
   shiftRequests        ShiftRequest[]       @relation("ShiftRequester")
+  shiftReviews         ShiftRequest[]       @relation("ShiftRequestReviewer")
   vehicleEvents        VehicleEvent[]       @relation("VehicleEventActor")
+  vehicleQcSignoffs    Vehicle[]            @relation("VehicleQcSignoff")
   washerTasks          WasherTask[]         @relation("WasherTaskAssignee")
   authSessions         AuthSession[]
   inviteTokensCreated  InviteToken[]        @relation("InviteCreator")
@@ -442,12 +454,18 @@ model Shift {
   startsAt       DateTime
   endsAt         DateTime
   status         ShiftStatus    @default(DRAFT)
+  version        Int            @default(1)
+  publishedAt    DateTime?
+  lockedAt       DateTime?
+  lockedBy       String?
   notes          String?
+  snapshotJson   String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignee       User?          @relation("ShiftAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
   creator        User           @relation("ShiftCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  locker         User?          @relation("ShiftLocker", fields: [lockedBy], references: [id], onDelete: SetNull)
   requests       ShiftRequest[]
 
   @@index([workspaceId, startsAt, endsAt])
@@ -464,32 +482,41 @@ model ShiftRequest {
   startsAt    DateTime
   endsAt      DateTime
   reason      String
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  reviewNote  String?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   requester   User               @relation("ShiftRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   shift       Shift?             @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  reviewer    User?              @relation("ShiftRequestReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, status, createdAt])
   @@index([requesterId, createdAt])
 }
 
 model Vehicle {
-  id            String         @id @default(cuid())
-  workspaceId   String
-  plateNumber   String
-  model         String
-  status        VehicleStatus  @default(READY)
-  mileageKm     Int            @default(0)
-  fuelPercent   Int            @default(100)
-  lastServiceAt DateTime?
-  photoDataUrl  String?
-  notes         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  events        VehicleEvent[]
-  washerTasks   WasherTask[]
+  id              String         @id @default(cuid())
+  workspaceId     String
+  plateNumber     String
+  model           String
+  status          VehicleStatus  @default(READY)
+  mileageKm       Int            @default(0)
+  fuelPercent     Int            @default(100)
+  lastServiceAt   DateTime?
+  photoDataUrl    String?
+  notes           String?
+  slaDeadlineAt   DateTime?
+  qcSignoffBy     String?
+  qcResult        String?
+  qcFailReason    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events          VehicleEvent[]
+  washerTasks     WasherTask[]
+  qcSignoffUser   User?          @relation("VehicleQcSignoff", fields: [qcSignoffBy], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, plateNumber])
   @@index([workspaceId, status])

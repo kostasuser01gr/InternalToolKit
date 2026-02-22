@@ -40,9 +40,22 @@ export const reviewShiftRequestSchema = z.object({
   workspaceId: z.string().min(1),
   requestId: z.string().min(1),
   decision: z.enum(["approve", "reject"]),
+  reviewNote: z.string().trim().max(500).optional(),
 });
 
 export const importShiftsCsvSchema = z.object({
   workspaceId: z.string().min(1),
   csvContent: z.string().trim().min(1),
+});
+
+export const transitionShiftSchema = z.object({
+  workspaceId: z.string().min(1),
+  shiftId: z.string().min(1),
+  targetStatus: z.nativeEnum(ShiftStatus),
+  notes: z.string().trim().max(800).optional(),
+});
+
+export const rollbackShiftSchema = z.object({
+  workspaceId: z.string().min(1),
+  shiftId: z.string().min(1),
 });

@@ -28,3 +28,18 @@ export const createVehicleEventSchema = z.object({
   valueNumber: z.coerce.number().optional(),
   notes: z.string().trim().max(1000).optional(),
 });
+
+export const transitionVehicleSchema = z.object({
+  workspaceId: z.string().min(1),
+  vehicleId: z.string().min(1),
+  targetStatus: z.nativeEnum(VehicleStatus),
+  notes: z.string().trim().max(1000).optional(),
+});
+
+export const qcSignoffSchema = z.object({
+  workspaceId: z.string().min(1),
+  vehicleId: z.string().min(1),
+  result: z.enum(["PASS", "FAIL"]),
+  failReason: z.string().trim().max(500).optional(),
+  notes: z.string().trim().max(1000).optional(),
+});

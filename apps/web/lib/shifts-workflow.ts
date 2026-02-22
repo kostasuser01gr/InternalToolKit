@@ -1,52 +1,59 @@
 /**
  * Shifts operational workflow helpers.
  *
- * Schedule lifecycle: DRAFT → REVIEW → PUBLISHED
- * After PUBLISHED, edits require coordinator override.
+ * Schedule lifecycle: DRAFT → REVIEW → PUBLISHED → LOCKED
+ * After LOCKED, edits require coordinator override + rollback.
  */
+import type { ShiftStatus } from "@prisma/client";
 
-export const SCHEDULE_STATES = ["DRAFT", "REVIEW", "PUBLISHED"] as const;
-export type ScheduleState = (typeof SCHEDULE_STATES)[number];
+export const SCHEDULE_STATES: ShiftStatus[] = [
+  "DRAFT",
+  "REVIEW",
+  "PUBLISHED",
+  "LOCKED",
+] as ShiftStatus[];
 
-const SCHEDULE_TRANSITIONS: Record<ScheduleState, ScheduleState[]> = {
-  DRAFT: ["REVIEW"],
-  REVIEW: ["DRAFT", "PUBLISHED"],
-  PUBLISHED: [], // locked — needs override
+const SCHEDULE_TRANSITIONS: Record<string, ShiftStatus[]> = {
+  DRAFT: ["REVIEW", "CANCELLED"],
+  REVIEW: ["DRAFT", "PUBLISHED", "CANCELLED"],
+  PUBLISHED: ["LOCKED", "REVIEW", "COMPLETED", "CANCELLED"],
+  LOCKED: [], // requires coordinator override
+  COMPLETED: [],
+  CANCELLED: ["DRAFT"],
 };
 
 export function isValidScheduleTransition(
-  current: ScheduleState,
-  next: ScheduleState,
+  current: ShiftStatus,
+  next: ShiftStatus,
 ): boolean {
   if (current === next) return false;
-  return SCHEDULE_TRANSITIONS[current].includes(next);
+  return (SCHEDULE_TRANSITIONS[current] ?? []).includes(next);
 }
 
-export function allowedScheduleTransitions(current: ScheduleState): ScheduleState[] {
-  return SCHEDULE_TRANSITIONS[current];
+export function allowedScheduleTransitions(current: ShiftStatus): ShiftStatus[] {
+  return SCHEDULE_TRANSITIONS[current] ?? [];
 }
 
-/**
- * Check if a schedule is editable (only DRAFT is freely editable).
- */
-export function isScheduleEditable(state: ScheduleState): boolean {
+/** Only DRAFT is freely editable. */
+export function isScheduleEditable(state: ShiftStatus): boolean {
   return state === "DRAFT";
 }
 
-/**
- * Check if a schedule is locked (PUBLISHED).
- */
-export function isScheduleLocked(state: ScheduleState): boolean {
-  return state === "PUBLISHED";
+/** LOCKED and COMPLETED are locked states. */
+export function isScheduleLocked(state: ShiftStatus): boolean {
+  return state === "LOCKED" || state === "COMPLETED";
+}
+
+/** PUBLISHED or LOCKED — visible to employees. */
+export function isScheduleVisible(state: ShiftStatus): boolean {
+  return state === "PUBLISHED" || state === "LOCKED";
 }
 
 // Swap request lifecycle
 export const SWAP_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
 export type SwapStatus = (typeof SWAP_STATUSES)[number];
 
-/**
- * Roles that may approve swap requests.
- */
+/** Roles that may approve swap requests. */
 export const SWAP_APPROVER_ROLES = ["ADMIN", "EDITOR"] as const;
 
 export function canApproveSwap(role: string): boolean {
@@ -62,10 +69,7 @@ export interface ShiftSlot {
   endsAt: Date | string;
 }
 
-/**
- * Detect overlapping shifts for a specific user.
- * Returns pairs of shift IDs that overlap.
- */
+/** Detect overlapping shifts for a specific user. */
 export function detectOverlaps(shifts: ShiftSlot[]): [string, string][] {
   const overlaps: [string, string][] = [];
   const sorted = [...shifts]
@@ -88,9 +92,7 @@ export function detectOverlaps(shifts: ShiftSlot[]): [string, string][] {
   return overlaps;
 }
 
-/**
- * Detect if a user would exceed a maximum number of hours in a day.
- */
+/** Detect if a user would exceed a maximum number of hours in a day. */
 export function detectOvertimeViolations(
   shifts: ShiftSlot[],
   maxHoursPerDay: number = 10,
@@ -116,4 +118,24 @@ export function detectOvertimeViolations(
   }
 
   return violations;
+}
+
+/** Create a snapshot of shift data for rollback. */
+export function createShiftSnapshot(shift: {
+  title: string;
+  assignedUserId: string | null;
+  startsAt: Date;
+  endsAt: Date;
+  notes: string | null;
+  status: string;
+}): string {
+  return JSON.stringify({
+    title: shift.title,
+    assignedUserId: shift.assignedUserId,
+    startsAt: shift.startsAt.toISOString(),
+    endsAt: shift.endsAt.toISOString(),
+    notes: shift.notes,
+    status: shift.status,
+    snapshotAt: new Date().toISOString(),
+  });
 }

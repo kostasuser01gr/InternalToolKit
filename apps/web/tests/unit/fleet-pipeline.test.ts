@@ -3,67 +3,83 @@ import { describe, expect, it } from "vitest";
 import {
   isValidTransition,
   allowedTransitions,
+  pipelineStageIndex,
   canSignoffQc,
+  computeSlaDeadline,
   isSlaBreached,
   slaMinutesRemaining,
   DEFAULT_SLA_CONFIGS,
-  type FleetState,
+  PIPELINE_STAGES,
 } from "@/lib/fleet-pipeline";
+import type { VehicleStatus } from "@prisma/client";
 
 describe("fleet pipeline state transitions", () => {
   it("allows RETURNED → NEEDS_CLEANING", () => {
-    expect(isValidTransition("RETURNED", "NEEDS_CLEANING")).toBe(true);
+    expect(isValidTransition("RETURNED" as VehicleStatus, "NEEDS_CLEANING" as VehicleStatus)).toBe(true);
   });
 
   it("allows NEEDS_CLEANING → CLEANING", () => {
-    expect(isValidTransition("NEEDS_CLEANING", "CLEANING")).toBe(true);
+    expect(isValidTransition("NEEDS_CLEANING" as VehicleStatus, "CLEANING" as VehicleStatus)).toBe(true);
   });
 
-  it("allows CLEANING → QC", () => {
-    expect(isValidTransition("CLEANING", "QC")).toBe(true);
+  it("allows CLEANING → QC_PENDING", () => {
+    expect(isValidTransition("CLEANING" as VehicleStatus, "QC_PENDING" as VehicleStatus)).toBe(true);
   });
 
-  it("allows QC → READY", () => {
-    expect(isValidTransition("QC", "READY")).toBe(true);
+  it("allows QC_PENDING → READY", () => {
+    expect(isValidTransition("QC_PENDING" as VehicleStatus, "READY" as VehicleStatus)).toBe(true);
   });
 
-  it("allows QC → NEEDS_CLEANING (QC fail → reclean)", () => {
-    expect(isValidTransition("QC", "NEEDS_CLEANING")).toBe(true);
+  it("allows QC_PENDING → NEEDS_CLEANING (QC fail → reclean)", () => {
+    expect(isValidTransition("QC_PENDING" as VehicleStatus, "NEEDS_CLEANING" as VehicleStatus)).toBe(true);
   });
 
   it("rejects RETURNED → READY (skip steps)", () => {
-    expect(isValidTransition("RETURNED", "READY")).toBe(false);
+    expect(isValidTransition("RETURNED" as VehicleStatus, "READY" as VehicleStatus)).toBe(false);
   });
 
-  it("rejects READY → QC (backward without re-entry)", () => {
-    expect(isValidTransition("READY", "QC")).toBe(false);
+  it("rejects READY → QC_PENDING (backward without re-entry)", () => {
+    expect(isValidTransition("READY" as VehicleStatus, "QC_PENDING" as VehicleStatus)).toBe(false);
   });
 
   it("rejects same-state transition", () => {
-    expect(isValidTransition("CLEANING", "CLEANING")).toBe(false);
+    expect(isValidTransition("CLEANING" as VehicleStatus, "CLEANING" as VehicleStatus)).toBe(false);
   });
 
-  it("allows any state → BLOCKED", () => {
-    const states: FleetState[] = ["RETURNED", "NEEDS_CLEANING", "CLEANING", "QC", "READY"];
+  it("allows any pipeline state → OUT_OF_SERVICE", () => {
+    const states: VehicleStatus[] = ["RETURNED", "NEEDS_CLEANING", "CLEANING", "QC_PENDING", "READY"] as VehicleStatus[];
     for (const s of states) {
-      expect(isValidTransition(s, "BLOCKED")).toBe(true);
+      expect(isValidTransition(s, "OUT_OF_SERVICE" as VehicleStatus)).toBe(true);
     }
   });
 
-  it("allows any state → MAINTENANCE", () => {
-    const states: FleetState[] = ["RETURNED", "NEEDS_CLEANING", "CLEANING", "QC", "READY"];
-    for (const s of states) {
-      expect(isValidTransition(s, "MAINTENANCE")).toBe(true);
-    }
+  it("allows IN_SERVICE → RETURNED", () => {
+    expect(isValidTransition("IN_SERVICE" as VehicleStatus, "RETURNED" as VehicleStatus)).toBe(true);
   });
 
   it("allowedTransitions returns correct set for CLEANING", () => {
-    const allowed = allowedTransitions("CLEANING");
-    expect(allowed).toContain("QC");
-    expect(allowed).toContain("BLOCKED");
-    expect(allowed).toContain("MAINTENANCE");
+    const allowed = allowedTransitions("CLEANING" as VehicleStatus);
+    expect(allowed).toContain("QC_PENDING");
+    expect(allowed).toContain("OUT_OF_SERVICE");
     expect(allowed).not.toContain("READY");
     expect(allowed).not.toContain("RETURNED");
+  });
+});
+
+describe("pipeline stage index", () => {
+  it("returns correct index for pipeline stages", () => {
+    expect(pipelineStageIndex("RETURNED" as VehicleStatus)).toBe(0);
+    expect(pipelineStageIndex("NEEDS_CLEANING" as VehicleStatus)).toBe(1);
+    expect(pipelineStageIndex("READY" as VehicleStatus)).toBe(4);
+  });
+
+  it("returns -1 for side branches", () => {
+    expect(pipelineStageIndex("OUT_OF_SERVICE" as VehicleStatus)).toBe(-1);
+    expect(pipelineStageIndex("IN_SERVICE" as VehicleStatus)).toBe(-1);
+  });
+
+  it("PIPELINE_STAGES has 5 stages", () => {
+    expect(PIPELINE_STAGES).toHaveLength(5);
   });
 });
 
@@ -89,60 +105,67 @@ describe("QC permission enforcement", () => {
   });
 });
 
-describe("SLA alert trigger logic", () => {
+describe("SLA helpers", () => {
+  it("computeSlaDeadline returns deadline for CLEANING (45 min)", () => {
+    const from = new Date("2025-01-15T10:00:00Z");
+    const deadline = computeSlaDeadline("CLEANING" as VehicleStatus, from);
+    expect(deadline).toEqual(new Date("2025-01-15T10:45:00Z"));
+  });
+
+  it("computeSlaDeadline returns null for READY (no SLA)", () => {
+    expect(computeSlaDeadline("READY" as VehicleStatus)).toBeNull();
+  });
+
   it("does not breach SLA when within time limit", () => {
     const enteredAt = new Date("2026-01-01T10:00:00Z");
-    const now = new Date("2026-01-01T10:20:00Z").getTime(); // 20 min
-    expect(isSlaBreached("CLEANING", enteredAt, now)).toBe(false);
+    const now = new Date("2026-01-01T10:20:00Z").getTime();
+    expect(isSlaBreached("CLEANING" as VehicleStatus, enteredAt, now)).toBe(false);
   });
 
   it("breaches SLA when over time limit", () => {
     const enteredAt = new Date("2026-01-01T10:00:00Z");
-    const now = new Date("2026-01-01T10:50:00Z").getTime(); // 50 min > 45 limit
-    expect(isSlaBreached("CLEANING", enteredAt, now)).toBe(true);
+    const now = new Date("2026-01-01T10:50:00Z").getTime();
+    expect(isSlaBreached("CLEANING" as VehicleStatus, enteredAt, now)).toBe(true);
   });
 
   it("returns false for states with no SLA config", () => {
     const enteredAt = new Date("2026-01-01T10:00:00Z");
-    const now = new Date("2026-01-02T10:00:00Z").getTime(); // 24h later
-    expect(isSlaBreached("READY", enteredAt, now)).toBe(false);
+    const now = new Date("2026-01-02T10:00:00Z").getTime();
+    expect(isSlaBreached("READY" as VehicleStatus, enteredAt, now)).toBe(false);
   });
 
   it("accepts ISO string for enteredAt", () => {
-    const now = new Date("2026-01-01T11:00:00Z").getTime(); // 60 min
-    expect(isSlaBreached("CLEANING", "2026-01-01T10:00:00Z", now)).toBe(true);
+    const now = new Date("2026-01-01T11:00:00Z").getTime();
+    expect(isSlaBreached("CLEANING" as VehicleStatus, "2026-01-01T10:00:00Z", now)).toBe(true);
   });
 
   it("respects custom SLA overrides", () => {
     const enteredAt = new Date("2026-01-01T10:00:00Z");
-    const now = new Date("2026-01-01T10:10:00Z").getTime(); // 10 min
-    const overrides = { CLEANING: { maxMinutes: 5 } } as const;
-    expect(isSlaBreached("CLEANING", enteredAt, now, overrides)).toBe(true);
+    const now = new Date("2026-01-01T10:10:00Z").getTime();
+    const overrides = { CLEANING: { maxMinutes: 5 } };
+    expect(isSlaBreached("CLEANING" as VehicleStatus, enteredAt, now, overrides)).toBe(true);
   });
 
   it("slaMinutesRemaining returns correct value", () => {
     const enteredAt = new Date("2026-01-01T10:00:00Z");
-    const now = new Date("2026-01-01T10:30:00Z").getTime(); // 30 min
-    const remaining = slaMinutesRemaining("CLEANING", enteredAt, now);
-    expect(remaining).toBe(15); // 45 - 30 = 15
+    const now = new Date("2026-01-01T10:30:00Z").getTime();
+    expect(slaMinutesRemaining("CLEANING" as VehicleStatus, enteredAt, now)).toBe(15);
   });
 
   it("slaMinutesRemaining returns 0 when breached", () => {
     const enteredAt = new Date("2026-01-01T10:00:00Z");
-    const now = new Date("2026-01-01T11:00:00Z").getTime(); // 60 min
-    const remaining = slaMinutesRemaining("CLEANING", enteredAt, now);
-    expect(remaining).toBe(0);
+    const now = new Date("2026-01-01T11:00:00Z").getTime();
+    expect(slaMinutesRemaining("CLEANING" as VehicleStatus, enteredAt, now)).toBe(0);
   });
 
   it("slaMinutesRemaining returns null for states without SLA", () => {
-    const remaining = slaMinutesRemaining("READY", new Date(), Date.now());
-    expect(remaining).toBeNull();
+    expect(slaMinutesRemaining("READY" as VehicleStatus, new Date(), Date.now())).toBeNull();
   });
 
   it("DEFAULT_SLA_CONFIGS has expected states", () => {
     expect(DEFAULT_SLA_CONFIGS.NEEDS_CLEANING).toBeDefined();
     expect(DEFAULT_SLA_CONFIGS.CLEANING).toBeDefined();
-    expect(DEFAULT_SLA_CONFIGS.QC).toBeDefined();
+    expect(DEFAULT_SLA_CONFIGS.QC_PENDING).toBeDefined();
     expect(DEFAULT_SLA_CONFIGS.READY).toBeUndefined();
   });
 });
