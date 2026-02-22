@@ -34,4 +34,5 @@ export const features = {
   shiftPublishLock: isEnabled(process.env.NEXT_PUBLIC_FEATURE_SHIFT_PUBLISH_LOCK, true),
   chatEntityThreads: isEnabled(process.env.NEXT_PUBLIC_FEATURE_CHAT_ENTITY_THREADS, true),
   coordinatorDashboard: isEnabled(process.env.NEXT_PUBLIC_FEATURE_COORDINATOR_DASHBOARD, true),
+  chatFirstUi: isEnabled(process.env.NEXT_PUBLIC_FEATURE_CHAT_FIRST_UI, true),
 };
