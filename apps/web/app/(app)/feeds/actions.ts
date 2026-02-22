@@ -230,3 +230,32 @@ export async function deleteFeedSourceAction(formData: FormData) {
   revalidatePath("/feeds");
   redirect("/feeds?success=Source+deleted");
 }
+
+export async function updateFeedSourceKeywordsAction(input: {
+  workspaceId: string;
+  sourceId: string;
+  boostKeywords: string[];
+  suppressKeywords: string[];
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await getAppContext(input.workspaceId);
+    const source = await db.feedSource.findUnique({ where: { id: input.sourceId } });
+    if (!source || source.workspaceId !== input.workspaceId) {
+      return { ok: false, error: "Source not found" };
+    }
+    await db.feedSource.update({
+      where: { id: input.sourceId },
+      data: {
+        keywordsJson: {
+          boost: input.boostKeywords.filter(Boolean),
+          suppress: input.suppressKeywords.filter(Boolean),
+        },
+      },
+    });
+    revalidatePath("/feeds");
+    return { ok: true };
+  } catch (err) {
+    if (isSchemaNotReadyError(err)) return { ok: false, error: "Feeds module not ready" };
+    return { ok: false, error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}

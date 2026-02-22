@@ -13,6 +13,7 @@ import { db } from "@/lib/db";
 import { hasWorkspacePermission } from "@/lib/rbac";
 
 import { addVehicleEventAction, createVehicleAction, updateVehicleAction } from "./actions";
+import { BulkFleetBar } from "./bulk-fleet-bar";
 import { FleetInlineField } from "./fleet-inline-field";
 import { FleetVehicleList } from "./fleet-vehicle-list";
 
@@ -167,6 +168,21 @@ export default async function FleetPage({ searchParams }: FleetPageProps) {
             workspaceId={workspace.id}
             selectedId={selectedVehicle?.id}
           />
+
+          {canWrite && vehicles.length > 0 ? (
+            <div className="mt-4">
+              <h3 className="kpi-font mb-2 text-lg font-semibold">Bulk Status Change</h3>
+              <BulkFleetBar
+                vehicles={vehicles.map((v) => ({
+                  id: v.id,
+                  plateNumber: v.plateNumber,
+                  model: v.model,
+                  status: v.status,
+                }))}
+                workspaceId={workspace.id}
+              />
+            </div>
+          ) : null}
         </GlassCard>
 
         <div className="space-y-4">

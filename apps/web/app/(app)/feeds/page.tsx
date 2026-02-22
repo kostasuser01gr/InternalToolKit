@@ -17,6 +17,7 @@ import {
   seedDefaultSourcesAction,
 } from "./actions";
 import { FeedItemsTable } from "./feed-items-table";
+import { FeedSourceKeywords } from "./feed-source-keywords";
 
 type FeedsPageProps = {
   searchParams: Promise<{
@@ -25,6 +26,17 @@ type FeedsPageProps = {
     category?: string;
   }>;
 };
+
+function parseKeywords(json: unknown): { boost: string[]; suppress: string[] } {
+  if (json && typeof json === "object" && !Array.isArray(json)) {
+    const obj = json as Record<string, unknown>;
+    return {
+      boost: Array.isArray(obj["boost"]) ? (obj["boost"] as string[]) : [],
+      suppress: Array.isArray(obj["suppress"]) ? (obj["suppress"] as string[]) : [],
+    };
+  }
+  return { boost: [], suppress: [] };
+}
 
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   BOOKING_POLICY: { label: "Booking Policy", color: "text-blue-300 bg-blue-400/20 border-blue-400/40" },
@@ -38,7 +50,7 @@ export default async function FeedsPage({ searchParams }: FeedsPageProps) {
   const params = await searchParams;
   const { workspace } = await getAppContext();
 
-  let sources: { id: string; name: string; url: string; lastScannedAt: Date | null; _count: { items: number } }[] = [];
+  let sources: { id: string; name: string; url: string; lastScannedAt: Date | null; keywordsJson: unknown; _count: { items: number } }[] = [];
   let items: {
     id: string;
     title: string;
@@ -149,6 +161,12 @@ export default async function FeedsPage({ searchParams }: FeedsPageProps) {
                   </form>
                 </div>
               </div>
+              <FeedSourceKeywords
+                workspaceId={workspace.id}
+                sourceId={src.id}
+                sourceName={src.name}
+                initial={parseKeywords(src.keywordsJson)}
+              />
             </div>
           ))}
 
