@@ -1,12 +1,13 @@
 import { formatDistanceToNow } from "date-fns";
 
-import { DataTable } from "@/components/kit/data-table";
 import { FilterBar } from "@/components/kit/filter-bar";
 import { GlassCard } from "@/components/kit/glass-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+import { ActivityEventTable, AuditTrailTable } from "./activity-tables";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 import { listDemoEvents } from "@/lib/demo-events";
@@ -132,28 +133,15 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           <h2 className="kpi-font text-xl font-semibold">Live Activity Feed</h2>
           <Badge variant="active">{memoryEvents.length}</Badge>
         </div>
-        <DataTable
-          columns={[
-            { key: "time", label: "Time" },
-            { key: "action", label: "Action" },
-            { key: "entity", label: "Entity" },
-            { key: "actor", label: "Actor" },
-            { key: "source", label: "Source" },
-          ]}
-          rows={memoryEvents.map((event) => ({
+        <ActivityEventTable
+          events={memoryEvents.map((event) => ({
             id: event.id,
-            cells: [
-              formatDistanceToNow(new Date(event.createdAt), { addSuffix: true }),
-              event.action,
-              `${event.entityType}:${event.entityId}`,
-              event.actorUserId ?? "system",
-              <Badge key={`${event.id}-source`} variant="default">
-                {event.source}
-              </Badge>,
-            ],
+            time: formatDistanceToNow(new Date(event.createdAt), { addSuffix: true }),
+            action: event.action,
+            entity: `${event.entityType}:${event.entityId}`,
+            actor: event.actorUserId ?? "system",
+            source: event.source,
           }))}
-          emptyTitle="No demo events yet."
-          emptyDescription="Trigger actions from command palette or feature pages to populate this feed."
         />
       </GlassCard>
 
@@ -162,23 +150,14 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           <h2 className="kpi-font text-xl font-semibold">Audit Trail</h2>
           <Badge variant="default">{auditEntries.length}</Badge>
         </div>
-        <DataTable
-          columns={[
-            { key: "time", label: "Time" },
-            { key: "action", label: "Action" },
-            { key: "entity", label: "Entity" },
-            { key: "actor", label: "Actor" },
-          ]}
-          rows={auditEntries.map((entry) => ({
+        <AuditTrailTable
+          entries={auditEntries.map((entry) => ({
             id: entry.id,
-            cells: [
-              formatDistanceToNow(entry.createdAt, { addSuffix: true }),
-              entry.action,
-              `${entry.entityType}:${entry.entityId}`,
-              entry.actor?.email ?? "system",
-            ],
+            time: formatDistanceToNow(entry.createdAt, { addSuffix: true }),
+            action: entry.action,
+            entity: `${entry.entityType}:${entry.entityId}`,
+            actor: entry.actor?.email ?? "system",
           }))}
-          emptyTitle="No audit logs for current filters."
         />
       </GlassCard>
     </div>
