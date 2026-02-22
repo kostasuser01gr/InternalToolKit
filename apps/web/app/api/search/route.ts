@@ -176,12 +176,35 @@ export async function GET(request: Request) {
       if (!isSchemaNotReadyError(err)) throw err;
     }
 
-    // Search chat messages (content)
+    // Search chat messages (content) — RBAC: only from channels the user is a member of (or public/no channel)
     try {
+      const { user } = await getAppContext(wId ?? undefined);
+
+      // Get channels the user belongs to
+      let memberChannelIds: string[] = [];
+      try {
+        const memberships = await db.chatChannelMember.findMany({
+          where: { userId: user.id },
+          select: { channelId: true },
+        });
+        memberChannelIds = memberships.map((m) => m.channelId);
+      } catch {
+        // schema may not be ready
+      }
+
       const messages = await db.chatMessage.findMany({
         where: {
           content: { contains: q, mode: "insensitive" as const },
-          ...(wId ? { thread: { workspaceId: wId } } : {}),
+          thread: {
+            ...(wId ? { workspaceId: wId } : {}),
+            OR: [
+              { channelId: null }, // threads without a channel (DMs / general)
+              { channel: { type: "PUBLIC" as const } }, // public channels visible to all
+              ...(memberChannelIds.length > 0
+                ? [{ channelId: { in: memberChannelIds } }]
+                : []),
+            ],
+          },
         },
         take: 5,
         orderBy: { createdAt: "desc" },

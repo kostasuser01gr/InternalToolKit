@@ -21,6 +21,41 @@ const MAX_SOURCES_PER_RUN = 20;
 const FETCH_TIMEOUT_MS = 15_000;
 const FEED_ITEM_RETENTION_DAYS = 90;
 const CRON_LOG_RETENTION_DAYS = 30;
+const MAX_RETRY_ATTEMPTS = 3;
+
+/** Bounded retry with exponential backoff */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxAttempts = MAX_RETRY_ATTEMPTS,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxAttempts) {
+        const delayMs = Math.min(1000 * 2 ** (attempt - 1), 8000);
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  // Log to dead-letter on final failure
+  try {
+    await db.deadLetterEntry.create({
+      data: {
+        type: `cron-${label}`,
+        payload: label,
+        error: lastError instanceof Error ? lastError.message : "Unknown error",
+        attempts: maxAttempts,
+      },
+    });
+  } catch {
+    // non-critical
+  }
+  throw lastError;
+}
 
 // Persist cron run to database (replaces in-memory log)
 async function logRunToDB(entry: {
@@ -94,7 +129,10 @@ export async function GET(request: Request) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-        const { xml, etag, notModified } = await fetchFeedRaw(source.url, source.lastEtag);
+        const { xml, etag, notModified } = await withRetry(
+          () => fetchFeedRaw(source.url, source.lastEtag),
+          `feeds:${source.name}`,
+        );
         clearTimeout(timer);
 
         if (notModified) {
@@ -191,8 +229,15 @@ export async function GET(request: Request) {
     const stationIds = Object.keys(DEFAULT_STATIONS);
     let warmed = 0;
     for (const sid of stationIds) {
-      const data = await fetchWeatherSafe(sid);
-      if (data) warmed++;
+      try {
+        const data = await withRetry(
+          () => fetchWeatherSafe(sid),
+          `weather:${sid}`,
+        );
+        if (data) warmed++;
+      } catch {
+        // individual station failure logged to dead-letter by withRetry
+      }
     }
     jobs.weather = { stationsWarmed: warmed, total: stationIds.length };
     await logRunToDB({ job: "weather", startedAt: runStart, finishedAt: new Date(), status: "ok", itemsProcessed: warmed });

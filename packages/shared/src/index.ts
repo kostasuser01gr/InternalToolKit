@@ -121,6 +121,7 @@ export const shortcutDefinitionSchema = z.object({
   label: z.string().trim().min(1).max(60),
   command: z.string().trim().min(1).max(300),
   keybinding: z.string().trim().max(40).optional(),
+  position: z.number().int().min(0).optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

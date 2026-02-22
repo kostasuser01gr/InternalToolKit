@@ -8,6 +8,7 @@ const updateShortcutSchema = z.object({
   label: z.string().trim().min(1).max(60).optional(),
   command: z.string().trim().min(1).max(300).optional(),
   keybinding: z.string().trim().max(40).optional(),
+  position: z.number().int().min(0).optional(),
 });
 
 type RouteContext = {
@@ -43,6 +44,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         ...(payload.label ? { label: payload.label } : {}),
         ...(payload.command ? { command: payload.command } : {}),
         ...(payload.keybinding ? { keybinding: payload.keybinding } : {}),
+        ...(payload.position !== undefined ? { position: payload.position } : {}),
       },
     });
 
@@ -54,6 +56,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         label: updated.label,
         command: updated.command,
         keybinding: updated.keybinding ?? undefined,
+        position: updated.position,
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
       },
