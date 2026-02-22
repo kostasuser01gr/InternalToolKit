@@ -1,5 +1,5 @@
 import { WasherTaskStatus } from "@prisma/client";
-import { format, startOfDay, endOfDay } from "date-fns";
+import { format, startOfDay, endOfDay, differenceInMinutes } from "date-fns";
 import Link from "next/link";
 
 import { ExportButton } from "@/components/kit/export-button";
@@ -112,6 +112,44 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
       return [];
     });
 
+  // ─── KPI Computation ─────────────────────────────────────────────────────
+  const todayStart = startOfDay(new Date());
+  const todayEnd = endOfDay(new Date());
+  const todayTasks = dailyTasks.filter(
+    (t) => t.createdAt >= todayStart && t.createdAt <= todayEnd,
+  );
+  const kpi = {
+    total: todayTasks.length,
+    done: todayTasks.filter((t) => t.status === WasherTaskStatus.DONE).length,
+    pending: todayTasks.filter(
+      (t) => t.status === WasherTaskStatus.TODO || t.status === WasherTaskStatus.IN_PROGRESS,
+    ).length,
+    blocked: todayTasks.filter((t) => t.status === WasherTaskStatus.BLOCKED).length,
+    avgTurnaround: (() => {
+      const completed = todayTasks.filter((t) => t.status === WasherTaskStatus.DONE);
+      if (completed.length === 0) return 0;
+      const totalMin = completed.reduce(
+        (sum, t) => sum + differenceInMinutes(t.updatedAt, t.createdAt),
+        0,
+      );
+      return Math.round(totalMin / completed.length);
+    })(),
+    topWashers: (() => {
+      const counts = new Map<string, number>();
+      for (const t of todayTasks) {
+        const name = t.washer?.name ?? "Kiosk";
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+    })(),
+  };
+
+  const kioskToken = process.env.KIOSK_TOKEN ?? "";
+  const kioskStationId = process.env.KIOSK_STATION_ID ?? "default";
+  const hasKioskToken = kioskToken.length > 0;
+
   return (
     <div className="space-y-6" data-testid="washers-page">
       <PageHeader
@@ -125,6 +163,73 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
       />
 
       <StatusBanner error={params.error} success={params.success} />
+
+      {/* ─── KPI Dashboard ───────────────────────────────────────────── */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" data-testid="washers-kpis">
+        <GlassCard className="p-4 text-center">
+          <p className="text-2xl font-bold text-[var(--accent)]">{kpi.total}</p>
+          <p className="text-xs text-[var(--text-muted)]">Today Tasks</p>
+        </GlassCard>
+        <GlassCard className="p-4 text-center">
+          <p className="text-2xl font-bold text-emerald-400">{kpi.done}</p>
+          <p className="text-xs text-[var(--text-muted)]">Completed</p>
+        </GlassCard>
+        <GlassCard className="p-4 text-center">
+          <p className="text-2xl font-bold text-amber-400">{kpi.pending}</p>
+          <p className="text-xs text-[var(--text-muted)]">Pending</p>
+        </GlassCard>
+        <GlassCard className="p-4 text-center">
+          <p className="text-2xl font-bold text-rose-400">{kpi.blocked}</p>
+          <p className="text-xs text-[var(--text-muted)]">Issues</p>
+        </GlassCard>
+        <GlassCard className="p-4 text-center">
+          <p className="text-2xl font-bold text-[var(--text)]">{kpi.avgTurnaround}m</p>
+          <p className="text-xs text-[var(--text-muted)]">Avg Turnaround</p>
+        </GlassCard>
+      </div>
+
+      {/* ─── Top Washers ─────────────────────────────────────────────── */}
+      {kpi.topWashers.length > 0 && (
+        <GlassCard className="space-y-2 p-4">
+          <h3 className="text-sm font-semibold text-[var(--text-muted)]">Top Washers Today</h3>
+          <div className="flex flex-wrap gap-3">
+            {kpi.topWashers.map(([name, count]) => (
+              <span key={name} className="rounded-full border border-[var(--border)] bg-white/5 px-3 py-1 text-sm text-[var(--text)]">
+                {name}: <strong>{count}</strong>
+              </span>
+            ))}
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ─── Share Washer App Panel ──────────────────────────────────── */}
+      <GlassCard className="space-y-3 p-4" data-testid="share-washer-app">
+        <h3 className="kpi-font text-lg font-semibold">Share Washer App</h3>
+        <p className="text-sm text-[var(--text-muted)]">
+          Share this link with your washers. They can open it on any device — no login required.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <code className="flex-1 rounded border border-[var(--border)] bg-white/5 px-3 py-2 text-xs text-[var(--text)]">
+            {typeof window !== "undefined"
+              ? `${window.location.origin}/washers/app?kiosk=${hasKioskToken ? "***" : "NOT_SET"}&station=${kioskStationId}`
+              : `/washers/app?kiosk=${hasKioskToken ? "***" : "NOT_SET"}&station=${kioskStationId}`}
+          </code>
+          <Button variant="outline" className="h-9 text-xs" asChild>
+            <Link href="/washers/app" target="_blank">Open Preview</Link>
+          </Button>
+        </div>
+        <div className="text-xs text-[var(--text-muted)] space-y-1">
+          <p>📱 <strong>iOS</strong>: Open in Safari → Share → Add to Home Screen</p>
+          <p>🤖 <strong>Android</strong>: Open in Chrome → Menu → Install App</p>
+          <p>🖥️ <strong>Desktop</strong>: Open in Chrome → Address bar install icon</p>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <span className={`inline-block size-2 rounded-full ${hasKioskToken ? "bg-emerald-400" : "bg-rose-400"}`} />
+          <span className="text-[var(--text-muted)]">
+            Kiosk Token: {hasKioskToken ? "Configured ✓" : "Not Set — washers will be in read-only mode"}
+          </span>
+        </div>
+      </GlassCard>
 
       <div className="grid gap-4 xl:grid-cols-[420px,1fr]">
         <GlassCard className="space-y-4">

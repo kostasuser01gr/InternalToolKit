@@ -1,8 +1,21 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
   title: "Washer Kiosk",
   description: "Quick vehicle wash task registration kiosk.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Washer Kiosk",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a1a",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function KioskLayout({
@@ -22,7 +35,7 @@ export default function KioskLayout({
           <span id="kiosk-sync-status">●&nbsp;Online</span>
         </div>
       </header>
-      <main className="flex-1 overflow-y-auto p-4">{children}</main>
+      <main className="flex-1 overflow-y-auto p-4 pb-20">{children}</main>
     </div>
   );
 }
