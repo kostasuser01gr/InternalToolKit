@@ -386,7 +386,9 @@ test("fleet flow: create and update vehicle", async ({ page }, testInfo) => {
   await expect(page.getByText("Vehicle added.")).toBeVisible();
   await expect(page.getByText(plate)).toBeVisible();
 
-  await page.getByRole("link", { name: new RegExp(plate) }).first().click();
+  await page.getByText(plate).first().click();
+  // Full update form is now in a <details> element
+  await page.getByText("Full update form").click();
   await page.getByLabel("Fuel (%)").nth(1).fill("73");
   await page.getByRole("button", { name: "Save vehicle update" }).click();
 
