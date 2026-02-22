@@ -58,6 +58,7 @@ type ChatFirstShellProps = {
   userName: string;
   userRole?: string | undefined;
   roleShortcuts?: Record<string, Array<{ id: string; label: string; command: string }>> | undefined;
+  opsInboxCount?: number | undefined;
 };
 
 const moduleShortcuts = [
@@ -90,6 +91,7 @@ function ChatFirstShell({
   userName,
   userRole,
   roleShortcuts,
+  opsInboxCount,
 }: ChatFirstShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -271,6 +273,11 @@ function ChatFirstShell({
                     >
                       <Icon className="size-4 shrink-0" aria-hidden="true" />
                       {label}
+                      {href === "/ops-inbox" && opsInboxCount ? (
+                        <span className="ml-auto inline-flex size-5 items-center justify-center rounded-full bg-rose-500/20 text-[10px] font-bold tabular-nums text-rose-300">
+                          {opsInboxCount > 99 ? "99+" : opsInboxCount}
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}

@@ -367,3 +367,70 @@ export async function qcSignoffAction(formData: FormData) {
     redirect(buildFleetUrl({ error: getErrorMessage(error) }));
   }
 }
+
+const MAX_BULK_VEHICLES = 50;
+
+export async function bulkUpdateVehiclesAction(input: {
+  workspaceId: string;
+  vehicleIds: string[];
+  targetStatus: VehicleStatus;
+}): Promise<{ ok: boolean; count: number; previous: Array<{ id: string; status: string }>; error?: string }> {
+  try {
+    if (input.vehicleIds.length === 0) return { ok: true, count: 0, previous: [] };
+    if (input.vehicleIds.length > MAX_BULK_VEHICLES) {
+      return { ok: false, count: 0, previous: [], error: `Max ${MAX_BULK_VEHICLES} vehicles per bulk operation.` };
+    }
+
+    const { user } = await requireWorkspacePermission(input.workspaceId, "fleet", "write");
+
+    const vehicles = await db.vehicle.findMany({
+      where: { id: { in: input.vehicleIds }, workspaceId: input.workspaceId },
+      select: { id: true, status: true, plateNumber: true },
+    });
+
+    const valid = vehicles.filter((v) => isValidTransition(v.status, input.targetStatus));
+    if (valid.length === 0) {
+      return { ok: false, count: 0, previous: [], error: "No valid transitions found." };
+    }
+
+    const previous = valid.map((v) => ({ id: v.id, status: v.status }));
+    const slaDeadline = computeSlaDeadline(input.targetStatus);
+
+    for (const v of valid) {
+      await db.vehicle.update({
+        where: { id: v.id },
+        data: {
+          status: input.targetStatus,
+          slaDeadlineAt: slaDeadline,
+          ...(input.targetStatus !== ("QC_PENDING" as VehicleStatus)
+            ? { qcResult: null, qcFailReason: null, qcSignoffBy: null }
+            : {}),
+        },
+      });
+
+      await db.vehicleEvent.create({
+        data: {
+          workspaceId: input.workspaceId,
+          vehicleId: v.id,
+          actorUserId: user.id,
+          type: VehicleEventType.PIPELINE_TRANSITION,
+          valueText: `${v.status} → ${input.targetStatus} (bulk)`,
+        },
+      });
+    }
+
+    await appendAuditLog({
+      workspaceId: input.workspaceId,
+      actorUserId: user.id,
+      action: "fleet.bulk_transition",
+      entityType: "vehicle",
+      entityId: valid.map((v) => v.id).join(","),
+      metaJson: { targetStatus: input.targetStatus, count: valid.length },
+    });
+
+    revalidatePath("/fleet");
+    return { ok: true, count: valid.length, previous };
+  } catch (error) {
+    return { ok: false, count: 0, previous: [], error: error instanceof Error ? error.message : "Unexpected error." };
+  }
+}

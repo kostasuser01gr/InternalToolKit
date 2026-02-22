@@ -1161,6 +1161,7 @@ model FeedSource {
   type        String   @default("rss") // rss | html | api
   isActive    Boolean  @default(true)
   scanIntervalMin Int  @default(30)
+  keywordsJson Json?   // per-source keyword overrides for relevance scoring
   lastScannedAt DateTime?
   lastEtag    String?
   createdAt   DateTime @default(now())
