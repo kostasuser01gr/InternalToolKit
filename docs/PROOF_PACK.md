@@ -762,3 +762,31 @@ curl https://internal-tool-kit-web.vercel.app/api/ai/setup
 4. **Shift InlineEdit** — click-to-edit shift titles in BulkShiftBar with undo
 5. **Optimistic Shifts** — useOptimistic for bulk publish/lock/cancel
 6. **Mobile overflow** — body overflow-x:clip + overflow-x-auto on tables confirmed
+
+---
+
+## Wave 6 — Feeds VirtualTable, Role Shortcuts Admin, Feed Auto-pin
+
+### Commit
+- `4c514c5` — wave 6: feeds virtualtable, daily register VT, role shortcuts admin, feed auto-pin, quickbar wiring
+
+### CI
+- Run `22282177885` — ✅ green
+
+### Gates
+| Gate | Result |
+|------|--------|
+| typecheck | ✅ clean |
+| lint | ✅ 0 warnings |
+| unit tests | ✅ 413 passed (17 new wave6 tests) |
+| build | ✅ success |
+
+### Features Delivered
+1. **Feeds VirtualTable** — FeedItemsTable replaces GlassCard stack (56px rows, optimistic pin toggle)
+2. **Daily Register VirtualTable** — DailyRegisterClient rewritten with VirtualTable, bulk actions, checkbox selection
+3. **Role Shortcuts Admin** — RoleShortcutsEditor in Settings for ADMIN users (per-role: ADMIN/EDITOR/EMPLOYEE/WASHER/VIEWER)
+4. **Role Shortcuts Wiring** — layout → AppShell → ChatFirstShell → QuickBar prop chain loads workspace-level config
+5. **Role Shortcuts Storage** — PromptTemplate with reserved title `__workspace_role_shortcuts__` (no schema change)
+6. **Feed Auto-pin** — cron auto-pins items with relevanceScore >= 0.8, creates FEED_HIGH_RELEVANCE notifications
+7. **Notification for Admins** — ADMIN + EDITOR users get notified of high-relevance feed items (non-blocking try/catch)
+8. **QuickBar Defaults** — Fixed role fallbacks to match actual schema (EMPLOYEE instead of STAFF)
