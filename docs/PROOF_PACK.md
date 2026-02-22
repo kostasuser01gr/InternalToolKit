@@ -728,3 +728,37 @@ curl https://internal-tool-kit-web.vercel.app/api/ai/setup
 4. **Bulk Shifts** — checkbox selection + bulk publish/lock/cancel with undo
 5. **Ops Inbox** — unified page aggregating pending shifts, incidents, high-relevance feeds, unread notifications
 6. **Feature flag** — `opsInbox` (default: true)
+
+---
+
+## Session 8 — Wave 5: Deep Integration & Optimistic UI (`20e07b1`)
+
+### What Changed
+
+| File | Change |
+|------|--------|
+| `app/(app)/activity/page.tsx` | Replaced DataTable with VirtualTable (ActivityEventTable + AuditTrailTable) |
+| `app/(app)/activity/activity-tables.tsx` | NEW — Client VirtualTable wrappers for activity data |
+| `app/(app)/washers/page.tsx` | Replaced 60-item article card list with TaskQueueTable |
+| `app/(app)/washers/task-queue-table.tsx` | NEW — VirtualTable + quick status panel + useOptimistic |
+| `app/(app)/shifts/bulk-shift-bar.tsx` | Added ShiftInlineField for title + useOptimistic for bulk actions |
+| `app/(app)/shifts/shift-inline-actions.ts` | NEW — Server action for inline shift title/notes edit |
+| `app/(app)/shifts/shift-inline-field.tsx` | NEW — Client InlineEdit wrapper for shifts with undo |
+| `app/(app)/shifts/page.tsx` | Pass canWrite to BulkShiftBar |
+| `tests/unit/wave5.test.ts` | NEW — 16 tests for wave 5 |
+
+### CI Proof
+- **Commit**: `20e07b1` (main)
+- **CI Run**: `22281711447` ✅ green
+- **Unit tests**: 396 passing (27 files)
+- **Lint**: 0 warnings
+- **Typecheck**: clean
+- **Build**: success
+
+### Features Delivered
+1. **Activity VirtualTable** — 200 live events + 120 audit entries virtualized (400px, 40px rows)
+2. **Washers TaskQueueTable** — 60-task queue virtualized with click-to-expand quick status panel
+3. **Optimistic Washers** — useOptimistic for instant task status updates
+4. **Shift InlineEdit** — click-to-edit shift titles in BulkShiftBar with undo
+5. **Optimistic Shifts** — useOptimistic for bulk publish/lock/cancel
+6. **Mobile overflow** — body overflow-x:clip + overflow-x-auto on tables confirmed
