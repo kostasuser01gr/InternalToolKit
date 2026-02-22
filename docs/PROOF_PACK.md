@@ -857,3 +857,26 @@ All 9 phases from the mission are now fully implemented:
 
 ### CI
 - Run `22283500164` — ✅ green
+
+---
+
+## Wave 9 — Ops Inbox Actions + Automation Engine + Feed→Viber Mirror
+
+### Commit `63e8d95`
+**Changes delivered:**
+1. **W9-A: Feed→Viber auto-mirror** — High-relevance feed items (score ≥ 0.8) auto-mirrored to Viber channel. Posts category, title, summary, relevance %. Non-blocking, respects bridge config.
+2. **W9-B: Ops Inbox actions** — Server actions: ackFeedItem (unpin + audit), dismissNotification (mark read), createIncident (with severity picker), resolveIncident. Client UI buttons with pending states wired into ops-inbox page.
+3. **W9-C: Automation execution engine** — Daily cron processes ACTIVE AutomationRules. Supports create_notification, mirror_to_viber, write_audit_log. Logs to AutomationExecution table.
+4. **W9-D: Optimistic notifications** — NotificationsList component with `useOptimistic` for instant mark-read visual feedback.
+5. **W9-E: Tests** — 11 new tests in wave9.test.ts.
+
+### Gates
+| Check | Status |
+|------|--------|
+| typecheck | ✅ clean |
+| lint | ✅ 0 warnings |
+| unit tests | ✅ 453 passed (11 new wave9 tests) |
+| build | ✅ success |
+
+### CI
+- Run `22283875247` — pending

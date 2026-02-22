@@ -112,8 +112,8 @@ describe("Wave 9-D: Optimistic notifications", () => {
       state.map((n) => (n.id === readId ? { ...n, readAt: new Date() } : n));
 
     const updated = reducer(notifications, "n1");
-    expect(updated[0].readAt).not.toBeNull();
-    expect(updated[1].readAt).toBeNull();
+    expect(updated[0]!.readAt).not.toBeNull();
+    expect(updated[1]!.readAt).toBeNull();
   });
 });
 
