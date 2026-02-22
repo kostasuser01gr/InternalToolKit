@@ -1,6 +1,11 @@
 import { aiChatResponseSchema, type AiChatTask } from "@internal-toolkit/shared";
 
 import { getServerEnv } from "@/lib/env";
+import {
+  routeRequest,
+  type RouterMode,
+  type RouterTelemetry,
+} from "./router";
 
 export type AssistantTask = {
   type: "summarize_table" | "automation_draft" | "kpi_layout";
@@ -11,6 +16,7 @@ export type AssistantTask = {
 export type AssistantResult = {
   provider: string;
   content: string;
+  routerTelemetry?: RouterTelemetry;
 };
 
 export interface ProviderAdapter {
@@ -136,7 +142,48 @@ class FallbackProviderChain implements ProviderAdapter {
   }
 }
 
+class MultiModelRouterProvider implements ProviderAdapter {
+  readonly id = "multi-model-router";
+
+  get enabled() {
+    return !!process.env.OPENROUTER_API_KEY;
+  }
+
+  async generate(task: AssistantTask): Promise<AssistantResult> {
+    if (!this.enabled) {
+      throw new Error("Multi-model router requires OPENROUTER_API_KEY.");
+    }
+
+    const taskClassMap: Record<string, "coding" | "general" | "summary"> = {
+      summarize_table: "summary",
+      automation_draft: "coding",
+      kpi_layout: "general",
+    };
+
+    const result = await routeRequest(task.prompt, {
+      mode: "fast" as RouterMode,
+      taskClass: taskClassMap[task.type] ?? "general",
+    });
+
+    return {
+      provider: result.telemetry.modelUsed,
+      content: result.content,
+      routerTelemetry: result.telemetry,
+    };
+  }
+}
+
 export function getAssistantProvider(): ProviderAdapter {
+  const router = new MultiModelRouterProvider();
+  if (router.enabled) {
+    return new FallbackProviderChain(
+      router,
+      new FallbackProviderChain(
+        new CloudFreeGatewayProvider(),
+        new MockLocalProvider(),
+      ),
+    );
+  }
   return new FallbackProviderChain(
     new CloudFreeGatewayProvider(),
     new MockLocalProvider(),

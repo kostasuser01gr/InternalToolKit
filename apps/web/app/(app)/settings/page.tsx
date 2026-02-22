@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { ThemePreference } from "@prisma/client";
 
+import { RequestAccessButton } from "@/components/kit/request-access-button";
 import { GlassCard } from "@/components/kit/glass-card";
 import { PrimaryButton } from "@/components/kit/primary-button";
 import { PageHeader } from "@/components/layout/page-header";
@@ -51,7 +52,7 @@ export default async function SettingsPage({
   searchParams,
 }: SettingsPageProps) {
   const params = await searchParams;
-  const { user, workspace } = await getAppContext();
+  const { user, workspace, workspaceRole } = await getAppContext();
 
   const profile = await db.user.findUnique({
     where: { id: user.id },
@@ -381,6 +382,61 @@ export default async function SettingsPage({
             <p className="text-sm text-[var(--text-muted)]">No active sessions.</p>
           ) : null}
         </div>
+      </GlassCard>
+
+      {/* Governance / Workspace Settings (visible to all, editable by ADMIN only) */}
+      <GlassCard className="space-y-4">
+        <h2 className="kpi-font text-xl font-semibold">Workspace Settings</h2>
+        <p className="text-sm text-[var(--text-muted)]">
+          These settings are managed by workspace coordinators. You can view
+          current policies and request changes.
+        </p>
+
+        {workspaceRole === "ADMIN" ? (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-sm text-emerald-200">
+              You have full access to workspace settings.
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-[var(--border)] bg-white/5 p-3">
+                <p className="text-sm font-medium text-[var(--text)]">Member Management</p>
+                <p className="text-xs text-[var(--text-muted)]">Invite, remove, and manage roles</p>
+              </div>
+              <div className="rounded-lg border border-[var(--border)] bg-white/5 p-3">
+                <p className="text-sm font-medium text-[var(--text)]">Security Policies</p>
+                <p className="text-xs text-[var(--text-muted)]">Session timeouts, IP restrictions</p>
+              </div>
+              <div className="rounded-lg border border-[var(--border)] bg-white/5 p-3">
+                <p className="text-sm font-medium text-[var(--text)]">Audit Log</p>
+                <p className="text-xs text-[var(--text-muted)]">View all workspace activity</p>
+              </div>
+              <div className="rounded-lg border border-[var(--border)] bg-white/5 p-3">
+                <p className="text-sm font-medium text-[var(--text)]">AI & Model Config</p>
+                <p className="text-xs text-[var(--text-muted)]">Model routing, usage limits</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {[
+              { feature: "Member Management", desc: "Invite/remove workspace members" },
+              { feature: "Security Policies", desc: "Session & access control settings" },
+              { feature: "Audit Log Access", desc: "View workspace activity log" },
+              { feature: "AI & Model Config", desc: "Configure AI model routing" },
+            ].map(({ feature, desc }) => (
+              <div
+                key={feature}
+                className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-white/5 p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-[var(--text)]">{feature}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{desc}</p>
+                </div>
+                <RequestAccessButton feature={feature} />
+              </div>
+            ))}
+          </div>
+        )}
       </GlassCard>
     </div>
   );

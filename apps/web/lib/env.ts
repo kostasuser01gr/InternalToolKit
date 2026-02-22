@@ -23,6 +23,8 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().trim().optional(),
   GOOGLE_API_KEY: z.string().trim().optional(),
   COHERE_API_KEY: z.string().trim().optional(),
+  OPENROUTER_API_KEY: z.string().trim().optional(),
+  OPENROUTER_BASE_URL: z.string().trim().url().optional(),
 });
 
 export type ServerEnv = {

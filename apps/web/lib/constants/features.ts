@@ -35,4 +35,6 @@ export const features = {
   chatEntityThreads: isEnabled(process.env.NEXT_PUBLIC_FEATURE_CHAT_ENTITY_THREADS, true),
   coordinatorDashboard: isEnabled(process.env.NEXT_PUBLIC_FEATURE_COORDINATOR_DASHBOARD, true),
   chatFirstUi: isEnabled(process.env.NEXT_PUBLIC_FEATURE_CHAT_FIRST_UI, true),
+  multiModelRouter: isEnabled(process.env.NEXT_PUBLIC_FEATURE_MULTI_MODEL_ROUTER, true),
+  settingsEverywhere: isEnabled(process.env.NEXT_PUBLIC_FEATURE_SETTINGS_EVERYWHERE, true),
 };
