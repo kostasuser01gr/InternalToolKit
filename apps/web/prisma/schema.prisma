@@ -228,6 +228,9 @@ model Workspace {
   chatChannels   ChatChannel[]
   // Phase 11: File imports
   importBatches  ImportBatch[]
+  // Phase 13: Feeds
+  feedSources    FeedSource[]
+  feedItems      FeedItem[]
 
   @@index([ownerId])
 }
@@ -1137,4 +1140,57 @@ model ImportBatch {
   @@unique([workspaceId, fileHash])
   @@index([workspaceId, status])
   @@index([workspaceId, importType])
+}
+
+// ─── Feeds Module ───────────────────────────────────────────────────────────
+
+enum FeedCategory {
+  BOOKING_POLICY
+  COMPETITOR_NEWS
+  SALES_OPPORTUNITY
+  SECURITY_ALERT
+  GENERAL
+}
+
+model FeedSource {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  url         String
+  type        String   @default("rss") // rss | html | api
+  isActive    Boolean  @default(true)
+  scanIntervalMin Int  @default(30)
+  lastScannedAt DateTime?
+  lastEtag    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items       FeedItem[]
+
+  @@index([workspaceId])
+}
+
+model FeedItem {
+  id            String       @id @default(cuid())
+  workspaceId   String
+  sourceId      String
+  title         String
+  summary       String?
+  url           String
+  urlHash       String
+  category      FeedCategory @default(GENERAL)
+  relevanceScore Float       @default(0)
+  keywords      String?
+  isPinned      Boolean      @default(false)
+  pinnedBy      String?
+  sharedToChannelId String?
+  publishedAt   DateTime?
+  fetchedAt     DateTime     @default(now())
+  createdAt     DateTime     @default(now())
+  workspace     Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  source        FeedSource   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, urlHash])
+  @@index([workspaceId, category])
+  @@index([workspaceId, fetchedAt])
 }

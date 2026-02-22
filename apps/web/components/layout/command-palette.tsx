@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
-import { Command, MoonStar, PlusCircle, Search, SunMedium } from "lucide-react";
+import { Command, Loader2, MoonStar, PlusCircle, Search, SunMedium } from "lucide-react";
 import type { ShortcutDefinition } from "@internal-toolkit/shared";
 
 import { useToast } from "@/components/layout/toast-provider";
@@ -212,6 +212,33 @@ function CommandPalette() {
     );
   }, [actions, query]);
 
+  // Server-side search results (debounced)
+  type SearchResult = { type: string; id: string; title: string; subtitle?: string; url?: string };
+  const [serverResults, setServerResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimerRef = useRef<number | null>(null);
+
+  const searchServer = useCallback(async (q: string) => {
+    if (q.length < 2) { setServerResults([]); return; }
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (res.ok) {
+        const data = await res.json() as { results: SearchResult[] };
+        setServerResults(data.results ?? []);
+      }
+    } catch { /* best effort */ }
+    setSearching(false);
+  }, []);
+
+  useEffect(() => {
+    if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
+    const q = query.trim();
+    if (q.length < 2) { setServerResults([]); return; }
+    searchTimerRef.current = window.setTimeout(() => { void searchServer(q); }, 300);
+    return () => { if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current); };
+  }, [query, searchServer]);
+
   useEffect(() => {
     if (!features.commandPalette) {
       return;
@@ -347,12 +374,13 @@ function CommandPalette() {
           </div>
 
           <div className="max-h-[420px] overflow-y-auto p-2">
-            {filteredActions.length === 0 ? (
+            {filteredActions.length === 0 && serverResults.length === 0 && !searching ? (
               <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 px-3 py-6 text-center text-sm text-[var(--text-muted)]">
                 No command matches your search.
               </div>
             ) : (
-              filteredActions.map((action) => (
+              <>
+              {filteredActions.map((action) => (
                 <button
                   key={action.id}
                   type="button"
@@ -381,7 +409,37 @@ function CommandPalette() {
                     <PlusCircle className="size-4 text-[var(--text-muted)]" />
                   ) : null}
                 </button>
-              ))
+              ))}
+              {searching && (
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-muted)]">
+                  <Loader2 className="size-3 animate-spin" /> Searching…
+                </div>
+              )}
+              {serverResults.length > 0 && (
+                <>
+                  <div className="mb-1 mt-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                    Search Results
+                  </div>
+                  {serverResults.map((r) => (
+                    <button
+                      key={`sr-${r.type}-${r.id}`}
+                      type="button"
+                      onClick={() => {
+                        if (r.url) router.push(r.url);
+                        setOpen(false);
+                        setQuery("");
+                      }}
+                      className="focus-ring mb-1 flex w-full items-start gap-3 rounded-[var(--radius-sm)] border border-transparent px-3 py-2 text-left hover:border-[var(--border)] hover:bg-white/5"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-[var(--text)]">{r.title}</p>
+                        {r.subtitle && <p className="text-xs text-[var(--text-muted)]">{r.subtitle}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+              </>
             )}
           </div>
         </DialogContent>
