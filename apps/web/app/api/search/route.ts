@@ -4,6 +4,45 @@ import { getAppContext } from "@/lib/app-context";
 import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 
 const MAX_RESULTS = 20;
+const MIN_SIMILARITY = 0.15;
+
+type SearchResult = { type: string; id: string; title: string; subtitle?: string; url?: string; score?: number };
+
+/**
+ * Trigram search helper — uses pg_trgm similarity() + ILIKE fallback.
+ * Returns scored results sorted by relevance.
+ */
+async function trigramSearch<T extends { id: string }>(
+  table: string,
+  columns: string[],
+  q: string,
+  workspaceIdCol: string | null,
+  wId: string | null,
+  limit: number,
+  extraWhere?: string,
+): Promise<(T & { _score: number })[]> {
+  const similarityExprs = columns.map(
+    (c) => `COALESCE(similarity(${c}, $1), 0)`,
+  );
+  const scoreExpr = similarityExprs.join(" + ");
+  const ilikeExprs = columns.map((c) => `${c} ILIKE $2`).join(" OR ");
+
+  let whereClause = `(${ilikeExprs} OR (${scoreExpr}) > ${MIN_SIMILARITY})`;
+  if (workspaceIdCol && wId) {
+    whereClause = `"${workspaceIdCol}" = '${wId}' AND ${whereClause}`;
+  }
+  if (extraWhere) {
+    whereClause = `${whereClause} AND ${extraWhere}`;
+  }
+
+  const sql = `SELECT *, (${scoreExpr}) AS "_score" FROM "${table}" WHERE ${whereClause} ORDER BY "_score" DESC LIMIT ${limit}`;
+
+  try {
+    return await db.$queryRawUnsafe(sql, q, `%${q}%`);
+  } catch {
+    return [];
+  }
+}
 
 export async function GET(request: Request) {
   const requestId = getRequestId(request);
@@ -24,9 +63,93 @@ export async function GET(request: Request) {
     }
 
     const wId = workspaceId;
-    const results: Array<{ type: string; id: string; title: string; subtitle?: string; url?: string }> = [];
+    const results: SearchResult[] = [];
 
-    // Search washer tasks by notes
+    // Vehicles — trigram on plateNumber + model
+    try {
+      const vehicles = await trigramSearch<{ id: string; plateNumber: string; model: string | null; status: string }>(
+        "Vehicle", ['"plateNumber"', '"model"'], q, "workspaceId", wId, 5,
+      );
+      for (const v of vehicles) {
+        results.push({
+          type: "vehicle", id: v.id,
+          title: `Vehicle: ${v.plateNumber}`,
+          subtitle: `${v.model ?? ""} · ${v.status}`,
+          url: "/fleet", score: v._score,
+        });
+      }
+    } catch (err) {
+      if (!isSchemaNotReadyError(err)) throw err;
+    }
+
+    // Chat threads — trigram on title
+    try {
+      const threads = await trigramSearch<{ id: string; title: string }>(
+        "ChatThread", ['"title"'], q, "workspaceId", wId, 5,
+      );
+      for (const t of threads) {
+        results.push({
+          type: "thread", id: t.id,
+          title: `Chat: ${t.title}`,
+          url: "/chat", score: t._score,
+        });
+      }
+    } catch (err) {
+      if (!isSchemaNotReadyError(err)) throw err;
+    }
+
+    // Users — trigram on name + email
+    try {
+      const users = await trigramSearch<{ id: string; name: string | null; email: string }>(
+        "User", ['"name"', '"email"'], q, null, null, 5,
+      );
+      for (const u of users) {
+        results.push({
+          type: "user", id: u.id,
+          title: u.name ?? u.email,
+          subtitle: u.email,
+          url: "/settings", score: u._score,
+        });
+      }
+    } catch (err) {
+      if (!isSchemaNotReadyError(err)) throw err;
+    }
+
+    // Shifts — trigram on title
+    try {
+      const shifts = await trigramSearch<{ id: string; title: string; status: string; startsAt: Date }>(
+        "Shift", ['"title"'], q, "workspaceId", wId, 5,
+      );
+      for (const s of shifts) {
+        results.push({
+          type: "shift", id: s.id,
+          title: `Shift: ${s.title}`,
+          subtitle: `${s.status} · ${new Date(s.startsAt).toLocaleDateString()}`,
+          url: "/shifts", score: s._score,
+        });
+      }
+    } catch (err) {
+      if (!isSchemaNotReadyError(err)) throw err;
+    }
+
+    // Feed items — trigram on title + summary
+    try {
+      const feedItems = await trigramSearch<{ id: string; title: string; category: string }>(
+        "FeedItem", ['"title"', '"summary"'], q, "workspaceId", wId, 5,
+      );
+      for (const f of feedItems) {
+        results.push({
+          type: "feed", id: f.id,
+          title: `Feed: ${f.title}`,
+          subtitle: f.category,
+          url: "/feeds", score: f._score,
+        });
+      }
+    } catch (err) {
+      if (!isSchemaNotReadyError(err)) throw err;
+    }
+
+    // Washer tasks — trigram on notes (vehicle plate via join is complex, keep Prisma)
     try {
       const tasks = await db.washerTask.findMany({
         where: {
@@ -39,8 +162,7 @@ export async function GET(request: Request) {
       });
       for (const t of tasks) {
         results.push({
-          type: "task",
-          id: t.id,
+          type: "task", id: t.id,
           title: `Task: ${t.vehicle.plateNumber}`,
           subtitle: `${t.status} · ${t.createdAt.toLocaleDateString()}`,
           url: "/washers",
@@ -50,137 +172,10 @@ export async function GET(request: Request) {
       if (!isSchemaNotReadyError(err)) throw err;
     }
 
-    // Search vehicles
-    try {
-      const vehicles = await db.vehicle.findMany({
-        where: {
-          ...(wId ? { workspaceId: wId } : {}),
-          OR: [
-            { plateNumber: { contains: q, mode: "insensitive" as const } },
-            { model: { contains: q, mode: "insensitive" as const } },
-          ],
-        },
-        take: 5,
-        orderBy: { updatedAt: "desc" },
-        select: { id: true, plateNumber: true, model: true, status: true },
-      });
-      for (const v of vehicles) {
-        results.push({
-          type: "vehicle",
-          id: v.id,
-          title: `Vehicle: ${v.plateNumber}`,
-          subtitle: `${v.model ?? ""} · ${v.status}`,
-          url: "/fleet",
-        });
-      }
-    } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
-    }
-
-    // Search chat threads
-    try {
-      const threads = await db.chatThread.findMany({
-        where: {
-          ...(wId ? { workspaceId: wId } : {}),
-          title: { contains: q, mode: "insensitive" as const },
-        },
-        take: 5,
-        orderBy: { updatedAt: "desc" },
-        select: { id: true, title: true },
-      });
-      for (const t of threads) {
-        results.push({
-          type: "thread",
-          id: t.id,
-          title: `Chat: ${t.title}`,
-          url: "/chat",
-        });
-      }
-    } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
-    }
-
-    // Search users/staff
-    try {
-      const users = await db.user.findMany({
-        where: {
-          OR: [
-            { name: { contains: q, mode: "insensitive" as const } },
-            { email: { contains: q, mode: "insensitive" as const } },
-          ],
-        },
-        take: 5,
-        select: { id: true, name: true, email: true },
-      });
-      for (const u of users) {
-        results.push({
-          type: "user",
-          id: u.id,
-          title: u.name ?? u.email,
-          subtitle: u.email,
-          url: "/settings",
-        });
-      }
-    } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
-    }
-
-    // Search shifts
-    try {
-      const shifts = await db.shift.findMany({
-        where: {
-          ...(wId ? { workspaceId: wId } : {}),
-          title: { contains: q, mode: "insensitive" as const },
-        },
-        take: 5,
-        orderBy: { startsAt: "desc" },
-        select: { id: true, title: true, startsAt: true, status: true },
-      });
-      for (const s of shifts) {
-        results.push({
-          type: "shift",
-          id: s.id,
-          title: `Shift: ${s.title}`,
-          subtitle: `${s.status} · ${s.startsAt.toLocaleDateString()}`,
-          url: "/shifts",
-        });
-      }
-    } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
-    }
-
-    // Search feed items
-    try {
-      const feedItems = await db.feedItem.findMany({
-        where: {
-          ...(wId ? { workspaceId: wId } : {}),
-          OR: [
-            { title: { contains: q, mode: "insensitive" as const } },
-            { summary: { contains: q, mode: "insensitive" as const } },
-          ],
-        },
-        take: 5,
-        orderBy: { fetchedAt: "desc" },
-        select: { id: true, title: true, category: true },
-      });
-      for (const f of feedItems) {
-        results.push({
-          type: "feed",
-          id: f.id,
-          title: `Feed: ${f.title}`,
-          subtitle: f.category,
-          url: "/feeds",
-        });
-      }
-    } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
-    }
-
-    // Search chat messages (content) — RBAC: only from channels the user is a member of (or public/no channel)
+    // Chat messages (RBAC) — trigram on content
     try {
       const { user } = await getAppContext(wId ?? undefined);
 
-      // Get channels the user belongs to
       let memberChannelIds: string[] = [];
       try {
         const memberships = await db.chatChannelMember.findMany({
@@ -189,20 +184,26 @@ export async function GET(request: Request) {
         });
         memberChannelIds = memberships.map((m) => m.channelId);
       } catch {
-        // schema may not be ready
+        // schema not ready
       }
 
+      // Build RBAC-safe channel filter for raw SQL
+      const publicChannelIds = await db.chatChannel.findMany({
+        where: { type: "PUBLIC", ...(wId ? { workspaceId: wId } : {}) },
+        select: { id: true },
+      }).then((cs) => cs.map((c) => c.id)).catch(() => []);
+
+      const allowedChannelIds = [...new Set([...publicChannelIds, ...memberChannelIds])];
+
+      // Use Prisma for RBAC-safe message search (complex joins)
       const messages = await db.chatMessage.findMany({
         where: {
           content: { contains: q, mode: "insensitive" as const },
           thread: {
             ...(wId ? { workspaceId: wId } : {}),
             OR: [
-              { channelId: null }, // threads without a channel (DMs / general)
-              { channel: { type: "PUBLIC" as const } }, // public channels visible to all
-              ...(memberChannelIds.length > 0
-                ? [{ channelId: { in: memberChannelIds } }]
-                : []),
+              { channelId: null },
+              ...(allowedChannelIds.length > 0 ? [{ channelId: { in: allowedChannelIds } }] : []),
             ],
           },
         },
@@ -212,8 +213,7 @@ export async function GET(request: Request) {
       });
       for (const m of messages) {
         results.push({
-          type: "message",
-          id: m.id,
+          type: "message", id: m.id,
           title: `Message in "${m.thread.title}"`,
           subtitle: m.content.slice(0, 80),
           url: "/chat",
@@ -222,6 +222,9 @@ export async function GET(request: Request) {
     } catch (err) {
       if (!isSchemaNotReadyError(err)) throw err;
     }
+
+    // Sort all results by score descending (scored results first)
+    results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
     return Response.json(
       { results: results.slice(0, MAX_RESULTS), query: q },

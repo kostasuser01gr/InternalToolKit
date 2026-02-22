@@ -1,13 +1,12 @@
 import { BarChart3, Database, MessageSquare, Workflow } from "lucide-react";
 import Link from "next/link";
-import { Suspense } from "react";
 
 import { GlassCard } from "@/components/kit/glass-card";
 import { StatCard } from "@/components/kit/stat-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
 import { Badge } from "@/components/ui/badge";
-import { WeatherWidget } from "@/components/widgets/weather-widget";
+import { WeatherWidgetGeo } from "@/components/widgets/weather-widget-geo";
 import { db } from "@/lib/db";
 import { getAppContext } from "@/lib/app-context";
 import { isSchemaNotReadyError } from "@/lib/prisma-errors";
@@ -74,10 +73,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <StatusBanner error={params.error} success={params.success} />
 
-      {/* Weather */}
-      <Suspense fallback={<GlassCard className="h-24 animate-pulse p-4"><span /></GlassCard>}>
-        <WeatherWidget />
-      </Suspense>
+      {/* Weather with browser geolocation */}
+      <WeatherWidgetGeo />
 
       <section
         className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
