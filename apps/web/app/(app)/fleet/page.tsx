@@ -13,6 +13,8 @@ import { db } from "@/lib/db";
 import { hasWorkspacePermission } from "@/lib/rbac";
 
 import { addVehicleEventAction, createVehicleAction, updateVehicleAction } from "./actions";
+import { FleetInlineField } from "./fleet-inline-field";
+import { FleetVehicleList } from "./fleet-vehicle-list";
 
 type FleetPageProps = {
   searchParams: Promise<{
@@ -154,92 +156,137 @@ export default async function FleetPage({ searchParams }: FleetPageProps) {
             </PrimaryButton>
           </form>
 
-          <div className="space-y-2">
-            {vehicles.map((vehicle) => (
-              <a
-                key={vehicle.id}
-                href={`/fleet?workspaceId=${workspace.id}&vehicleId=${vehicle.id}`}
-                className="focus-ring block rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 px-3 py-2"
-              >
-                <p className="font-medium text-[var(--text)]">{vehicle.plateNumber}</p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {vehicle.model} · {vehicle.status} · {vehicle.mileageKm} km
-                </p>
-              </a>
-            ))}
-            {vehicles.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)]">No vehicles yet.</p>
-            ) : null}
-          </div>
+          <FleetVehicleList
+            vehicles={vehicles.map((v) => ({
+              id: v.id,
+              plateNumber: v.plateNumber,
+              model: v.model,
+              status: v.status,
+              mileageKm: v.mileageKm,
+            }))}
+            workspaceId={workspace.id}
+            selectedId={selectedVehicle?.id}
+          />
         </GlassCard>
 
         <div className="space-y-4">
           <GlassCard className="space-y-4">
             <h2 className="kpi-font text-xl font-semibold">Vehicle State</h2>
             {selectedVehicle ? (
-              <form action={updateVehicleAction} className="space-y-3">
-                <input type="hidden" name="workspaceId" value={workspace.id} />
-                <input type="hidden" name="vehicleId" value={selectedVehicle.id} />
-
-                <div className="grid gap-3 sm:grid-cols-3">
+              <>
+                {/* Quick inline edits */}
+                <div className="grid gap-3 text-sm sm:grid-cols-3">
                   <div className="space-y-1">
-                    <Label htmlFor="vehicle-update-status">Status</Label>
-                    <select
-                      id="vehicle-update-status"
-                      name="status"
-                      defaultValue={selectedVehicle.status}
-                      className="focus-ring h-10 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/6 px-3 text-sm text-[var(--text)]"
-                      disabled={!canWrite}
-                    >
-                      {Object.values(VehicleStatus).map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="text-xs font-medium text-[var(--text-muted)]">Mileage (km)</span>
+                    <div>
+                      <FleetInlineField
+                        workspaceId={workspace.id}
+                        vehicleId={selectedVehicle.id}
+                        field="mileageKm"
+                        value={String(selectedVehicle.mileageKm)}
+                        disabled={!canWrite}
+                        placeholder="0"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="vehicle-update-mileage">Mileage (km)</Label>
-                    <Input
-                      id="vehicle-update-mileage"
-                      name="mileageKm"
-                      type="number"
-                      min={0}
-                      step={1}
-                      defaultValue={selectedVehicle.mileageKm}
-                      disabled={!canWrite}
-                    />
+                    <span className="text-xs font-medium text-[var(--text-muted)]">Fuel (%)</span>
+                    <div>
+                      <FleetInlineField
+                        workspaceId={workspace.id}
+                        vehicleId={selectedVehicle.id}
+                        field="fuelPercent"
+                        value={String(selectedVehicle.fuelPercent)}
+                        disabled={!canWrite}
+                        placeholder="100"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="vehicle-update-fuel">Fuel (%)</Label>
-                    <Input
-                      id="vehicle-update-fuel"
-                      name="fuelPercent"
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={1}
-                      defaultValue={selectedVehicle.fuelPercent}
-                      disabled={!canWrite}
-                    />
+                    <span className="text-xs font-medium text-[var(--text-muted)]">Notes</span>
+                    <div>
+                      <FleetInlineField
+                        workspaceId={workspace.id}
+                        vehicleId={selectedVehicle.id}
+                        field="notes"
+                        value={selectedVehicle.notes ?? ""}
+                        disabled={!canWrite}
+                        placeholder="Click to add notes"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="vehicle-update-notes">Notes</Label>
-                  <Textarea
-                    id="vehicle-update-notes"
-                    name="notes"
-                    rows={3}
-                    defaultValue={selectedVehicle.notes ?? ""}
-                    disabled={!canWrite}
-                  />
-                </div>
+                {/* Full update form */}
+                <details className="group">
+                  <summary className="cursor-pointer text-xs text-[var(--text-muted)] hover:text-[var(--text)]">
+                    Full update form ▸
+                  </summary>
+                  <form action={updateVehicleAction} className="mt-3 space-y-3">
+                    <input type="hidden" name="workspaceId" value={workspace.id} />
+                    <input type="hidden" name="vehicleId" value={selectedVehicle.id} />
 
-                <PrimaryButton type="submit" disabled={!canWrite}>
-                  Save vehicle update
-                </PrimaryButton>
-              </form>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="vehicle-update-status">Status</Label>
+                        <select
+                          id="vehicle-update-status"
+                          name="status"
+                          defaultValue={selectedVehicle.status}
+                          className="focus-ring h-10 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/6 px-3 text-sm text-[var(--text)]"
+                          disabled={!canWrite}
+                        >
+                          {Object.values(VehicleStatus).map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="vehicle-update-mileage">Mileage (km)</Label>
+                        <Input
+                          id="vehicle-update-mileage"
+                          name="mileageKm"
+                          type="number"
+                          min={0}
+                          step={1}
+                          defaultValue={selectedVehicle.mileageKm}
+                          disabled={!canWrite}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="vehicle-update-fuel">Fuel (%)</Label>
+                        <Input
+                          id="vehicle-update-fuel"
+                          name="fuelPercent"
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={1}
+                          defaultValue={selectedVehicle.fuelPercent}
+                          disabled={!canWrite}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="vehicle-update-notes">Notes</Label>
+                      <Textarea
+                        id="vehicle-update-notes"
+                        name="notes"
+                        rows={3}
+                        defaultValue={selectedVehicle.notes ?? ""}
+                        disabled={!canWrite}
+                      />
+                    </div>
+
+                    <PrimaryButton type="submit" disabled={!canWrite}>
+                      Save vehicle update
+                    </PrimaryButton>
+                  </form>
+                </details>
+              </>
             ) : (
               <p className="text-sm text-[var(--text-muted)]">Select a vehicle to update.</p>
             )}

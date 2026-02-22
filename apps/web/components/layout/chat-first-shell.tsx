@@ -10,6 +10,7 @@ import {
   CarFront,
   FileText,
   Home,
+  Inbox,
   LogOut,
   MessageSquare,
   Newspaper,
@@ -60,6 +61,7 @@ type ChatFirstShellProps = {
 
 const moduleShortcuts = [
   { href: "/home", label: "Home", icon: Home },
+  { href: "/ops-inbox", label: "Ops Inbox", icon: Inbox },
   { href: "/overview", label: "Overview", icon: ChartNoAxesCombined },
   { href: "/data", label: "Data", icon: Database },
   { href: "/automations", label: "Automations", icon: Workflow },
@@ -96,7 +98,7 @@ function ChatFirstShell({
 
   // Prefetch core routes on idle for instant navigation
   useEffect(() => {
-    const coreRoutes = ["/home", "/chat", "/washers", "/fleet", "/shifts", "/feeds", "/settings"];
+    const coreRoutes = ["/home", "/ops-inbox", "/chat", "/washers", "/fleet", "/shifts", "/feeds", "/settings"];
     const id = requestIdleCallback(() => {
       for (const route of coreRoutes) {
         if (route !== pathname) router.prefetch(route);

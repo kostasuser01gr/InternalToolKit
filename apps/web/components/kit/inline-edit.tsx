@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 type InlineEditProps = {
   value: string;
   onSave: (newValue: string) => void | Promise<void>;
-  className?: string;
-  inputClassName?: string;
-  placeholder?: string;
-  disabled?: boolean;
+  className?: string | undefined;
+  inputClassName?: string | undefined;
+  placeholder?: string | undefined;
+  disabled?: boolean | undefined;
   /** Show optimistic value immediately while saving */
-  optimistic?: boolean;
+  optimistic?: boolean | undefined;
 };
 
 export function InlineEdit({
