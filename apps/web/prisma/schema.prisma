@@ -171,6 +171,17 @@ model User {
   promptTemplates      PromptTemplate[]
   aiUsageMeters        AiUsageMeter[]
   chatArtifacts        ChatArtifact[]
+  attendances          Attendance[]
+  userSkills           UserSkill[]
+  trainingRecords      TrainingRecord[]
+  handoversFrom        AssetHandover[]      @relation("AssetHandoverFrom")
+  handoversTo          AssetHandover[]      @relation("AssetHandoverTo")
+  reportedIncidents    Incident[]           @relation("IncidentReporter")
+  automationRules      AutomationRule[]     @relation("AutomationRuleCreator")
+  savedViews           SavedView[]
+  runbooks             Runbook[]            @relation("RunbookCreator")
+  accessReviewsGiven   AccessReview[]       @relation("AccessReviewer")
+  accessReviewsReceived AccessReview[]      @relation("AccessReviewTarget")
 }
 
 model Workspace {
@@ -196,6 +207,17 @@ model Workspace {
   promptTemplates PromptTemplate[]
   aiUsageMeters  AiUsageMeter[]
   chatArtifacts  ChatArtifact[]
+  attendances    Attendance[]
+  skills         Skill[]
+  trainings      Training[]
+  assets         Asset[]
+  incidents      Incident[]
+  automationRules AutomationRule[]
+  savedViews     SavedView[]
+  runbooks       Runbook[]
+  retentionPolicies RetentionPolicy[]
+  accessReviews  AccessReview[]
+  stations       Station[]
 
   @@index([ownerId])
 }
@@ -517,6 +539,7 @@ model Vehicle {
   events          VehicleEvent[]
   washerTasks     WasherTask[]
   qcSignoffUser   User?          @relation("VehicleQcSignoff", fields: [qcSignoffBy], references: [id], onDelete: SetNull)
+  incidents       Incident[]
 
   @@unique([workspaceId, plateNumber])
   @@index([workspaceId, status])
@@ -651,4 +674,335 @@ model SecurityEvent {
   @@index([event, createdAt])
   @@index([actorUserId, createdAt])
   @@index([targetUserId, createdAt])
+}
+
+// ─── Phase 10: Workforce Ops ─────────────────────────────────────────────────
+
+enum AttendanceType {
+  CHECK_IN
+  CHECK_OUT
+  BREAK_START
+  BREAK_END
+}
+
+model Attendance {
+  id          String         @id @default(cuid())
+  workspaceId String
+  userId      String
+  type        AttendanceType
+  recordedAt  DateTime       @default(now())
+  notes       String?
+  deviceId    String?
+  createdAt   DateTime       @default(now())
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, recordedAt])
+}
+
+model Skill {
+  id          String        @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  createdAt   DateTime      @default(now())
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignments UserSkill[]
+
+  @@unique([workspaceId, name])
+}
+
+enum SkillLevel {
+  BASIC
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+model UserSkill {
+  id        String     @id @default(cuid())
+  userId    String
+  skillId   String
+  level     SkillLevel @default(BASIC)
+  certifiedAt DateTime?
+  expiresAt   DateTime?
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill     Skill      @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId])
+}
+
+enum TrainingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+}
+
+model Training {
+  id          String         @id @default(cuid())
+  workspaceId String
+  title       String
+  description String?
+  durationMin Int?
+  createdAt   DateTime       @default(now())
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  records     TrainingRecord[]
+
+  @@index([workspaceId])
+}
+
+model TrainingRecord {
+  id          String         @id @default(cuid())
+  trainingId  String
+  userId      String
+  status      TrainingStatus @default(NOT_STARTED)
+  completedAt DateTime?
+  expiresAt   DateTime?
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  training    Training       @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingId, userId])
+}
+
+// ─── Phase 10: Asset / Inventory / Keys ──────────────────────────────────────
+
+enum AssetType {
+  KEY
+  EQUIPMENT
+  CONSUMABLE
+  ACCESSORY
+}
+
+enum AssetStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  LOST
+  RETIRED
+}
+
+model Asset {
+  id           String      @id @default(cuid())
+  workspaceId  String
+  type         AssetType
+  name         String
+  serialNumber String?
+  status       AssetStatus @default(AVAILABLE)
+  location     String?
+  notes        String?
+  reorderLevel Int?
+  quantity     Int         @default(1)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  handovers    AssetHandover[]
+
+  @@index([workspaceId, type, status])
+}
+
+model AssetHandover {
+  id         String   @id @default(cuid())
+  assetId    String
+  fromUserId String?
+  toUserId   String?
+  action     String
+  notes      String?
+  createdAt  DateTime @default(now())
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  fromUser   User?    @relation("AssetHandoverFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUser     User?    @relation("AssetHandoverTo", fields: [toUserId], references: [id], onDelete: SetNull)
+
+  @@index([assetId, createdAt])
+}
+
+// ─── Phase 10: Incident / Damage ─────────────────────────────────────────────
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  REPAIR_PENDING
+  REPAIR_IN_PROGRESS
+  RESOLVED
+  CLOSED
+  CLAIMED
+}
+
+model Incident {
+  id           String           @id @default(cuid())
+  workspaceId  String
+  vehicleId    String?
+  reportedBy   String
+  severity     IncidentSeverity @default(MEDIUM)
+  status       IncidentStatus   @default(OPEN)
+  title        String
+  description  String?
+  photosJson   Json?
+  repairEta    DateTime?
+  repairCost   Float?
+  claimRef     String?
+  resolvedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle?         @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  reporter     User             @relation("IncidentReporter", fields: [reportedBy], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, createdAt])
+  @@index([vehicleId])
+}
+
+// ─── Phase 10: Automations 2.0 ──────────────────────────────────────────────
+
+enum AutomationRuleStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+model AutomationRule {
+  id          String               @id @default(cuid())
+  workspaceId String
+  createdBy   String
+  name        String
+  description String?
+  triggerJson Json
+  conditionJson Json?
+  actionJson  Json
+  schedule    String?
+  status      AutomationRuleStatus @default(ACTIVE)
+  retryMax    Int                  @default(3)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator     User                 @relation("AutomationRuleCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  executions  AutomationExecution[]
+
+  @@index([workspaceId, status])
+}
+
+enum AutomationExecStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  DEAD_LETTER
+}
+
+model AutomationExecution {
+  id         String              @id @default(cuid())
+  ruleId     String
+  status     AutomationExecStatus @default(PENDING)
+  attempt    Int                 @default(1)
+  inputJson  Json?
+  outputJson Json?
+  error      String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime            @default(now())
+  rule       AutomationRule      @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, status, createdAt])
+}
+
+// ─── Phase 10: Saved Views + Runbooks ────────────────────────────────────────
+
+model SavedView {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  name        String
+  module      String
+  filtersJson Json
+  columnsJson Json?
+  sortJson    Json?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, module])
+}
+
+model Runbook {
+  id          String   @id @default(cuid())
+  workspaceId String
+  createdBy   String
+  title       String
+  content     String
+  tags        String?
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator     User      @relation("RunbookCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+// ─── Phase 10: Compliance / Retention ────────────────────────────────────────
+
+model RetentionPolicy {
+  id          String   @id @default(cuid())
+  workspaceId String
+  module      String
+  retainDays  Int
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, module])
+}
+
+enum AccessReviewStatus {
+  PENDING
+  APPROVED
+  REVOKED
+}
+
+model AccessReview {
+  id           String             @id @default(cuid())
+  workspaceId  String
+  reviewerId   String
+  targetUserId String
+  status       AccessReviewStatus @default(PENDING)
+  decision     String?
+  reviewedAt   DateTime?
+  createdAt    DateTime           @default(now())
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reviewer     User               @relation("AccessReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  target       User               @relation("AccessReviewTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+}
+
+// ─── Phase 10: Multi-Station ─────────────────────────────────────────────────
+
+model Station {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  code        String
+  address     String?
+  isActive    Boolean  @default(true)
+  configJson  Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, code])
+  @@index([workspaceId, isActive])
 }
