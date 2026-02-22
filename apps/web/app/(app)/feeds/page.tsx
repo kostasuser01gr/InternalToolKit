@@ -4,7 +4,6 @@ import { GlassCard } from "@/components/kit/glass-card";
 import { PrimaryButton } from "@/components/kit/primary-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAppContext } from "@/lib/app-context";
@@ -14,11 +13,10 @@ import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 import {
   addFeedSourceAction,
   deleteFeedSourceAction,
-  pinFeedItemAction,
   scanFeedSourceAction,
   seedDefaultSourcesAction,
-  sendFeedToChatAction,
 } from "./actions";
+import { FeedItemsTable } from "./feed-items-table";
 
 type FeedsPageProps = {
   searchParams: Promise<{
@@ -169,89 +167,25 @@ export default async function FeedsPage({ searchParams }: FeedsPageProps) {
 
         {/* Feed Items */}
         <div className="space-y-3">
-          {items.length === 0 && (
-            <GlassCard className="p-6 text-center">
-              <p className="text-[var(--text-muted)]">
-                No feed items yet. Add sources and scan to populate.
-              </p>
-            </GlassCard>
-          )}
-
-          {items.map((item) => {
-            const catMeta = CATEGORY_LABELS[item.category] ?? CATEGORY_LABELS["GENERAL"]!;
-            return (
-              <GlassCard key={item.id} className="space-y-2 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      {item.isPinned && <span className="text-amber-400">📌</span>}
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium text-[var(--text)] hover:text-[var(--accent)] hover:underline"
-                      >
-                        {item.title}
-                      </a>
-                    </div>
-                    {item.summary && (
-                      <p className="mt-1 text-sm text-[var(--text-muted)] line-clamp-2">
-                        {item.summary}
-                      </p>
-                    )}
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
-                      <Badge variant="default" className={catMeta.color}>
-                        {catMeta.label}
-                      </Badge>
-                      <span>{item.source.name}</span>
-                      {item.publishedAt && (
-                        <span>{new Date(item.publishedAt).toLocaleDateString()}</span>
-                      )}
-                      {item.relevanceScore > 0 && (
-                        <span className="text-[var(--accent)]">
-                          ★ {(item.relevanceScore * 100).toFixed(0)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-1">
-                    <form action={sendFeedToChatAction}>
-                      <input type="hidden" name="itemId" value={item.id} />
-                      <input type="hidden" name="workspaceId" value={workspace.id} />
-                      <input type="hidden" name="channel" value="ops-general" />
-                      <button
-                        type="submit"
-                        className="rounded border border-[var(--border)] bg-white/5 px-2 py-1 text-xs text-[var(--text-muted)] hover:bg-white/10"
-                      >
-                        💬 Ops
-                      </button>
-                    </form>
-                    <form action={sendFeedToChatAction}>
-                      <input type="hidden" name="itemId" value={item.id} />
-                      <input type="hidden" name="workspaceId" value={workspace.id} />
-                      <input type="hidden" name="channel" value="washers-only" />
-                      <button
-                        type="submit"
-                        className="rounded border border-[var(--border)] bg-white/5 px-2 py-1 text-xs text-[var(--text-muted)] hover:bg-white/10"
-                      >
-                        🧽 Washers
-                      </button>
-                    </form>
-                    <form action={pinFeedItemAction}>
-                      <input type="hidden" name="itemId" value={item.id} />
-                      <input type="hidden" name="workspaceId" value={workspace.id} />
-                      <button
-                        type="submit"
-                        className="rounded border border-[var(--border)] bg-white/5 px-2 py-1 text-xs text-[var(--text-muted)] hover:bg-white/10"
-                      >
-                        {item.isPinned ? "Unpin" : "📌 Pin"}
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </GlassCard>
-            );
-          })}
+          <FeedItemsTable
+            items={items.map((item) => {
+              const catMeta = CATEGORY_LABELS[item.category] ?? CATEGORY_LABELS["GENERAL"]!;
+              return {
+                id: item.id,
+                title: item.title,
+                summary: item.summary ?? "",
+                url: item.url,
+                category: item.category,
+                categoryLabel: catMeta.label,
+                categoryColor: catMeta.color,
+                relevanceScore: item.relevanceScore,
+                isPinned: item.isPinned,
+                sourceName: item.source.name,
+                publishedAt: item.publishedAt ? new Date(item.publishedAt).toLocaleDateString() : "",
+                workspaceId: workspace.id,
+              };
+            })}
+          />
         </div>
       </div>
     </div>

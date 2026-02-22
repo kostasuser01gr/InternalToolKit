@@ -7,6 +7,7 @@ import {
   undoWasherTasksAction,
   type BulkUpdateResult,
 } from "@/app/(app)/washers/actions";
+import { VirtualTable, type VirtualTableColumn } from "@/components/kit/virtual-table";
 
 type TaskRow = {
   id: string;
@@ -28,6 +29,18 @@ type DailyRegisterClientProps = {
 };
 
 const UNDO_TIMEOUT_MS = 15_000;
+
+function StatusBadge({ status }: { status: string }) {
+  const color =
+    status === "DONE"
+      ? "bg-emerald-400/20 text-emerald-300"
+      : status === "IN_PROGRESS"
+        ? "bg-blue-400/20 text-blue-300"
+        : status === "BLOCKED"
+          ? "bg-rose-400/20 text-rose-300"
+          : "bg-amber-400/20 text-amber-300";
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>{status}</span>;
+}
 
 export function DailyRegisterClient({
   workspaceId,
@@ -77,7 +90,6 @@ export function DailyRegisterClient({
         setUndoState(result);
         setSelected(new Set());
 
-        // Auto-dismiss undo after timeout
         setTimeout(() => {
           setUndoState((current) =>
             current === result ? null : current,
@@ -110,45 +122,86 @@ export function DailyRegisterClient({
     });
   }
 
+  const columns: VirtualTableColumn<TaskRow>[] = [
+    ...(canWrite
+      ? [{
+          key: "select",
+          header: "",
+          width: "36px",
+          render: (r: TaskRow) => (
+            <input
+              type="checkbox"
+              checked={selected.has(r.id)}
+              onChange={() => toggleOne(r.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="accent-purple-500 size-4"
+            />
+          ),
+        } satisfies VirtualTableColumn<TaskRow>]
+      : []),
+    { key: "vehicle", header: "Vehicle", width: "160px", render: (r) => <span className="font-medium">{r.plate} · {r.model}</span> },
+    { key: "status", header: "Status", width: "100px", render: (r) => <StatusBadge status={r.status} /> },
+    { key: "ext", header: "Ext", width: "40px", render: (r) => <span className="text-center block">{r.exteriorDone ? "✓" : "—"}</span> },
+    { key: "int", header: "Int", width: "40px", render: (r) => <span className="text-center block">{r.interiorDone ? "✓" : "—"}</span> },
+    { key: "vac", header: "Vac", width: "40px", render: (r) => <span className="text-center block">{r.vacuumDone ? "✓" : "—"}</span> },
+    { key: "washer", header: "Washer", width: "100px", render: (r) => <span className="text-[var(--text-muted)]">{r.washer}</span> },
+    { key: "station", header: "Station", width: "80px", render: (r) => <span className="text-[var(--text-muted)]">{r.station}</span> },
+    { key: "time", header: "Time", width: "60px", render: (r) => <span className="text-[var(--text-muted)] tabular-nums">{r.time}</span> },
+  ];
+
   return (
     <div className="space-y-3" data-testid="daily-register-client">
-      {/* Bulk action bar */}
-      {canWrite && selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-purple-400/30 bg-purple-500/10 px-3 py-2">
-          <span className="text-sm font-medium text-purple-200">
-            {selected.size} selected
-          </span>
-          <button
-            type="button"
-            onClick={() => handleBulkAction("DONE")}
-            disabled={isPending}
-            className="rounded-md bg-emerald-600/80 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            ✓ Mark Done
-          </button>
-          <button
-            type="button"
-            onClick={() => handleBulkAction("IN_PROGRESS")}
-            disabled={isPending}
-            className="rounded-md bg-blue-600/80 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
-          >
-            ▶ In Progress
-          </button>
-          <button
-            type="button"
-            onClick={() => handleBulkAction("BLOCKED")}
-            disabled={isPending}
-            className="rounded-md bg-rose-600/80 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
-          >
-            ⚠ Block
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelected(new Set())}
-            className="text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
-          >
-            Clear
-          </button>
+      {/* Select-all + Bulk action bar */}
+      {canWrite && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+            <input
+              type="checkbox"
+              checked={selected.size === tasks.length && tasks.length > 0}
+              onChange={toggleAll}
+              className="accent-purple-500 size-4"
+            />
+            Select all
+          </label>
+
+          {selected.size > 0 && (
+            <div className="flex items-center gap-2 rounded-lg border border-purple-400/30 bg-purple-500/10 px-3 py-1.5">
+              <span className="text-xs font-medium text-purple-200">
+                {selected.size} selected
+              </span>
+              <button
+                type="button"
+                onClick={() => handleBulkAction("DONE")}
+                disabled={isPending}
+                className="rounded-md bg-emerald-600/80 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                ✓ Done
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBulkAction("IN_PROGRESS")}
+                disabled={isPending}
+                className="rounded-md bg-blue-600/80 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+              >
+                ▶ Progress
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBulkAction("BLOCKED")}
+                disabled={isPending}
+                className="rounded-md bg-rose-600/80 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+              >
+                ⚠ Block
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text)]"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -182,91 +235,14 @@ export function DailyRegisterClient({
         </div>
       )}
 
-      {/* Data table */}
-      <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--border)]">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-[var(--surface-2)]/95 backdrop-blur">
-            <tr className="border-b border-[var(--border)]">
-              {canWrite && (
-                <th className="w-10 px-2 py-2">
-                  <input
-                    type="checkbox"
-                    checked={selected.size === tasks.length && tasks.length > 0}
-                    onChange={toggleAll}
-                    className="accent-purple-500"
-                    aria-label="Select all"
-                  />
-                </th>
-              )}
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-[var(--text-muted)]">Vehicle</th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-[var(--text-muted)]">Status</th>
-              <th className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium text-[var(--text-muted)]">Ext</th>
-              <th className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium text-[var(--text-muted)]">Int</th>
-              <th className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium text-[var(--text-muted)]">Vac</th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-[var(--text-muted)]">Washer</th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-[var(--text-muted)]">Station</th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-[var(--text-muted)]">Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tasks.map((task) => (
-              <tr
-                key={task.id}
-                className={`border-b border-[var(--border)]/50 transition-colors ${
-                  selected.has(task.id)
-                    ? "bg-purple-500/10"
-                    : "hover:bg-white/3"
-                }`}
-              >
-                {canWrite && (
-                  <td className="px-2 py-2">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(task.id)}
-                      onChange={() => toggleOne(task.id)}
-                      className="accent-purple-500"
-                    />
-                  </td>
-                )}
-                <td className="px-3 py-2 font-medium text-[var(--text)]">
-                  {task.plate} · {task.model}
-                </td>
-                <td className="px-3 py-2">
-                  <span
-                    className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                      task.status === "DONE"
-                        ? "bg-emerald-400/20 text-emerald-300"
-                        : task.status === "IN_PROGRESS"
-                          ? "bg-blue-400/20 text-blue-300"
-                          : task.status === "BLOCKED"
-                            ? "bg-rose-400/20 text-rose-300"
-                            : "bg-amber-400/20 text-amber-300"
-                    }`}
-                  >
-                    {task.status}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-center">{task.exteriorDone ? "✓" : "—"}</td>
-                <td className="px-3 py-2 text-center">{task.interiorDone ? "✓" : "—"}</td>
-                <td className="px-3 py-2 text-center">{task.vacuumDone ? "✓" : "—"}</td>
-                <td className="px-3 py-2 text-[var(--text-muted)]">{task.washer}</td>
-                <td className="px-3 py-2 text-[var(--text-muted)]">{task.station}</td>
-                <td className="px-3 py-2 text-[var(--text-muted)]">{task.time}</td>
-              </tr>
-            ))}
-            {tasks.length === 0 && (
-              <tr>
-                <td
-                  colSpan={canWrite ? 9 : 8}
-                  className="py-8 text-center text-sm text-[var(--text-muted)]"
-                >
-                  No tasks for this day
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Virtualized table */}
+      <VirtualTable
+        data={tasks}
+        columns={columns}
+        rowHeight={40}
+        maxHeight={500}
+        emptyMessage="No tasks for this day"
+      />
     </div>
   );
 }

@@ -92,7 +92,7 @@ export async function GET(request: Request) {
             where: { workspaceId_urlHash: { workspaceId: source.workspaceId, urlHash: item.urlHash } },
           });
           if (!existing) {
-            await db.feedItem.create({
+            const created = await db.feedItem.create({
               data: {
                 workspaceId: source.workspaceId,
                 sourceId: source.id,
@@ -107,6 +107,34 @@ export async function GET(request: Request) {
               },
             });
             newCount++;
+
+            // Auto-pin high-relevance items and notify coordinators
+            if (item.relevanceScore >= 0.8) {
+              await db.feedItem.update({
+                where: { id: created.id },
+                data: { isPinned: true },
+              });
+
+              // Create notification for workspace admins
+              try {
+                const admins = await db.workspaceMember.findMany({
+                  where: { workspaceId: source.workspaceId, role: { in: ["ADMIN", "EDITOR"] } },
+                  select: { userId: true },
+                });
+                for (const admin of admins) {
+                  await db.notification.create({
+                    data: {
+                      userId: admin.userId,
+                      type: "FEED_HIGH_RELEVANCE",
+                      title: `📌 High-relevance feed: ${item.title.slice(0, 80)}`,
+                      body: `${item.category} — Score ${(item.relevanceScore * 100).toFixed(0)}%. Auto-pinned.`,
+                    },
+                  });
+                }
+              } catch {
+                // non-critical: notification creation failure should not break feed scan
+              }
+            }
           }
         }
 

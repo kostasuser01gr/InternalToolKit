@@ -57,6 +57,7 @@ type ChatFirstShellProps = {
   workspaceName: string;
   userName: string;
   userRole?: string | undefined;
+  roleShortcuts?: Record<string, Array<{ id: string; label: string; command: string }>> | undefined;
 };
 
 const moduleShortcuts = [
@@ -88,6 +89,7 @@ function ChatFirstShell({
   workspaceName,
   userName,
   userRole,
+  roleShortcuts,
 }: ChatFirstShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -149,7 +151,7 @@ function ChatFirstShell({
           </div>
 
           {/* Quick Bar */}
-          <QuickBar userRole={userRole} />
+          <QuickBar userRole={userRole} roleShortcuts={roleShortcuts} />
 
           {/* Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
