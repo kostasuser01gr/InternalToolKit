@@ -833,3 +833,27 @@ All 9 phases from the mission are now fully implemented:
 
 ### CI
 - Run `22282583918` — ✅ green
+
+---
+
+## Wave 8 — Gap Fixes + Production Polish
+
+### Commit `c4b7b7f`
+**Changes delivered:**
+1. **W8-A: Cron retry backoff** — `withRetry()` helper with exponential backoff (1s→2s→4s), max 3 attempts. Final failures logged to `DeadLetterEntry` table with type `cron-{label}`. Wrapped feed source fetch and weather station fetch.
+2. **W8-B: Chat search RBAC** — Search API now queries user's `ChatChannelMember` memberships and filters chat message results to only include messages from public channels, channel-less threads, or channels the user belongs to.
+3. **W8-C: Viber rich media + helpers** — `sendViaChannelRich()` for picture/video/file types, `setViberWebhook()` for webhook registration, `getViberAccountInfo()` for superadmin ID discovery.
+4. **W8-D: Shortcut reordering** — `position Int @default(0)` added to `UserShortcut` model. Migration `20260222190240_wave8_shortcut_position` applied. List ordered by `position ASC, createdAt DESC`. Create/update accept `position`. Shared schema updated.
+5. **W8-E: CLI setup helper** — `scripts/setup-integrations.mjs` interactive env var setup. Writes `.env.local` (gitignored). Added `"setup:integrations"` script to package.json.
+6. **W8-F: Tests** — 18 new tests in `wave8.test.ts` covering all items.
+
+### Gates
+| Check | Status |
+|------|--------|
+| typecheck | ✅ clean |
+| lint | ✅ 0 warnings |
+| unit tests | ✅ 442 passed (18 new wave8 tests) |
+| build | ✅ success |
+
+### CI
+- Run `22283500164` — ✅ green
