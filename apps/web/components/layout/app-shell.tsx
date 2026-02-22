@@ -17,9 +17,10 @@ type AppShellProps = {
   children: React.ReactNode;
   workspaceName: string;
   userName: string;
+  userRole?: string | undefined;
 };
 
-function AppShell({ children, workspaceName, userName }: AppShellProps) {
+function AppShell({ children, workspaceName, userName, userRole }: AppShellProps) {
   const pathname = usePathname();
 
   if (features.chatFirstUi) {
@@ -27,6 +28,7 @@ function AppShell({ children, workspaceName, userName }: AppShellProps) {
       <ChatFirstShell
         workspaceName={workspaceName}
         userName={userName}
+        userRole={userRole}
       >
         {children}
       </ChatFirstShell>

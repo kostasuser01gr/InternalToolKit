@@ -15,11 +15,15 @@ const FEED_ITEM_RETENTION_DAYS = 90;
 
 function verifyCronSecret(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return true; // allow in dev when no secret configured
+  if (!secret) return true;
   const header = request.headers.get("authorization");
   return header === `Bearer ${secret}`;
 }
 
+/**
+ * Legacy feed-only cron endpoint — kept for backward compatibility.
+ * The consolidated daily cron is at /api/cron/daily.
+ */
 export async function GET(request: Request) {
   if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
