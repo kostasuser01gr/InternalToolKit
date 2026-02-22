@@ -1,6 +1,6 @@
-# Proof Pack — Full-Scale OPS OS: Stabilization, Chat-First UI, AI Router, Kiosk, Fleet, Shifts, Phase 10+11
+# Proof Pack — Full-Scale OPS OS: Stabilization, Chat-First UI, AI Router, Kiosk, Fleet, Shifts, Phase 10+11+12
 
-> Generated: 2026-02-22 | Last updated: 2026-02-22T12:25Z
+> Generated: 2026-02-22 | Last updated: 2026-02-22T12:55Z
 
 ---
 
@@ -448,3 +448,41 @@ cd apps/web && npx eslint . --max-warnings=0   # 0 warnings
 gh run list --limit 5                           # CI green
 curl https://internal-tool-kit-web.vercel.app/api/ai/setup
 ```
+
+---
+
+## Phase 12 — Washer-Centric Upgrades + Viber-like Chat
+
+### Delivered
+1. **Washers KPI Dashboard** — 5 KPI cards (total/done/pending/issues/avg turnaround) + top washers leaderboard
+2. **Share Washer App Panel** — Copyable link, install instructions for iOS/Android/Desktop, kiosk token status
+3. **Kiosk Companion App Upgrade** — Tabbed UI (Tasks/History/Chat/Settings), theme switching (quantum/dark/light/high-contrast), voice input (behind flag), link param overrides
+4. **#washers-only Channel** — Auto-created on first kiosk chat, daily threads, kiosk identity in messages
+5. **Kiosk Chat API** — GET/POST endpoints with rate limiting, token validation
+6. **Chat Channels Sidebar** — Viber-like channel list in main chat (behind viberChat flag)
+7. **Viber Bridge Service** — One-way mirror with PII redaction, rate limiting, dead-letter queue, admin status API
+8. **Documentation** — WASHERS_DASHBOARD.md, WASHER_APP.md, CHAT_VIBERLIKE.md, QA_CHECKLIST.md
+
+### Tests
+- 305 unit tests passing (26 new for Phase 12)
+- TypeScript strict mode: clean
+- Lint: 0 warnings
+- Build: clean
+
+### Commits
+- `5749d12` — feat: washers dashboard KPIs, companion PWA upgrade, #washers-only channel, Viber bridge
+- `6b3a1b2` — fix: token validation test strict type comparisons
+
+### Deployment
+- Vercel production: https://internal-tool-kit-web.vercel.app ✓
+- `/api/health` → `{"ok":true,"db":"ok"}` ✓
+- `/api/viber` → `{"enabled":false,"ready":false,"mode":"one-way","deadLetterCount":0}` ✓
+
+### Environment Variables Added
+| Variable | Purpose |
+|----------|---------|
+| FEATURE_VIBER_BRIDGE | Enable Viber bridge (default: 0) |
+| VIBER_BOT_TOKEN | Viber bot API token |
+| VIBER_TARGET_GROUP_ID | Target Viber group |
+| VIBER_WEBHOOK_SECRET | Inbound webhook secret |
+| VIBER_BRIDGE_MODE | one-way (default) or two-way |
