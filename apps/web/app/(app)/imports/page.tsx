@@ -166,30 +166,14 @@ function BatchCard({ batch, workspaceId }: { batch: Batch; workspaceId: string }
 }
 
 async function ImportBatchList({ workspaceId }: { workspaceId: string }) {
+  let batches: Batch[];
   try {
-    const batches = await db.importBatch.findMany({
+    batches = await db.importBatch.findMany({
       where: { workspaceId },
       orderBy: { createdAt: "desc" },
       take: 50,
       include: { creator: { select: { name: true, email: true } } },
     });
-
-    if (batches.length === 0) {
-      return (
-        <GlassCard className="p-8 text-center">
-          <FileSpreadsheet className="mx-auto mb-3 h-10 w-10 text-[var(--text-muted)]" />
-          <p className="text-sm text-[var(--text-muted)]">No imports yet. Upload a file to get started.</p>
-        </GlassCard>
-      );
-    }
-
-    return (
-      <div className="space-y-3">
-        {batches.map((b) => (
-          <BatchCard key={b.id} batch={b} workspaceId={workspaceId} />
-        ))}
-      </div>
-    );
   } catch (err) {
     if (isSchemaNotReadyError(err)) {
       return (
@@ -203,6 +187,23 @@ async function ImportBatchList({ workspaceId }: { workspaceId: string }) {
     }
     throw err;
   }
+
+  if (batches.length === 0) {
+    return (
+      <GlassCard className="p-8 text-center">
+        <FileSpreadsheet className="mx-auto mb-3 h-10 w-10 text-[var(--text-muted)]" />
+        <p className="text-sm text-[var(--text-muted)]">No imports yet. Upload a file to get started.</p>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {batches.map((b) => (
+        <BatchCard key={b.id} batch={b} workspaceId={workspaceId} />
+      ))}
+    </div>
+  );
 }
 
 export default async function ImportsPage(props: { searchParams: SearchParams }) {

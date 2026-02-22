@@ -234,7 +234,10 @@ function CommandPalette() {
   useEffect(() => {
     if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
     const q = query.trim();
-    if (q.length < 2) { setServerResults([]); return; }
+    if (q.length < 2) {
+      searchTimerRef.current = window.setTimeout(() => { setServerResults([]); }, 0);
+      return () => { if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current); };
+    }
     searchTimerRef.current = window.setTimeout(() => { void searchServer(q); }, 300);
     return () => { if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current); };
   }, [query, searchServer]);
