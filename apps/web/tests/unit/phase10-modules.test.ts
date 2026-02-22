@@ -55,7 +55,6 @@ import {
   IncidentSeverity,
   IncidentStatus,
   AutomationRuleStatus,
-  AccessReviewStatus,
   AttendanceType,
   SkillLevel,
   TrainingStatus,
