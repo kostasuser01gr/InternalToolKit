@@ -174,7 +174,7 @@ describe("Phase 10 — Automations 2.0 validators", () => {
     const result = updateAutomationRuleSchema.safeParse({
       workspaceId: "ws1",
       ruleId: "rule1",
-      status: AutomationRuleStatus.DISABLED,
+      status: AutomationRuleStatus.PAUSED,
     });
     expect(result.success).toBe(true);
   });
