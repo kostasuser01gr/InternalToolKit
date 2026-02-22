@@ -9,6 +9,7 @@ const createShortcutSchema = z.object({
   label: z.string().trim().min(1).max(60),
   command: z.string().trim().min(1).max(300),
   keybinding: z.string().trim().max(40).optional(),
+  position: z.number().int().min(0).optional(),
 });
 
 function toIso(value: Date) {
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
         userId: user.id,
         workspaceId: workspace.id,
       },
-      orderBy: [{ createdAt: "desc" }],
+      orderBy: [{ position: "asc" }, { createdAt: "desc" }],
     });
 
     return Response.json({
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
           label: shortcut.label,
           command: shortcut.command,
           keybinding: shortcut.keybinding ?? undefined,
+          position: shortcut.position,
           createdAt: toIso(shortcut.createdAt),
           updatedAt: toIso(shortcut.updatedAt),
         }),
@@ -63,6 +65,7 @@ export async function POST(request: Request) {
         label: payload.label,
         command: payload.command,
         keybinding: payload.keybinding ?? null,
+        position: payload.position ?? 0,
       },
     });
 

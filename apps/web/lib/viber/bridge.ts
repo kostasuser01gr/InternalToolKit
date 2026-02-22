@@ -127,6 +127,108 @@ async function sendViaChannel(config: ViberBridgeConfig, text: string): Promise<
   }
 }
 
+export type ViberRichMediaType = "picture" | "video" | "file";
+
+/** Send rich media (picture/video/file) via Channel Post API */
+export async function sendViaChannelRich(
+  type: ViberRichMediaType,
+  opts: { mediaUrl: string; thumbnailUrl?: string; fileName?: string; text?: string },
+): Promise<{ ok: boolean; error?: string }> {
+  const config = getViberBridgeConfig();
+  if (!config.channelToken) return { ok: false, error: "Missing VIBER_CHANNEL_AUTH_TOKEN" };
+
+  const body: Record<string, unknown> = {
+    type,
+    sender: { name: "OPS Bridge" },
+  };
+
+  if (type === "picture") {
+    body.media = opts.mediaUrl;
+    body.thumbnail = opts.thumbnailUrl ?? opts.mediaUrl;
+    body.text = opts.text ?? "";
+  } else if (type === "video") {
+    body.media = opts.mediaUrl;
+    body.thumbnail = opts.thumbnailUrl ?? "";
+    body.size = 0; // Viber requires size but we may not know it
+    if (opts.text) body.text = opts.text;
+  } else if (type === "file") {
+    body.media = opts.mediaUrl;
+    body.file_name = opts.fileName ?? "file";
+    body.size = 0;
+  }
+
+  try {
+    const res = await fetch(VIBER_CHANNEL_POST_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Viber-Auth-Token": config.channelToken,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return { ok: false, error: `Channel HTTP ${res.status}` };
+    const data = await res.json();
+    if (data.status !== 0) return { ok: false, error: `Channel error ${data.status}: ${data.status_message}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+/** Set Viber webhook — required for receiving callbacks (valid SSL URL needed) */
+export async function setViberWebhook(
+  webhookUrl: string,
+  eventTypes?: string[],
+): Promise<{ ok: boolean; error?: string }> {
+  const config = getViberBridgeConfig();
+  const token = config.channelToken || config.botToken;
+  if (!token) return { ok: false, error: "Missing Viber auth token" };
+
+  try {
+    const res = await fetch("https://chatapi.viber.com/pa/set_webhook", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Viber-Auth-Token": token,
+      },
+      body: JSON.stringify({
+        url: webhookUrl,
+        event_types: eventTypes ?? ["delivered", "seen", "failed"],
+      }),
+    });
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+    const data = await res.json();
+    if (data.status !== 0) return { ok: false, error: `Viber error ${data.status}: ${data.status_message}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+/** Get Viber account info — useful to discover superadmin sender ID */
+export async function getViberAccountInfo(): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }> {
+  const config = getViberBridgeConfig();
+  const token = config.channelToken || config.botToken;
+  if (!token) return { ok: false, error: "Missing Viber auth token" };
+
+  try {
+    const res = await fetch("https://chatapi.viber.com/pa/get_account_info", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Viber-Auth-Token": token,
+      },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+    const data = await res.json();
+    if (data.status !== 0) return { ok: false, error: `Viber error ${data.status}: ${data.status_message}` };
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 /** Send a message to Viber group via Bot API (fallback) */
 async function sendToViber(config: ViberBridgeConfig, text: string): Promise<{ ok: boolean; error?: string }> {
   try {
