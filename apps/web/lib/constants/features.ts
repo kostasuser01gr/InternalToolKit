@@ -45,4 +45,8 @@ export const features = {
   advancedSearch: isEnabled(process.env.NEXT_PUBLIC_FEATURE_ADVANCED_SEARCH, false),
   compliance: isEnabled(process.env.NEXT_PUBLIC_FEATURE_COMPLIANCE, false),
   multiStation: isEnabled(process.env.NEXT_PUBLIC_FEATURE_MULTI_STATION, false),
+  viberChat: isEnabled(process.env.NEXT_PUBLIC_FEATURE_VIBER_CHAT, true),
+  fileImports: isEnabled(process.env.NEXT_PUBLIC_FEATURE_FILE_IMPORTS, true),
+  viberBridge: isEnabled(process.env.NEXT_PUBLIC_FEATURE_VIBER_BRIDGE, false),
+  aiSetupWizard: isEnabled(process.env.NEXT_PUBLIC_FEATURE_AI_SETUP_WIZARD, true),
 };
