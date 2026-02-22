@@ -880,3 +880,39 @@ All 9 phases from the mission are now fully implemented:
 
 ### CI
 - Run `22283943649` — ✅ green
+
+---
+
+## Wave 10 — Fleet Bulk Ops + Ops Inbox Badge + Feed Keyword Tuning
+
+### Commit
+`82e994a` — `feat: wave 10 — fleet bulk ops, ops inbox badge, feed keyword tuning`
+
+### W10-A: Fleet Bulk Status Change
+- `bulkUpdateVehiclesAction()` — validates transitions via `isValidTransition()`, max 50 vehicles
+- `BulkFleetBar` client component — Set selection + useOptimistic + pushUndo
+- Targets: NEEDS_CLEANING, CLEANING, QC_PENDING, READY, OUT_OF_SERVICE
+- Audit logged with `fleet.bulk_transition` action
+
+### W10-C: Feed Relevance Keyword Tuning
+- Added `keywordsJson` field to FeedSource model (migration `20260222200013`)
+- `updateFeedSourceKeywordsAction()` — per-source boost/suppress keywords
+- `FeedSourceKeywords` inline editor on Feeds page
+- Supports comma-separated boost and suppress keyword lists
+
+### W10-D: Ops Inbox Nav Badge
+- `getOpsInboxCount()` in layout.tsx — queries feed items (score >= 0.6) + pending shift requests + open incidents
+- Count passed through AppShell → ChatFirstShell → nav sidebar
+- Rose badge on "Ops Inbox" nav item, capped at 99+
+
+### Gates
+
+| gate | result |
+|---|---|
+| typecheck | ✅ clean |
+| lint | ✅ clean (max-warnings=0) |
+| unit tests | ✅ 462 passed (9 new wave10 tests) |
+| build | ✅ success |
+
+### CI
+- Run `22284343534` — pending (just pushed)
