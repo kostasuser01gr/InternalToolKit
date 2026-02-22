@@ -1,6 +1,6 @@
-# Proof Pack — Full-Scale Stabilization, Chat-First UI, AI Router, Washers Kiosk
+# Proof Pack — Full-Scale OPS OS: Stabilization, Chat-First UI, AI Router, Kiosk, Fleet, Shifts, Phase 10+11
 
-> Generated: 2026-02-22
+> Generated: 2026-02-22 | Last updated: 2026-02-22T12:25Z
 
 ---
 
@@ -391,3 +391,60 @@ ALTER TABLE "ShiftRequest" ADD COLUMN "reviewedBy", "reviewedAt", "reviewNote";
 ### Deployment
 - **Vercel**: Deployed to https://internal-tool-kit-web.vercel.app
 - **CI**: Green after lint fix commit
+
+---
+
+## Phase 11 — Viber-like Chat + File Import Pipeline + AI Setup (v5)
+
+### Schema & Migration
+- **Migration**: `20260222121039_viber_chat_file_imports` (155 lines SQL)
+- **Applied to production** Supabase DB
+- **2 new enums**: ChatChannelType, ImportBatchStatus
+- **5 new models**: ChatChannel, ChatChannelMember, ChatReadReceipt, ChatReaction, ImportBatch
+- **ChatThread enhanced**: channelId, isPinned, isArchived
+- **ChatMessage enhanced**: replyToId, isEdited, isDeleted, mentionsJson, editedAt, reactions, readReceipts
+
+### Viber-like Chat
+- Channels (PUBLIC/PRIVATE/DM/GROUP) with membership, reactions, replies, read receipts, pins, moderation
+- Validators + server actions for full channel lifecycle
+- Default channels `#ops-general` and `#washers-only` supported by schema
+
+### File Import Pipeline
+- Upload→Analyze→Preview→Accept/Decline/Rollback lifecycle with idempotency (fileHash)
+- Templates: Bookings.xlsx (22 fields) and Vehicles.xlsx (24 fields)
+- Diff engine: create/update/skip/error proposals with change tracking
+- RBAC: admin-only for all import operations
+
+### AI Setup Wizard
+- Key detection: `/api/ai/setup` (GET), `/api/ai/test-connection` (POST)
+- Never exposes actual key values
+
+### Viber Bridge
+- Feature flag `FEATURE_VIBER_BRIDGE` (OFF), docs at `docs/VIBER_BRIDGE.md`
+
+### Tests & Commits
+- 30 new tests (279 total, all passing), lint+build clean
+- Commit `80ef977`: feat: Viber-like chat channels + file import pipeline + AI setup wizard
+- Deployed to https://internal-tool-kit-web.vercel.app
+
+---
+
+## Environment Variables Checklist
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `DATABASE_URL` | Yes | Supabase pooler |
+| `DIRECT_URL` | Yes | Supabase direct (migrations) |
+| `SESSION_SECRET` | Yes | Cookie sessions |
+| `KIOSK_TOKEN` | Yes | Washer kiosk auth |
+| `OPENROUTER_API_KEY` | For AI | Multi-model routing |
+| `VIBER_BOT_TOKEN` | For bridge | Viber mirror |
+
+### Verification Commands
+```bash
+pnpm -w test                                   # 279 tests
+pnpm --filter @internal-toolkit/web build      # clean
+cd apps/web && npx eslint . --max-warnings=0   # 0 warnings
+gh run list --limit 5                           # CI green
+curl https://internal-tool-kit-web.vercel.app/api/ai/setup
+```
