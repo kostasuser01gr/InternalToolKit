@@ -1,3 +1,9 @@
 {
-  "buildCommand": "node scripts/migrate-deploy.mjs || echo '[warn] migrate-deploy failed — schema fallbacks active in app'; pnpm run build"
+  "buildCommand": "node scripts/migrate-deploy.mjs || echo '[warn] migrate-deploy failed — schema fallbacks active in app'; pnpm run build",
+  "crons": [
+    {
+      "path": "/api/cron/feeds",
+      "schedule": "*/30 * * * *"
+    }
+  ]
 }

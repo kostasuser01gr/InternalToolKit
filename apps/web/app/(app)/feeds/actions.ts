@@ -135,3 +135,97 @@ export async function pinFeedItemAction(formData: FormData) {
   }
   revalidatePath("/feeds");
 }
+
+export async function sendFeedToChatAction(formData: FormData) {
+  const itemId = formData.get("itemId") as string;
+  const workspaceId = formData.get("workspaceId") as string;
+  if (!itemId || !workspaceId) redirect("/feeds?error=Missing+fields");
+
+  try {
+    const { user } = await getAppContext(workspaceId);
+    const item = await db.feedItem.findUnique({ where: { id: itemId } });
+    if (!item || item.workspaceId !== workspaceId) redirect("/feeds?error=Not+found");
+
+    // Find or create #ops-general channel
+    let channel = await db.chatChannel.findFirst({
+      where: { workspaceId, slug: "ops-general" },
+    });
+    if (!channel) {
+      channel = await db.chatChannel.create({
+        data: {
+          workspaceId,
+          name: "#ops-general",
+          slug: "ops-general",
+          type: "PUBLIC",
+          createdBy: user.id,
+        },
+      });
+    }
+
+    // Create thread + message in the channel
+    const thread = await db.chatThread.create({
+      data: {
+        workspaceId,
+        channelId: channel.id,
+        title: `📰 ${item.title}`,
+        createdBy: user.id,
+      },
+    });
+
+    const summary = item.summary
+      ? `${item.summary.slice(0, 300)}${item.summary.length > 300 ? "…" : ""}`
+      : "No summary available.";
+
+    await db.chatMessage.create({
+      data: {
+        threadId: thread.id,
+        authorUserId: user.id,
+        role: "USER",
+        content: `**📰 ${item.title}**\n\n${summary}\n\n🔗 ${item.url}`,
+      },
+    });
+
+    await appendAuditLog({
+      workspaceId,
+      action: "feeds.item_sent_to_chat",
+      actorUserId: user.id,
+      entityType: "feed_item",
+      entityId: itemId,
+      metaJson: { title: item.title, channelSlug: "ops-general" },
+    });
+  } catch (err) {
+    if (isSchemaNotReadyError(err)) redirect("/feeds?error=Chat+module+not+ready");
+    throw err;
+  }
+  revalidatePath("/feeds");
+  redirect("/feeds?success=Sent+to+%23ops-general");
+}
+
+export async function deleteFeedSourceAction(formData: FormData) {
+  const sourceId = formData.get("sourceId") as string;
+  const workspaceId = formData.get("workspaceId") as string;
+  if (!sourceId || !workspaceId) redirect("/feeds?error=Missing+fields");
+
+  try {
+    const { user } = await getAppContext(workspaceId);
+    const source = await db.feedSource.findUnique({ where: { id: sourceId } });
+    if (!source || source.workspaceId !== workspaceId) redirect("/feeds?error=Source+not+found");
+
+    await db.feedItem.deleteMany({ where: { sourceId } });
+    await db.feedSource.delete({ where: { id: sourceId } });
+
+    await appendAuditLog({
+      workspaceId,
+      action: "feeds.source_deleted",
+      actorUserId: user.id,
+      entityType: "feed",
+      entityId: sourceId,
+      metaJson: { name: source.name },
+    });
+  } catch (err) {
+    if (isSchemaNotReadyError(err)) redirect("/feeds?error=Feeds+module+not+ready");
+    throw err;
+  }
+  revalidatePath("/feeds");
+  redirect("/feeds?success=Source+deleted");
+}
