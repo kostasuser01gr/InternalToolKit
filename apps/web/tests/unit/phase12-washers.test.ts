@@ -88,28 +88,24 @@ describe("Washer KPI computation", () => {
 
 // ─── Kiosk Token Validation Tests ───────────────────────────────────────────
 describe("Kiosk token validation", () => {
+  function validateToken(token: string, envToken: string): boolean {
+    return token.length > 0 && token === envToken;
+  }
+
   it("rejects empty token", () => {
-    const token = "";
-    const envToken = "abc123";
-    expect(token.length > 0 && token === envToken).toBe(false);
+    expect(validateToken("", "abc123")).toBe(false);
   });
 
   it("rejects mismatched token", () => {
-    const token = "wrong";
-    const envToken = "abc123";
-    expect(token.length > 0 && token === envToken).toBe(false);
+    expect(validateToken("wrong", "abc123")).toBe(false);
   });
 
   it("accepts valid matching token", () => {
-    const token = "abc123";
-    const envToken = "abc123";
-    expect(token.length > 0 && token === envToken).toBe(true);
+    expect(validateToken("abc123", "abc123")).toBe(true);
   });
 
   it("rejects when env token not set", () => {
-    const token = "abc123";
-    const envToken = "";
-    expect(token.length > 0 && token === envToken).toBe(false);
+    expect(validateToken("abc123", "")).toBe(false);
   });
 });
 
