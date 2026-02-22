@@ -12,6 +12,7 @@ import {
   Home,
   LogOut,
   MessageSquare,
+  Newspaper,
   PanelRightOpen,
   Pin,
   Plus,
@@ -19,6 +20,7 @@ import {
   Settings,
   SlidersHorizontal,
   Sparkles,
+  Upload,
   Workflow,
   X,
 } from "lucide-react";
@@ -58,6 +60,8 @@ const moduleShortcuts = [
   { href: "/controls", label: "Controls", icon: SlidersHorizontal },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/imports", label: "Imports", icon: Upload },
+  { href: "/feeds", label: "Feeds", icon: Newspaper },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
