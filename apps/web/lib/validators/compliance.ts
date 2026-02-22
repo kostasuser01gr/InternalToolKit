@@ -1,4 +1,3 @@
-import { AccessReviewStatus } from "@prisma/client";
 import { z } from "zod";
 
 export const createRetentionPolicySchema = z.object({
