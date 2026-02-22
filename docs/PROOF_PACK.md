@@ -315,3 +315,79 @@ ALTER TABLE "ShiftRequest" ADD COLUMN "reviewedBy", "reviewedAt", "reviewNote";
 6. **Fleet pipeline UI**: Server actions and logic complete; fleet page UI needs pipeline stage visualization, timeline view, and SLA indicators.
 7. **Shifts v2 UI**: Workflow logic complete; shifts page needs publish/lock controls, version history panel, and rollback UI.
 8. **PWA manifest**: Kiosk app would benefit from `manifest.json` + service worker for installability.
+
+---
+
+## Phase 10 — Full-Scale Domain Additions (v4)
+
+### Schema & Migration
+- **Migration**: `20260222113130_phase10_ops_os_additions` (387 lines SQL)
+- **Applied to production** Supabase DB successfully
+- **10 new enums**: AttendanceType, SkillLevel, TrainingStatus, AssetType, AssetStatus, IncidentSeverity, IncidentStatus, AutomationRuleStatus, AutomationExecStatus, AccessReviewStatus
+- **14 new models**: Attendance, Skill, UserSkill, Training, TrainingRecord, Asset, AssetHandover, Incident, AutomationRule, AutomationExecution, SavedView, Runbook, RetentionPolicy, AccessReview, Station
+- **24+ reverse relations** added to User, Workspace, Vehicle models
+
+### Feature Flags (all default OFF for safe rollout)
+| Flag | Module | Default |
+|------|--------|---------|
+| FEATURE_WORKFORCE_OPS | Workforce (attendance/skills/training) | OFF |
+| FEATURE_INVENTORY | Assets/Keys/Equipment | OFF |
+| FEATURE_INCIDENTS | Incidents/Damage/Claims | OFF |
+| FEATURE_AUTOMATIONS_2 | Automations 2.0 (rules/schedules) | OFF |
+| FEATURE_REALTIME_BOARDS | Real-time ops boards | OFF |
+| FEATURE_ADVANCED_SEARCH | Search/Saved views/Runbooks | OFF |
+| FEATURE_COMPLIANCE | Compliance/Audit/Retention | OFF |
+| FEATURE_MULTI_STATION | Multi-station management | OFF |
+
+### Modules Implemented
+
+#### A. Workforce Ops
+- **Validators**: `recordAttendanceSchema`, `createSkillSchema`, `assignSkillSchema`, `createTrainingSchema`, `updateTrainingRecordSchema`
+- **Actions**: `recordAttendanceAction`, `createSkillAction`, `assignSkillAction`, `createTrainingAction`, `updateTrainingRecordAction`
+- **RBAC**: Any workspace member can check in; admin for skill/training management
+
+#### B. Asset/Inventory/Keys
+- **Validators**: `createAssetSchema`, `updateAssetSchema`, `recordHandoverSchema`
+- **Actions**: `createAssetAction`, `updateAssetAction`, `recordHandoverAction`
+- **Features**: Asset types (KEY/EQUIPMENT/CONSUMABLE/ACCESSORY), handover logging, auto-status on handover
+
+#### C. Incidents/Damage
+- **Validators**: `createIncidentSchema`, `updateIncidentSchema`
+- **Actions**: `createIncidentAction`, `updateIncidentAction`
+- **Features**: Severity levels, vehicle linking, photo attachment (JSON), repair ETA/cost, claim ref, auto VehicleEvent creation
+
+#### D. Automations 2.0
+- **Validators**: `createAutomationRuleSchema`, `updateAutomationRuleSchema`
+- **Actions**: `createAutomationRuleAction`, `updateAutomationRuleAction`
+- **Features**: JSON trigger/condition/action, schedule support, retry config (max 10)
+
+#### E. Search/Saved Views/Runbooks
+- **Validators**: `createSavedViewSchema`, `createRunbookSchema`, `updateRunbookSchema`
+- **Actions**: `createSavedViewAction`, `createRunbookAction`, `updateRunbookAction`
+- **Features**: Per-user saved views with filters/columns/sort, pinnable runbooks with tags
+
+#### F. Compliance/Audit/Retention
+- **Validators**: `createRetentionPolicySchema`, `createAccessReviewSchema`, `resolveAccessReviewSchema`
+- **Actions**: `setRetentionPolicyAction`, `createAccessReviewAction`, `resolveAccessReviewAction`
+- **Features**: Module-level retention policies (1-3650 days), quarterly access review workflow (PENDING→APPROVED/REVOKED)
+
+#### G. Multi-Station
+- **Validators**: `createStationSchema`, `updateStationSchema`
+- **Actions**: `createStationAction`, `updateStationAction`
+- **Features**: Station code (auto-uppercase), activation/deactivation, config JSON
+
+### Tests
+- **36 new unit tests** covering all Phase 10 validators
+- **249 total tests**, all passing
+- **Lint clean** (0 warnings, 0 errors)
+- **Build clean** (TypeScript strict mode)
+
+### Commits
+| Commit | Description |
+|--------|-------------|
+| `2d65456` | feat: Phase 10 — 8 domain modules |
+| `5f86507` | fix: remove unused imports (lint) |
+
+### Deployment
+- **Vercel**: Deployed to https://internal-tool-kit-web.vercel.app
+- **CI**: Green after lint fix commit
