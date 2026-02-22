@@ -7,7 +7,7 @@ import {
   processFeedItems,
 } from "@/lib/feeds/scanner";
 import { isSchemaNotReadyError } from "@/lib/prisma-errors";
-import { retryDeadLetters } from "@/lib/viber/bridge";
+import { isViberBridgeReady, mirrorToViber, retryDeadLetters } from "@/lib/viber/bridge";
 import { DEFAULT_STATIONS, fetchWeatherSafe } from "@/lib/weather/client";
 
 /**
@@ -195,6 +195,21 @@ export async function GET(request: Request) {
               } catch {
                 // non-critical: notification creation failure should not break feed scan
               }
+
+              // Auto-mirror high-relevance feeds to Viber channel
+              try {
+                if (isViberBridgeReady()) {
+                  await mirrorToViber({
+                    id: created.id,
+                    channelSlug: "ops-general",
+                    content: `📰 ${item.category}: ${item.title}\n${item.summary?.slice(0, 200) ?? ""}\nRelevance: ${(item.relevanceScore * 100).toFixed(0)}%`,
+                    authorName: "Feed Scanner",
+                    timestamp: new Date(),
+                  });
+                }
+              } catch {
+                // non-critical: Viber mirror failure should not break feed scan
+              }
             }
           }
         }
@@ -287,6 +302,89 @@ export async function GET(request: Request) {
     purgedCronLogs: cronLogsPurged,
   };
   await logRunToDB({ job: "housekeeping", startedAt: runStart, finishedAt: new Date(), status: "ok", itemsProcessed: purgedCount + cronLogsPurged });
+
+  // ── Job 4: Scheduled Automation Rules ──
+  try {
+    const rules = await db.automationRule.findMany({
+      where: { status: "ACTIVE", schedule: { not: null } },
+      take: 50,
+    });
+
+    let rulesRun = 0;
+    let rulesFailed = 0;
+
+    for (const rule of rules) {
+      // Only process rules with daily schedule (matches this cron)
+      const schedule = typeof rule.schedule === "string" ? rule.schedule.trim() : "";
+      if (schedule !== "daily" && schedule !== "0 6 * * *" && schedule !== "cron.daily") continue;
+
+      const execStart = new Date();
+      const logs: Array<{ level: string; message: string }> = [];
+      let hasError = false;
+
+      try {
+        const actions = Array.isArray(rule.actionJson) ? (rule.actionJson as Array<Record<string, string>>) : [];
+
+        for (const action of actions) {
+          if (action.type === "create_notification" && action.userId) {
+            await db.notification.create({
+              data: {
+                userId: action.userId,
+                type: "automation",
+                title: action.title ?? `Automation: ${rule.name}`,
+                body: action.body ?? "Scheduled automation executed.",
+              },
+            });
+            logs.push({ level: "info", message: "Notification created." });
+          }
+
+          if (action.type === "mirror_to_viber" && isViberBridgeReady()) {
+            await mirrorToViber({
+              id: rule.id,
+              channelSlug: action.channel ?? "ops-general",
+              content: action.message ?? `🤖 Automation: ${rule.name}`,
+              authorName: "Automation Engine",
+              timestamp: new Date(),
+            });
+            logs.push({ level: "info", message: "Viber mirror sent." });
+          }
+
+          if (action.type === "write_audit_log") {
+            logs.push({ level: "info", message: `Audit: ${action.action ?? "automation.run"}` });
+          }
+        }
+
+        rulesRun++;
+      } catch (err) {
+        hasError = true;
+        rulesFailed++;
+        logs.push({ level: "error", message: err instanceof Error ? err.message : "Unknown error" });
+      }
+
+      // Log execution
+      try {
+        await db.automationExecution.create({
+          data: {
+            ruleId: rule.id,
+            status: hasError ? "FAILED" : "SUCCESS",
+            startedAt: execStart,
+            finishedAt: new Date(),
+            outputJson: logs,
+          },
+        });
+      } catch {
+        // non-critical
+      }
+    }
+
+    jobs.automations = { rulesEvaluated: rules.length, rulesRun, rulesFailed };
+    await logRunToDB({ job: "automations", startedAt: runStart, finishedAt: new Date(), status: rulesFailed > 0 ? "partial" : "ok", itemsProcessed: rulesRun });
+  } catch (err) {
+    if (!isSchemaNotReadyError(err)) {
+      jobs.automations = { error: err instanceof Error ? err.message : "Failed" };
+      await logRunToDB({ job: "automations", startedAt: runStart, finishedAt: new Date(), status: "error", itemsProcessed: 0, errorSummary: "Failed" });
+    }
+  }
 
   return NextResponse.json({
     ok: true,
