@@ -2,10 +2,23 @@ import { db } from "@/lib/db";
 
 import { KioskClient } from "./kiosk-client";
 
-export default async function WasherKioskPage() {
-  const kioskToken = process.env.KIOSK_TOKEN ?? "";
-  const kioskStationId = process.env.KIOSK_STATION_ID ?? "default";
-  const hasValidToken = kioskToken.length > 0;
+type SearchParams = Promise<{
+  kiosk?: string;
+  station?: string;
+  theme?: string;
+}>;
+
+export default async function WasherKioskPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const params = await searchParams;
+  const kioskToken = params.kiosk ?? process.env.KIOSK_TOKEN ?? "";
+  const kioskStationId = params.station ?? process.env.KIOSK_STATION_ID ?? "default";
+  const themeOverride = params.theme ?? "";
+  const envToken = process.env.KIOSK_TOKEN ?? "";
+  const hasValidToken = kioskToken.length > 0 && kioskToken === envToken;
 
   // Determine workspace from the first workspace with vehicles (kiosk mode)
   const workspace = await db.workspace.findFirst({
@@ -28,6 +41,8 @@ export default async function WasherKioskPage() {
     orderBy: { plateNumber: "asc" },
   });
 
+  const voiceEnabled = process.env.NEXT_PUBLIC_FEATURE_VOICE_INPUT === "1";
+
   return (
     <KioskClient
       workspaceId={workspace.id}
@@ -35,6 +50,8 @@ export default async function WasherKioskPage() {
       stationId={kioskStationId}
       kioskToken={hasValidToken ? kioskToken : ""}
       readOnly={!hasValidToken}
+      themeOverride={themeOverride}
+      voiceEnabled={voiceEnabled}
       vehicles={vehicles.map((v) => ({
         id: v.id,
         plateNumber: v.plateNumber,

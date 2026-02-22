@@ -33,6 +33,7 @@ type ChatPageProps = {
   searchParams: Promise<{
     workspaceId?: string;
     threadId?: string;
+    channelId?: string;
     error?: string;
     success?: string;
     quickCommand?: string;
@@ -231,9 +232,26 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
   const { workspace, user } = await getAppContext(params.workspaceId);
   const modelId = params.modelId ?? DEFAULT_MODEL_ID;
 
+  // ─── Load channels (if Viber-like chat enabled) ───────────────────
+  const channelsResult = await runOptionalChatQuery({
+    feature: "chat_channels",
+    query: () =>
+      db.chatChannel.findMany({
+        where: { workspaceId: workspace.id, isArchived: false },
+        orderBy: { name: "asc" },
+        include: { _count: { select: { threads: true, members: true } } },
+      }),
+    fallback: () => [],
+  });
+  const channels = channelsResult.data;
+  const selectedChannelId = params.channelId;
+
   const [threads, templatesResult, actionButtonsResult, artifactsResult] = await Promise.all([
     db.chatThread.findMany({
-      where: { workspaceId: workspace.id },
+      where: {
+        workspaceId: workspace.id,
+        ...(selectedChannelId ? { channelId: selectedChannelId } : {}),
+      },
       include: {
         _count: {
           select: {
@@ -321,6 +339,49 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
 
       <div className="grid gap-4 xl:grid-cols-[300px,1fr,340px]">
         <GlassCard className="space-y-4">
+          {/* ─── Channels (Viber-like) ─────────────────────── */}
+          {features.viberChat && channels.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="kpi-font text-lg font-semibold">Channels</h2>
+              <div className="space-y-1 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/4 p-2">
+                <Link
+                  href={chatQuery({ workspaceId: workspace.id, modelId })}
+                  className={cn(
+                    "focus-ring block rounded-[var(--radius-sm)] px-3 py-1.5 text-sm",
+                    !selectedChannelId
+                      ? "bg-[#9a6fff22] text-[var(--text)]"
+                      : "text-[var(--text-muted)] hover:bg-white/7",
+                  )}
+                >
+                  📬 All Threads
+                </Link>
+                {channels.map((ch) => (
+                  <Link
+                    key={ch.id}
+                    href={chatQuery({
+                      workspaceId: workspace.id,
+                      channelId: ch.id,
+                      modelId,
+                    })}
+                    className={cn(
+                      "focus-ring block rounded-[var(--radius-sm)] px-3 py-1.5 text-sm",
+                      selectedChannelId === ch.id
+                        ? "bg-[#9a6fff22] text-[var(--text)]"
+                        : "text-[var(--text-muted)] hover:bg-white/7",
+                    )}
+                  >
+                    <span className="truncate">
+                      {ch.type === "DM" ? "💬" : "#"} {ch.name}
+                    </span>
+                    <span className="ml-1 text-xs text-[var(--text-muted)]">
+                      {ch._count.threads}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           <h2 className="kpi-font text-xl font-semibold">Threads</h2>
 
           <form
