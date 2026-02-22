@@ -11,6 +11,7 @@ import { StatusBanner } from "@/components/layout/status-banner";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { UiPreferencesPanel } from "@/components/layout/ui-preferences-panel";
 import { IntegrationsWizard } from "@/components/settings/integrations-wizard";
+import { RoleShortcutsEditor } from "@/components/settings/role-shortcuts-editor";
 import { StationCoordsEditor } from "@/components/settings/station-coords-editor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +41,7 @@ import {
   updatePreferencesAction,
   updateProfileAction,
 } from "./actions";
+import { getRoleShortcuts } from "./role-shortcuts-actions";
 
 type SettingsPageProps = {
   searchParams: Promise<{
@@ -106,6 +108,10 @@ export default async function SettingsPage({
       })
       .catch(schemaFallback([])),
   ]);
+
+  const roleShortcutsConfig = workspaceRole === "ADMIN"
+    ? await getRoleShortcuts(workspace.id)
+    : {};
 
   return (
     <div className="space-y-6" data-testid="settings-page">
@@ -463,6 +469,16 @@ export default async function SettingsPage({
           })}
           workspaceId={workspace.id}
         />
+      ) : null}
+
+      {workspaceRole === "ADMIN" ? (
+        <GlassCard className="space-y-4">
+          <h2 className="kpi-font text-xl font-semibold">Role-Recommended Shortcuts</h2>
+          <RoleShortcutsEditor
+            workspaceId={workspace.id}
+            initial={roleShortcutsConfig}
+          />
+        </GlassCard>
       ) : null}
 
       {workspaceRole === "ADMIN" ? <IntegrationsWizard /> : null}

@@ -18,9 +18,10 @@ type AppShellProps = {
   workspaceName: string;
   userName: string;
   userRole?: string | undefined;
+  roleShortcuts?: Record<string, Array<{ id: string; label: string; command: string }>> | undefined;
 };
 
-function AppShell({ children, workspaceName, userName, userRole }: AppShellProps) {
+function AppShell({ children, workspaceName, userName, userRole, roleShortcuts }: AppShellProps) {
   const pathname = usePathname();
 
   if (features.chatFirstUi) {
@@ -29,6 +30,7 @@ function AppShell({ children, workspaceName, userName, userRole }: AppShellProps
         workspaceName={workspaceName}
         userName={userName}
         userRole={userRole}
+        roleShortcuts={roleShortcuts}
       >
         {children}
       </ChatFirstShell>

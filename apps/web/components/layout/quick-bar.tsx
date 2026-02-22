@@ -24,20 +24,20 @@ const DEFAULT_ACTIONS: QuickAction[] = [
   { id: "qa-imports", label: "Imports", command: "route /imports" },
 ];
 
-/** Role-based default shortcuts (coordinator can override via API) */
-const ROLE_DEFAULTS: Record<string, QuickAction[]> = {
+/** Role-based default shortcuts (fallback if workspace has no custom config) */
+const ROLE_DEFAULTS_FALLBACK: Record<string, QuickAction[]> = {
   ADMIN: [
     { id: "rq-settings", label: "Settings", command: "route /settings" },
     { id: "rq-analytics", label: "Analytics", command: "route /analytics" },
     { id: "rq-imports", label: "Imports", command: "route /imports" },
   ],
-  STAFF: [
+  EMPLOYEE: [
     { id: "rq-tasks", label: "My Tasks", command: "route /washers" },
     { id: "rq-shifts", label: "My Shifts", command: "route /shifts" },
   ],
 };
 
-export function QuickBar({ userRole }: { userRole?: string | undefined }) {
+export function QuickBar({ userRole, roleShortcuts }: { userRole?: string | undefined; roleShortcuts?: Record<string, QuickAction[]> | undefined }) {
   const router = useRouter();
   const [actions, setActions] = useState<QuickAction[]>(DEFAULT_ACTIONS.slice(0, 4));
   const [recommended, setRecommended] = useState<QuickAction[]>([]);
@@ -61,7 +61,8 @@ export function QuickBar({ userRole }: { userRole?: string | undefined }) {
         }));
 
         // Merge: user shortcuts → role defaults → global defaults
-        const roleDefaults = ROLE_DEFAULTS[userRole ?? "STAFF"] ?? [];
+        const workspaceRoleDefaults = roleShortcuts?.[userRole ?? "EMPLOYEE"];
+        const roleDefaults = workspaceRoleDefaults ?? ROLE_DEFAULTS_FALLBACK[userRole ?? "EMPLOYEE"] ?? [];
         const merged = [...userActions, ...DEFAULT_ACTIONS].slice(0, 6);
         setActions(merged);
 
@@ -76,7 +77,7 @@ export function QuickBar({ userRole }: { userRole?: string | undefined }) {
 
     void load();
     return () => { active = false; };
-  }, [userRole]);
+  }, [userRole, roleShortcuts]);
 
   const executeAction = useCallback((action: QuickAction) => {
     const cmd = action.command.trim();
