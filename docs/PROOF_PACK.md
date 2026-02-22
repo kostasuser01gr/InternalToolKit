@@ -486,3 +486,74 @@ curl https://internal-tool-kit-web.vercel.app/api/ai/setup
 | VIBER_TARGET_GROUP_ID | Target Viber group |
 | VIBER_WEBHOOK_SECRET | Inbound webhook secret |
 | VIBER_BRIDGE_MODE | one-way (default) or two-way |
+
+---
+
+## Session 6 — Weather, Feeds, Imports, Global Search, Speed
+
+> Updated: 2026-02-22T14:50Z
+
+### Weather Feed (Phase 7) ✅
+- Open-Meteo integration — keyless, free
+- 10-minute in-memory cache
+- 5 Greek airport stations (ATH, SKG, HER, RHO, CFU)
+- WMO weather code → description + emoji mapping
+- WeatherWidget server component on Home page
+- `/api/weather` endpoint with fallback
+- 12 unit tests
+
+### Feeds Module (Phase 8) ✅
+- FeedSource + FeedItem Prisma models
+- Migration `20260222142122_feeds_module` applied
+- RSS/Atom parser with CDATA, ETag support
+- Keyword categorization: BOOKING_POLICY, SALES_OPPORTUNITY, SECURITY_ALERT, COMPETITOR_NEWS, GENERAL
+- Relevance scoring (0.0–1.0)
+- 3 default sources (Europcar Newsroom, Google News rental/tourism)
+- Server actions: add source, seed defaults, scan, pin
+- Full feeds page at `/feeds` with category chips, sources sidebar, feed cards
+- 18 unit tests
+
+### Imports UI (Phase 6) ✅
+- Imports page at `/imports` with upload card + batch list
+- File upload API at `/api/imports/upload` with SHA-256 idempotency
+- Accept/Decline/Rollback buttons per batch
+- Status badges for all ImportBatchStatus values
+- Schema-not-ready fallback
+
+### Global Search + Speed (Phase 10) ✅
+- Server-side search API at `/api/search`
+  - Searches: washer tasks, vehicles, chat threads, users
+  - Schema-safe (skips missing tables)
+- Debounced server search in command palette (300ms)
+- Search results section with type icons
+- Navigation: added Imports + Feeds routes to sidebar
+
+### CI + Deploy
+- Unit tests: 335 passing (22 files)
+- Lint: clean (0 warnings)
+- Build: successful
+- CI: ✅ green (`gh run list --limit 5`)
+- Vercel deploy: ✅ `https://internal-tool-kit-web.vercel.app`
+
+### Files Created (Session 6)
+| File | Purpose |
+|------|---------|
+| `lib/weather/client.ts` | Open-Meteo client with cache |
+| `app/api/weather/route.ts` | Weather API endpoint |
+| `components/widgets/weather-widget.tsx` | Weather widget component |
+| `lib/feeds/scanner.ts` | RSS/Atom parser + categorizer |
+| `app/(app)/feeds/actions.ts` | Feed server actions |
+| `app/(app)/feeds/page.tsx` | Feeds page |
+| `app/(app)/imports/page.tsx` | Imports page |
+| `app/api/imports/upload/route.ts` | File upload API |
+| `app/api/search/route.ts` | Global search API |
+| `tests/unit/weather.test.ts` | 12 weather tests |
+| `tests/unit/feeds.test.ts` | 18 feeds tests |
+| `docs/FEEDS.md` | Feeds documentation |
+| `docs/IMPORTS.md` | Imports documentation |
+| `docs/INTEGRATIONS_SETUP.md` | Setup guide |
+
+### Documentation Added
+- `docs/FEEDS.md` — RSS scanner, categorization, sources, scheduling
+- `docs/IMPORTS.md` — Upload flow, status lifecycle, templates, diff engine
+- `docs/INTEGRATIONS_SETUP.md` — All env vars, setup wizard, CLI helper
