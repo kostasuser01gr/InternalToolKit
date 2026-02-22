@@ -182,6 +182,12 @@ model User {
   runbooks             Runbook[]            @relation("RunbookCreator")
   accessReviewsGiven   AccessReview[]       @relation("AccessReviewer")
   accessReviewsReceived AccessReview[]      @relation("AccessReviewTarget")
+  // Phase 11: Viber-like chat
+  channelMemberships   ChatChannelMember[]
+  readReceipts         ChatReadReceipt[]
+  chatReactions        ChatReaction[]
+  // Phase 11: File imports
+  importBatches        ImportBatch[]        @relation("ImportBatchCreator")
 }
 
 model Workspace {
@@ -218,6 +224,10 @@ model Workspace {
   retentionPolicies RetentionPolicy[]
   accessReviews  AccessReview[]
   stations       Station[]
+  // Phase 11: Viber-like chat
+  chatChannels   ChatChannel[]
+  // Phase 11: File imports
+  importBatches  ImportBatch[]
 
   @@index([ownerId])
 }
@@ -355,21 +365,27 @@ model AuditLog {
 model ChatThread {
   id          String        @id @default(cuid())
   workspaceId String
+  channelId   String?
   title       String
   createdBy   String
+  isPinned    Boolean       @default(false)
+  isArchived  Boolean       @default(false)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channel     ChatChannel?  @relation(fields: [channelId], references: [id], onDelete: SetNull)
   creator     User          @relation("ChatThreadCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   messages    ChatMessage[]
 
   @@index([workspaceId])
+  @@index([channelId])
 }
 
 model ChatMessage {
   id             String     @id @default(cuid())
   threadId       String
   authorUserId   String?
+  replyToId      String?
   role           ChatRole
   content        String
   modelId        String?
@@ -378,15 +394,24 @@ model ChatMessage {
   status         ChatMessageStatus @default(COMPLETED)
   commandName    String?
   isPinned       Boolean    @default(false)
+  isEdited       Boolean    @default(false)
+  isDeleted      Boolean    @default(false)
   attachmentUrl  String?
   attachmentMime String?
+  mentionsJson   Json?
   createdAt      DateTime   @default(now())
+  editedAt       DateTime?
   thread         ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   author         User?      @relation("ChatMessageAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  replyTo        ChatMessage? @relation("ChatReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        ChatMessage[] @relation("ChatReply")
   artifacts      ChatArtifact[]
+  reactions      ChatReaction[]
+  readReceipts   ChatReadReceipt[]
 
   @@index([threadId, createdAt])
   @@index([threadId, isPinned, createdAt])
+  @@index([replyToId])
 }
 
 model ChatArtifact {
@@ -1005,4 +1030,111 @@ model Station {
 
   @@unique([workspaceId, code])
   @@index([workspaceId, isActive])
+}
+
+// ─── Phase 11: Viber-like Chat — Channels/Presence/Receipts/Reactions ────────
+
+enum ChatChannelType {
+  PUBLIC
+  PRIVATE
+  DM
+  GROUP
+}
+
+model ChatChannel {
+  id          String          @id @default(cuid())
+  workspaceId String
+  type        ChatChannelType @default(PUBLIC)
+  name        String
+  slug        String
+  description String?
+  isPinned    Boolean         @default(false)
+  isArchived  Boolean         @default(false)
+  isReadOnly  Boolean         @default(false)
+  createdBy   String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  threads     ChatThread[]
+  members     ChatChannelMember[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, isArchived])
+}
+
+model ChatChannelMember {
+  channelId String
+  userId    String
+  role      String         @default("member")
+  joinedAt  DateTime       @default(now())
+  mutedAt   DateTime?
+  channel   ChatChannel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([channelId, userId])
+  @@index([userId])
+}
+
+model ChatReadReceipt {
+  messageId String
+  userId    String
+  readAt    DateTime    @default(now())
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([userId])
+}
+
+model ChatReaction {
+  id        String      @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime    @default(now())
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+// ─── Phase 11: File Ingestion & AI Import Pipeline ───────────────────────────
+
+enum ImportBatchStatus {
+  UPLOADING
+  ANALYZING
+  PREVIEW
+  ACCEPTED
+  DECLINED
+  APPLYING
+  APPLIED
+  ROLLED_BACK
+  FAILED
+}
+
+model ImportBatch {
+  id            String            @id @default(cuid())
+  workspaceId   String
+  createdBy     String
+  status        ImportBatchStatus @default(UPLOADING)
+  importType    String
+  fileName      String
+  fileHash      String
+  fileSizeBytes Int?
+  fileUrl       String?
+  mappingJson   Json?
+  previewJson   Json?
+  diffSummary   Json?
+  errorLog      String?
+  appliedAt     DateTime?
+  rolledBackAt  DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator       User              @relation("ImportBatchCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, fileHash])
+  @@index([workspaceId, status])
+  @@index([workspaceId, importType])
 }
