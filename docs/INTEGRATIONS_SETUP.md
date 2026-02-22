@@ -26,10 +26,12 @@ TOGETHER_API_KEY=...
 
 ### Viber Bridge (Optional)
 ```env
-FEATURE_VIBER_BRIDGE=1            # Enable bridge
-VIBER_BOT_TOKEN=<token>           # From Viber Admin Panel
-VIBER_WEBHOOK_SECRET=<secret>     # For inbound webhooks
-VIBER_TARGET_GROUP_ID=<id>        # Target group/community
+FEATURE_VIBER_BRIDGE=1                          # Enable bridge
+VIBER_CHANNEL_AUTH_TOKEN=<token>                 # Channel Post API (preferred)
+VIBER_BOT_TOKEN=<token>                         # Bot API (fallback)
+VIBER_TARGET_GROUP_ID=<id>                      # Target group/community (for Bot API)
+VIBER_MIRRORED_CHANNELS=washers-only,ops-general # Comma-separated channel slugs
+VIBER_BRIDGE_MODE=one-way                       # one-way (default) or two-way
 ```
 
 ### Feature Flags
@@ -48,10 +50,11 @@ KIOSK_TOKEN=<secure-random-token>   # Embedded in share link
 
 ### Via Settings UI
 Navigate to **Settings → Integrations** (Coordinator/God role only):
-1. System detects missing API keys
-2. Prompts for each integration
-3. "Test Connection" validates the key
+1. System shows all known integration points with their env var names
+2. Green checkmark for configured, amber warning for missing
+3. "Test Connection" button validates Viber tokens by calling `/pa/get_account_info`
 4. Keys are stored in environment, not in database
+5. Viber Channel Mirror panel shows real-time bridge status, success count, and dead letters
 
 ### Via CLI
 ```bash

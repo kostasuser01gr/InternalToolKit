@@ -557,3 +557,65 @@ curl https://internal-tool-kit-web.vercel.app/api/ai/setup
 - `docs/FEEDS.md` — RSS scanner, categorization, sources, scheduling
 - `docs/IMPORTS.md` — Upload flow, status lifecycle, templates, diff engine
 - `docs/INTEGRATIONS_SETUP.md` — All env vars, setup wizard, CLI helper
+
+---
+
+## Session 7 — Wave 2: Viber Channel Mirror, Integrations Wizard, Housekeeping, Performance
+
+### Changes Made
+
+#### Viber Channel Mirror (Enhanced)
+- **Channel Post API** support (`/pa/post`) as preferred delivery method
+- Bot API as fallback — automatic failover
+- **Multi-channel mirroring**: configurable via `VIBER_MIRRORED_CHANNELS` env var
+- Enhanced admin status: success count, last success timestamp, API config status
+- PII redaction preserved (emails, phones, tokens)
+
+#### Integrations Setup Wizard
+- New `Settings → Integrations` panel (Coordinator/Admin only)
+- Shows all env vars with configured/missing status (green ✓ / amber ⚠)
+- "Test Connection" for Viber tokens (calls `/pa/get_account_info`)
+- Viber Channel Mirror status panel with KPIs (messages sent, dead letters, readiness)
+- Dead letter retry button
+- API endpoints: `GET /api/integrations/status`, `GET /api/integrations/test`
+
+#### Housekeeping Cron
+- Daily cron (`0 6 * * *`) now includes:
+  - Feed item retention: purges unpinned items older than 90 days
+  - Viber dead letter retry
+- Response includes `housekeeping` stats
+
+#### Feed Enhancements
+- Send to #ops-general OR #washers-only from feed cards
+- Target channel parameter in `sendFeedToChatAction`
+
+#### Performance
+- Route prefetching on idle (7 core routes) via `requestIdleCallback`
+- Polyfill for environments without `requestIdleCallback`
+
+### Tests
+- 351 unit tests passing (24 files)
+- Lint: 0 warnings
+- Build: succeeds
+- New tests: Viber bridge channel API, multi-channel, integrations status, housekeeping retention, prefetch polyfill
+
+### Files Created
+| File | Purpose |
+|---|---|
+| `components/settings/integrations-wizard.tsx` | Integrations setup + Viber status UI |
+| `app/api/integrations/status/route.ts` | Integration env var status API |
+| `app/api/integrations/test/route.ts` | Integration connection test API |
+| `tests/unit/wave2.test.ts` | 10 new wave 2 tests |
+| `docs/VIBER_CHANNEL_MIRROR.md` | Viber mirror setup + architecture docs |
+
+### Files Modified
+| File | Change |
+|---|---|
+| `lib/viber/bridge.ts` | Channel Post API, multi-channel, enhanced status |
+| `app/api/cron/feeds/route.ts` | Housekeeping (retention + viber retry) |
+| `app/(app)/feeds/actions.ts` | Target channel parameter |
+| `app/(app)/feeds/page.tsx` | Ops + Washers send buttons |
+| `app/(app)/settings/page.tsx` | IntegrationsWizard for admins |
+| `components/layout/chat-first-shell.tsx` | Route prefetching on idle |
+| `docs/FEEDS.md` | Updated cron schedule + housekeeping |
+| `docs/INTEGRATIONS_SETUP.md` | Updated Viber vars + wizard description |

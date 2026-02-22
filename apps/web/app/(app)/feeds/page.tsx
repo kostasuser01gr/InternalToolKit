@@ -214,15 +214,27 @@ export default async function FeedsPage({ searchParams }: FeedsPageProps) {
                       )}
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-1">
+                  <div className="flex shrink-0 flex-wrap gap-1">
                     <form action={sendFeedToChatAction}>
                       <input type="hidden" name="itemId" value={item.id} />
                       <input type="hidden" name="workspaceId" value={workspace.id} />
+                      <input type="hidden" name="channel" value="ops-general" />
                       <button
                         type="submit"
                         className="rounded border border-[var(--border)] bg-white/5 px-2 py-1 text-xs text-[var(--text-muted)] hover:bg-white/10"
                       >
-                        💬 Chat
+                        💬 Ops
+                      </button>
+                    </form>
+                    <form action={sendFeedToChatAction}>
+                      <input type="hidden" name="itemId" value={item.id} />
+                      <input type="hidden" name="workspaceId" value={workspace.id} />
+                      <input type="hidden" name="channel" value="washers-only" />
+                      <button
+                        type="submit"
+                        className="rounded border border-[var(--border)] bg-white/5 px-2 py-1 text-xs text-[var(--text-muted)] hover:bg-white/10"
+                      >
+                        🧽 Washers
                       </button>
                     </form>
                     <form action={pinFeedItemAction}>
