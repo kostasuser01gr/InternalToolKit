@@ -1123,10 +1123,81 @@ The initial Ops OS commit triggered a CI failure:
 | `tests/unit/file-parser.test.ts` | 11 tests: CSV/JSON/TXT parse + mapping transforms |
 | `tests/unit/wave12-enhancements.test.ts` | 17 tests: SLA, view presets, channels, date filter, QR |
 
-### Quality Gates
+### Quality Gates (Wave 12)
 | Gate | Result |
 |------|--------|
 | Tests | **556 passing** (+28 new) |
 | Typecheck | ✅ Clean |
 | Lint | ✅ Clean (0 warnings) |
 | Build | ✅ Success |
+
+---
+
+## Wave 13 — Full-Scale Upgrade (`ebdb6a4`)
+
+### Changes
+| File | Change |
+|------|--------|
+| `lib/imports/apply-engine.ts` | Added `applyBookingsDiff()` — creates DRAFT shifts from booking imports + shift rollback |
+| `app/(app)/imports/actions.ts` | Wired bookings apply branch into `acceptImportAction()` |
+| `app/(app)/fleet/page.tsx` | Priority sort by `needByAt` ascending (nulls last), then `updatedAt` desc |
+| `app/api/cron/feeds/route.ts` | Inter-source rate limiting (1s delay) + dead-letter on scan failure |
+| `app/api/search/route.ts` | Postgres FTS via `plainto_tsquery('simple', q)` with ILIKE fallback |
+| `scripts/setup-local-env.ts` | Fixed lint (`let` → `const`) |
+| `tests/unit/full-scale-upgrade.test.ts` | NEW: 9 tests for templates, fleet presets, search |
+| `docs/ROADMAP_ACCEPTANCE.md` | NEW: Per-module acceptance criteria |
+| `docs/INCIDENT_BASELINE.md` | Updated with post-Wave-12 gap analysis |
+
+### Connections & Deployment
+| Service | Status | Details |
+|---------|--------|---------|
+| **GitHub** | ✅ Connected | `kostasuser01gr/InternalToolKit`, CI run `22307960298` ✅ passing |
+| **Supabase** | ✅ Linked | Project `xtawoqzaeuvaelnruotc` (West EU Ireland), 12 migrations applied |
+| **Vercel** | ✅ Deployed | `https://internal-toolkit-ops.vercel.app` |
+| **Cloudflare** | ✅ Deployed | `https://internaltoolkit-api.dataos-api.workers.dev` |
+
+### Env Vars Checklist (names only, no values)
+| Variable | Vercel | .env.local |
+|----------|--------|------------|
+| DATABASE_URL | ✅ | ✅ |
+| DIRECT_URL | ✅ | ✅ |
+| SESSION_SECRET | ✅ | ✅ |
+| CRON_SECRET | ✅ | ✅ |
+
+### Quality Gates (Wave 13 — Final)
+| Gate | Result |
+|------|--------|
+| Tests | **565 passing** (+9 new, 40 test files) |
+| Typecheck | ✅ Clean |
+| Lint | ✅ Clean (0 warnings) |
+| Build | ✅ Success |
+| CI | ✅ Run `22307960298` passing |
+| Deploy | ✅ Production at `internal-toolkit-ops.vercel.app` |
+
+### Route Smoke Checklist
+| Route | Status |
+|-------|--------|
+| `/chat` | ✅ Renders (auth-gated) |
+| `/fleet` | ✅ Renders with priority sort |
+| `/washers` | ✅ Renders with KPIs + share panel |
+| `/washers/app` | ✅ Kiosk PWA (token-gated writes) |
+| `/imports` | ✅ Upload + preview + apply/decline |
+| `/feeds` | ✅ RSS scanning with rate limiting |
+| `/search` | ✅ FTS + pg_trgm |
+| `/weather` | ✅ Geolocation + Open-Meteo |
+| `/settings` | ✅ No crash |
+| `/calendar` | ✅ No crash |
+
+### Module Completion Summary
+| Module | Status | Key Features |
+|--------|--------|-------------|
+| Stability | ✅ 100% | proxy.ts (CSP/auth/security), safe DB helpers, error boundaries |
+| Imports | ✅ 100% | XLSX/CSV/JSON/TXT parse, preview, accept/decline, rollback, bookings+fleet apply |
+| Fleet | ✅ 100% | State machine, SLA timers, QC, incidents, keys, priority queue |
+| Washers | ✅ 100% | KPIs, PWA kiosk, token auth, offline queue, QR share |
+| Chat | ✅ 100% | Channels/DMs, replies/pins/reactions, #ops-general + #washers-only |
+| Feeds | ✅ 100% | RSS scanning, rate limiting, dead-letter, severity scoring |
+| Weather | ✅ 100% | Geolocation + station fallback, Open-Meteo, stale badge |
+| Search | ✅ 100% | Postgres FTS + pg_trgm, RBAC filtering |
+| Shortcuts | ✅ 100% | Per-user quick bar, role defaults, inline/bulk/undo |
+| Connections | ✅ 100% | GH+Supabase+Vercel+CF linked, env scripts, deploy docs |
