@@ -1201,3 +1201,51 @@ The initial Ops OS commit triggered a CI failure:
 | Search | ✅ 100% | Postgres FTS + pg_trgm, RBAC filtering |
 | Shortcuts | ✅ 100% | Per-user quick bar, role defaults, inline/bulk/undo |
 | Connections | ✅ 100% | GH+Supabase+Vercel+CF linked, env scripts, deploy docs |
+
+---
+
+## Wave 14 — Convex Backend Migration
+
+### Motivation
+Supabase Postgres became unreachable from Vercel serverless due to:
+- Direct URL: IPv6-only (no A record), Vercel = IPv4-only outbound
+- Pooler (Supavisor): "Tenant or user not found" on all connection attempts
+
+### Migration Summary
+| Component | Status | Details |
+|-----------|--------|---------|
+| Convex Schema | ✅ Deployed | 57 tables, 82 indexes, 4 search indexes |
+| Auth Functions | ✅ Deployed | verifyCredentials, signup, sessions, throttle, security events |
+| ConvexProvider | ✅ Wired | Conditional on NEXT_PUBLIC_CONVEX_URL |
+| Auth (cookie-adapter) | ✅ Convex-first | Prisma fallback for local dev |
+| Workspace/RBAC | ✅ Convex-first | getDefaultMembership, getMemberWithWorkspace |
+| Audit Logging | ✅ Convex-first | auditLogs.create |
+| Signup | ✅ Convex-first | authActions.signup (bcrypt in Convex runtime) |
+| /api/health | ✅ Convex-first | Reports `"db": "convex"` in production |
+
+### Deployment Verification
+```
+curl https://internal-tool-kit-web.vercel.app/api/health
+→ {"ok":true,"db":"convex"}
+
+curl -I https://internal-tool-kit-web.vercel.app/login
+→ 200 OK
+
+curl -I https://internal-tool-kit-web.vercel.app/signup
+→ 200 OK
+```
+
+### Convex Project
+- Deployment: `dev:amiable-chicken-236`
+- Region: Europe (Ireland)
+- Dashboard: https://dashboard.convex.dev/d/amiable-chicken-236
+
+### Test Results
+- 578 unit tests passing ✅
+- Build clean ✅
+- CI passing on GitHub ✅
+
+### Commits
+- `09752bc` — feat: wire Convex backend — auth, schema, providers
+- `d48cb03` — feat: wire workspace, RBAC, audit to Convex with Prisma fallback
+- `5797335` — feat: wire signup + health endpoint to Convex
