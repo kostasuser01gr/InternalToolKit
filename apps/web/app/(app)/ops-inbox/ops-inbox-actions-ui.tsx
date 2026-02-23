@@ -15,8 +15,13 @@ export function AckFeedButton({ workspaceId, feedItemId }: { workspaceId: string
     <form
       action={async (fd) => {
         setPending(true);
-        await ackFeedItemAction(fd);
-        setPending(false);
+        try {
+          await ackFeedItemAction(fd);
+        } catch {
+          // Server action handles redirect on DB error
+        } finally {
+          setPending(false);
+        }
       }}
     >
       <input type="hidden" name="workspaceId" value={workspaceId} />
@@ -39,8 +44,13 @@ export function DismissNotificationButton({ workspaceId, notificationId }: { wor
     <form
       action={async (fd) => {
         setPending(true);
-        await dismissNotificationAction(fd);
-        setPending(false);
+        try {
+          await dismissNotificationAction(fd);
+        } catch {
+          // Server action handles redirect on DB error
+        } finally {
+          setPending(false);
+        }
       }}
     >
       <input type="hidden" name="workspaceId" value={workspaceId} />
@@ -63,8 +73,13 @@ export function ResolveIncidentButton({ workspaceId, incidentId }: { workspaceId
     <form
       action={async (fd) => {
         setPending(true);
-        await resolveIncidentAction(fd);
-        setPending(false);
+        try {
+          await resolveIncidentAction(fd);
+        } catch {
+          // Server action handles redirect on DB error
+        } finally {
+          setPending(false);
+        }
       }}
     >
       <input type="hidden" name="workspaceId" value={workspaceId} />
@@ -102,10 +117,15 @@ export function CreateIncidentForm({ workspaceId }: { workspaceId: string }) {
       className="space-y-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-4"
       action={async (fd) => {
         setPending(true);
-        await createIncidentAction(fd);
-        setPending(false);
-        setOpen(false);
-        formRef.current?.reset();
+        try {
+          await createIncidentAction(fd);
+          setOpen(false);
+          formRef.current?.reset();
+        } catch {
+          // Server action handles redirect on DB error
+        } finally {
+          setPending(false);
+        }
       }}
     >
       <input type="hidden" name="workspaceId" value={workspaceId} />

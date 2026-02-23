@@ -1,7 +1,7 @@
 import { addDays, format, isAfter, isBefore, startOfDay } from "date-fns";
 
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -216,9 +216,9 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
             <Input id="calendar-to" name="to" type="date" defaultValue={format(toDate, "yyyy-MM-dd")} />
           </div>
           <div className="flex items-end">
-            <PrimaryButton type="submit" className="w-full">
+            <SubmitButton className="w-full">
               Apply range
-            </PrimaryButton>
+            </SubmitButton>
           </div>
         </form>
       </GlassCard>

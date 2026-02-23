@@ -61,34 +61,38 @@ export function BulkFleetBar({ vehicles, workspaceId }: BulkFleetBarProps) {
     startTransition(async () => {
       setOptimisticVehicles({ ids, status: targetStatus });
 
-      const result = await bulkUpdateVehiclesAction({
-        workspaceId,
-        vehicleIds: ids,
-        targetStatus,
-      });
-
-      if (result.ok) {
-        setMessage(`${result.count} vehicles → ${targetStatus}`);
-        setSelected(new Set());
-
-        pushUndo({
-          id: `bulk-fleet-${Date.now()}`,
-          label: `Undo bulk ${targetStatus.toLowerCase().replace(/_/g, " ")}`,
-          undo: async () => {
-            for (const prev of result.previous) {
-              await bulkUpdateVehiclesAction({
-                workspaceId,
-                vehicleIds: [prev.id],
-                targetStatus: prev.status as VehicleStatus,
-              });
-            }
-            router.refresh();
-          },
+      try {
+        const result = await bulkUpdateVehiclesAction({
+          workspaceId,
+          vehicleIds: ids,
+          targetStatus,
         });
 
-        router.refresh();
-      } else {
-        setMessage(`Error: ${result.error}`);
+        if (result.ok) {
+          setMessage(`${result.count} vehicles → ${targetStatus}`);
+          setSelected(new Set());
+
+          pushUndo({
+            id: `bulk-fleet-${Date.now()}`,
+            label: `Undo bulk ${targetStatus.toLowerCase().replace(/_/g, " ")}`,
+            undo: async () => {
+              for (const prev of result.previous) {
+                await bulkUpdateVehiclesAction({
+                  workspaceId,
+                  vehicleIds: [prev.id],
+                  targetStatus: prev.status as VehicleStatus,
+                });
+              }
+              router.refresh();
+            },
+          });
+
+          router.refresh();
+        } else {
+          setMessage(`Error: ${result.error}`);
+        }
+      } catch {
+        setMessage("Error: bulk update failed");
       }
     });
   };

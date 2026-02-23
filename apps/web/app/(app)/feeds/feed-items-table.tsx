@@ -42,7 +42,13 @@ export function FeedItemsTable({ items }: FeedItemsTableProps) {
       const fd = new FormData();
       fd.set("itemId", item.id);
       fd.set("workspaceId", item.workspaceId);
-      await pinFeedItemAction(fd);
+      try {
+        await pinFeedItemAction(fd);
+      } catch {
+        // Revert optimistic update on error
+        setOptimistic({ id: item.id, isPinned: item.isPinned });
+        return;
+      }
       router.refresh();
     });
   };
@@ -53,7 +59,12 @@ export function FeedItemsTable({ items }: FeedItemsTableProps) {
       fd.set("itemId", item.id);
       fd.set("workspaceId", item.workspaceId);
       fd.set("channel", channel);
-      await sendFeedToChatAction(fd);
+      try {
+        await sendFeedToChatAction(fd);
+      } catch {
+        // Action failed — server action will have logged the error
+        return;
+      }
       router.refresh();
     });
   };

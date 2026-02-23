@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ChatRole } from "@prisma/client";
 
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
 import { Badge } from "@/components/ui/badge";
@@ -400,9 +400,9 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
               placeholder="Ops command center"
               required
             />
-            <PrimaryButton type="submit" className="w-full">
+            <SubmitButton className="w-full">
               Create thread
-            </PrimaryButton>
+            </SubmitButton>
           </form>
 
           <ScrollArea className="h-[360px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/4 p-2">
@@ -444,13 +444,12 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                 <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
                 <input type="hidden" name="modelId" value={modelId} />
                 <input type="hidden" name="content" value={template.prompt} />
-                <PrimaryButton
-                  type="submit"
+                <SubmitButton
                   className="mb-2 w-full"
                   disabled={!activeThread}
                 >
                   {template.title}
-                </PrimaryButton>
+                </SubmitButton>
               </form>
             ))}
             {templates.length === 0 ? (
@@ -505,14 +504,14 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                           <input type="hidden" name="threadId" value={activeThread.id} />
                           <input type="hidden" name="messageId" value={message.id} />
                           <input type="hidden" name="modelId" value={modelId} />
-                          <PrimaryButton type="submit">Regenerate</PrimaryButton>
+                          <SubmitButton>Regenerate</SubmitButton>
                         </form>
 
                         <form action={exportMessageAction}>
                           <input type="hidden" name="workspaceId" value={workspace.id} />
                           <input type="hidden" name="threadId" value={activeThread.id} />
                           <input type="hidden" name="messageId" value={message.id} />
-                          <PrimaryButton type="submit">Export</PrimaryButton>
+                          <SubmitButton>Export</SubmitButton>
                         </form>
 
                         <form action={convertMessageAction}>
@@ -520,7 +519,7 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                           <input type="hidden" name="threadId" value={activeThread.id} />
                           <input type="hidden" name="messageId" value={message.id} />
                           <input type="hidden" name="target" value="automation" />
-                          <PrimaryButton type="submit">To Automation</PrimaryButton>
+                          <SubmitButton>To Automation</SubmitButton>
                         </form>
 
                         <form action={convertMessageAction}>
@@ -528,7 +527,7 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                           <input type="hidden" name="threadId" value={activeThread.id} />
                           <input type="hidden" name="messageId" value={message.id} />
                           <input type="hidden" name="target" value="report" />
-                          <PrimaryButton type="submit">To Report</PrimaryButton>
+                          <SubmitButton>To Report</SubmitButton>
                         </form>
                       </>
                     ) : null}
@@ -537,16 +536,16 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                       <input type="hidden" name="workspaceId" value={workspace.id} />
                       <input type="hidden" name="threadId" value={activeThread.id} />
                       <input type="hidden" name="messageId" value={message.id} />
-                      <PrimaryButton type="submit">
+                      <SubmitButton>
                         {message.isPinned ? "Unpin" : "Pin"}
-                      </PrimaryButton>
+                      </SubmitButton>
                     </form>
 
                     <form action={forkThreadAction}>
                       <input type="hidden" name="workspaceId" value={workspace.id} />
                       <input type="hidden" name="threadId" value={activeThread.id} />
                       <input type="hidden" name="messageId" value={message.id} />
-                      <PrimaryButton type="submit">Fork Here</PrimaryButton>
+                      <SubmitButton>Fork Here</SubmitButton>
                     </form>
                   </div>
                 </article>
@@ -573,7 +572,7 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                 required
               />
               <div className="flex flex-wrap gap-2">
-                <PrimaryButton type="submit">Send</PrimaryButton>
+                <SubmitButton>Send</SubmitButton>
                 <p className="text-xs text-[var(--text-muted)]">
                   Slash commands: /summarize-table, /draft-automation, /kpi-layout,
                   /create-shift, /log-fleet-event
@@ -596,9 +595,9 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                 <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
                 <input type="hidden" name="modelId" value={modelId} />
                 <input type="hidden" name="content" value="/summarize-table" />
-                <PrimaryButton type="submit" className="w-full" disabled={!activeThread}>
+                <SubmitButton className="w-full" disabled={!activeThread}>
                   Summarize Table
-                </PrimaryButton>
+                </SubmitButton>
               </form>
 
               <form action={sendMessageAction}>
@@ -610,9 +609,9 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                   name="content"
                   value="/draft-automation Alert admins when stale records exceed threshold"
                 />
-                <PrimaryButton type="submit" className="w-full" disabled={!activeThread}>
+                <SubmitButton className="w-full" disabled={!activeThread}>
                   Draft Automation
-                </PrimaryButton>
+                </SubmitButton>
               </form>
 
               <form action={sendMessageAction}>
@@ -624,9 +623,9 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                   name="content"
                   value="/kpi-layout Executive view for throughput, quality, and risk"
                 />
-                <PrimaryButton type="submit" className="w-full" disabled={!activeThread}>
+                <SubmitButton className="w-full" disabled={!activeThread}>
                   KPI Layout
-                </PrimaryButton>
+                </SubmitButton>
               </form>
             </div>
           </div>
@@ -642,13 +641,12 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                   <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
                   <input type="hidden" name="modelId" value={modelId} />
                   <input type="hidden" name="content" value={button.action} />
-                  <PrimaryButton
-                    type="submit"
+                  <SubmitButton
                     className="w-full"
                     disabled={!activeThread}
                   >
                     {button.label}
-                  </PrimaryButton>
+                  </SubmitButton>
                 </form>
               ))}
               {actionButtons.length === 0 ? (

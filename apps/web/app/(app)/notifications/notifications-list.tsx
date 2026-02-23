@@ -30,7 +30,11 @@ export function NotificationsList({ notifications }: { notifications: Notificati
       setOptimistic(id);
       const fd = new FormData();
       fd.set("notificationId", id);
-      await markNotificationReadAction(fd);
+      try {
+        await markNotificationReadAction(fd);
+      } catch {
+        // Server action handles redirect on DB error; optimistic update remains
+      }
     });
   };
 

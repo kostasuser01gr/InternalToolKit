@@ -3,7 +3,8 @@ import { format } from "date-fns";
 import Link from "next/link";
 
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { FormSubmitButton } from "@/components/kit/form-submit-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { ShiftBoard } from "@/components/modules/shifts/shift-board";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
@@ -200,9 +201,9 @@ export default async function ShiftsPage({ searchParams }: ShiftsPageProps) {
               <Textarea id="shift-notes" name="notes" rows={3} placeholder="Staffing notes" />
             </div>
 
-            <PrimaryButton type="submit" disabled={!canWrite}>
+            <SubmitButton disabled={!canWrite}>
               Create shift
-            </PrimaryButton>
+            </SubmitButton>
           </form>
         </GlassCard>
 
@@ -214,9 +215,9 @@ export default async function ShiftsPage({ searchParams }: ShiftsPageProps) {
               CSV columns: <code>title</code>, <code>startsAt</code>, <code>endsAt</code>, optional <code>assignedLoginName</code>, <code>notes</code>.
             </p>
             <Input name="file" type="file" accept=".csv,text/csv" required disabled={!canWrite} />
-            <PrimaryButton type="submit" disabled={!canWrite}>
+            <SubmitButton disabled={!canWrite}>
               Import CSV
-            </PrimaryButton>
+            </SubmitButton>
           </form>
 
           <div className="space-y-3">
@@ -320,7 +321,7 @@ export default async function ShiftsPage({ searchParams }: ShiftsPageProps) {
               <Textarea id="request-reason" name="reason" rows={3} required />
             </div>
 
-            <PrimaryButton type="submit">Submit request</PrimaryButton>
+            <SubmitButton>Submit request</SubmitButton>
           </form>
         </GlassCard>
 
@@ -349,18 +350,18 @@ export default async function ShiftsPage({ searchParams }: ShiftsPageProps) {
                       <input type="hidden" name="workspaceId" value={workspace.id} />
                       <input type="hidden" name="requestId" value={request.id} />
                       <input type="hidden" name="decision" value="approve" />
-                      <PrimaryButton type="submit">Approve</PrimaryButton>
+                      <SubmitButton>Approve</SubmitButton>
                     </form>
                     <form action={reviewShiftRequestAction}>
                       <input type="hidden" name="workspaceId" value={workspace.id} />
                       <input type="hidden" name="requestId" value={request.id} />
                       <input type="hidden" name="decision" value="reject" />
-                      <button
-                        type="submit"
+                      <FormSubmitButton
                         className="focus-ring rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-muted)]"
+                        pendingText="Rejecting…"
                       >
                         Reject
-                      </button>
+                      </FormSubmitButton>
                     </form>
                   </div>
                 ) : null}

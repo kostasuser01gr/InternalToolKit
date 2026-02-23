@@ -1,7 +1,7 @@
 import { WorkspaceRole } from "@prisma/client";
 
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
 import { Badge } from "@/components/ui/badge";
@@ -184,7 +184,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 placeholder="Admin PIN"
                 required
               />
-              <PrimaryButton type="submit">Verify admin PIN</PrimaryButton>
+              <SubmitButton>Verify admin PIN</SubmitButton>
             </form>
           </div>
 
@@ -211,7 +211,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <SelectItem value={WorkspaceRole.VIEWER}>VIEWER</SelectItem>
               </SelectContent>
             </Select>
-            <PrimaryButton type="submit">Invite</PrimaryButton>
+            <SubmitButton>Invite</SubmitButton>
           </form>
 
           <div className="space-y-2">
@@ -334,9 +334,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <Input id="entity" name="entity" defaultValue={params.entity} />
           </div>
           <div className="flex items-end">
-            <PrimaryButton type="submit" className="w-full">
+            <SubmitButton className="w-full">
               Filter
-            </PrimaryButton>
+            </SubmitButton>
           </div>
         </form>
 

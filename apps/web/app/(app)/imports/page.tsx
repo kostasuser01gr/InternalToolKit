@@ -5,6 +5,7 @@ import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { GlassCard } from "@/components/kit/glass-card";
+import { FormSubmitButton } from "@/components/kit/form-submit-button";
 import { Badge } from "@/components/ui/badge";
 import {
   acceptImportAction,
@@ -180,22 +181,22 @@ function BatchCard({ batch, workspaceId }: { batch: Batch; workspaceId: string }
             <form action={acceptImportAction}>
               <input type="hidden" name="workspaceId" value={workspaceId} />
               <input type="hidden" name="batchId" value={batch.id} />
-              <button
-                type="submit"
+              <FormSubmitButton
                 className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+                pendingText="Accepting…"
               >
                 <CheckCircle className="h-3 w-3" /> Accept
-              </button>
+              </FormSubmitButton>
             </form>
             <form action={declineImportAction}>
               <input type="hidden" name="workspaceId" value={workspaceId} />
               <input type="hidden" name="batchId" value={batch.id} />
-              <button
-                type="submit"
+              <FormSubmitButton
                 className="inline-flex items-center gap-1 rounded-md bg-rose-600 px-3 py-1 text-xs font-medium text-white hover:bg-rose-700"
+                pendingText="Declining…"
               >
                 <XCircle className="h-3 w-3" /> Decline
-              </button>
+              </FormSubmitButton>
             </form>
           </>
         )}
@@ -203,12 +204,12 @@ function BatchCard({ batch, workspaceId }: { batch: Batch; workspaceId: string }
           <form action={rollbackImportAction}>
             <input type="hidden" name="workspaceId" value={workspaceId} />
             <input type="hidden" name="batchId" value={batch.id} />
-            <button
-              type="submit"
+            <FormSubmitButton
               className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-1 text-xs font-medium hover:bg-white/5"
+              pendingText="Rolling back…"
             >
               <RotateCcw className="h-3 w-3" /> Rollback
-            </button>
+            </FormSubmitButton>
           </form>
         )}
       </div>

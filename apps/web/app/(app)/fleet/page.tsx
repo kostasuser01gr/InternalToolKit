@@ -2,7 +2,7 @@ import { VehicleEventType, VehicleStatus } from "@prisma/client";
 import { format } from "date-fns";
 
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
 import { Input } from "@/components/ui/input";
@@ -152,9 +152,9 @@ export default async function FleetPage({ searchParams }: FleetPageProps) {
               <Textarea id="vehicle-notes" name="notes" rows={3} disabled={!canWrite} />
             </div>
 
-            <PrimaryButton type="submit" disabled={!canWrite}>
+            <SubmitButton disabled={!canWrite}>
               Add vehicle
-            </PrimaryButton>
+            </SubmitButton>
           </form>
 
           <FleetVehicleList
@@ -297,9 +297,9 @@ export default async function FleetPage({ searchParams }: FleetPageProps) {
                       />
                     </div>
 
-                    <PrimaryButton type="submit" disabled={!canWrite}>
+                    <SubmitButton disabled={!canWrite}>
                       Save vehicle update
-                    </PrimaryButton>
+                    </SubmitButton>
                   </form>
                 </details>
               </>
@@ -354,9 +354,9 @@ export default async function FleetPage({ searchParams }: FleetPageProps) {
                     <Textarea id="vehicle-event-notes" name="notes" rows={3} disabled={!canWrite} />
                   </div>
 
-                  <PrimaryButton type="submit" disabled={!canWrite}>
+                  <SubmitButton disabled={!canWrite}>
                     Add event
-                  </PrimaryButton>
+                  </SubmitButton>
                 </form>
 
                 <div className="space-y-2">
