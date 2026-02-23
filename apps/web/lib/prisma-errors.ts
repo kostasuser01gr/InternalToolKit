@@ -61,6 +61,26 @@ export async function withDbFallback<T>(query: Promise<T>, fallback: T): Promise
   }
 }
 
+/**
+ * Wraps a server action's DB operations. If the database is unavailable,
+ * redirects to the given path with an error param instead of crashing.
+ */
+export async function withDbAction<T>(
+  fn: () => Promise<T>,
+  errorRedirect: string,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) {
+      const { redirect } = await import("next/navigation");
+      const sep = errorRedirect.includes("?") ? "&" : "?";
+      redirect(`${errorRedirect}${sep}error=Database+temporarily+unavailable`);
+    }
+    throw error;
+  }
+}
+
 export function isSchemaNotReadyError(error: unknown) {
   // Connection errors are NOT schema-not-ready — they should surface as operational errors
   if (isConnectionError(error)) {

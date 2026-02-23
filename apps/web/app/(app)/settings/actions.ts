@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth/session";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
+import { withDbAction } from "@/lib/prisma-errors";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
 import { getRequestContext } from "@/lib/request-context";
 import { AuthError } from "@/lib/rbac";
@@ -69,90 +70,94 @@ async function assertCurrentUser(userId: string) {
 }
 
 export async function updateProfileAction(formData: FormData) {
-  const parsed = updateProfileSchema.parse({
-    userId: formData.get("userId"),
-    name: formData.get("name"),
-  });
-
-  try {
-    const { user, workspace } = await assertCurrentUser(parsed.userId);
-
-    await db.user.update({
-      where: { id: parsed.userId },
-      data: {
-        name: parsed.name,
-      },
+  return withDbAction(async () => {
+    const parsed = updateProfileSchema.parse({
+      userId: formData.get("userId"),
+      name: formData.get("name"),
     });
 
-    await appendAuditLog({
-      workspaceId: workspace.id,
-      actorUserId: user.id,
-      action: "settings.profile_updated",
-      entityType: "user",
-      entityId: user.id,
-      metaJson: { name: parsed.name },
-    });
+    try {
+      const { user, workspace } = await assertCurrentUser(parsed.userId);
 
-    revalidatePath("/settings");
-    redirect(buildSettingsUrl({ success: "Profile updated." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    const context = await getRequestContext("/settings");
-    const errorId = crypto.randomUUID().slice(0, 12);
-    redirect(
-      buildSettingsUrl({
-        error: getErrorMessage(error),
-        requestId: context.requestId,
-        errorId,
-      }),
-    );
-  }
+      await db.user.update({
+        where: { id: parsed.userId },
+        data: {
+          name: parsed.name,
+        },
+      });
+
+      await appendAuditLog({
+        workspaceId: workspace.id,
+        actorUserId: user.id,
+        action: "settings.profile_updated",
+        entityType: "user",
+        entityId: user.id,
+        metaJson: { name: parsed.name },
+      });
+
+      revalidatePath("/settings");
+      redirect(buildSettingsUrl({ success: "Profile updated." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      const context = await getRequestContext("/settings");
+      const errorId = crypto.randomUUID().slice(0, 12);
+      redirect(
+        buildSettingsUrl({
+          error: getErrorMessage(error),
+          requestId: context.requestId,
+          errorId,
+        }),
+      );
+    }
+  }, "/settings");
 }
 
 export async function updatePreferencesAction(formData: FormData) {
-  const parsed = updatePreferencesSchema.parse({
-    userId: formData.get("userId"),
-    notificationsEnabled: formData.get("notificationsEnabled") === "on",
-    themePreference: formData.get("themePreference"),
-  });
-
-  try {
-    const { user, workspace } = await assertCurrentUser(parsed.userId);
-
-    await db.user.update({
-      where: { id: parsed.userId },
-      data: {
-        notificationsEnabled: parsed.notificationsEnabled,
-        themePreference: parsed.themePreference,
-      },
+  return withDbAction(async () => {
+    const parsed = updatePreferencesSchema.parse({
+      userId: formData.get("userId"),
+      notificationsEnabled: formData.get("notificationsEnabled") === "on",
+      themePreference: formData.get("themePreference"),
     });
 
-    await appendAuditLog({
-      workspaceId: workspace.id,
-      actorUserId: user.id,
-      action: "settings.preferences_updated",
-      entityType: "user",
-      entityId: user.id,
-      metaJson: {
-        notificationsEnabled: parsed.notificationsEnabled,
-        themePreference: parsed.themePreference,
-      },
-    });
+    try {
+      const { user, workspace } = await assertCurrentUser(parsed.userId);
 
-    revalidatePath("/settings");
-    redirect(buildSettingsUrl({ success: "Preferences updated." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    const context = await getRequestContext("/settings");
-    const errorId = crypto.randomUUID().slice(0, 12);
-    redirect(
-      buildSettingsUrl({
-        error: getErrorMessage(error),
-        requestId: context.requestId,
-        errorId,
-      }),
-    );
-  }
+      await db.user.update({
+        where: { id: parsed.userId },
+        data: {
+          notificationsEnabled: parsed.notificationsEnabled,
+          themePreference: parsed.themePreference,
+        },
+      });
+
+      await appendAuditLog({
+        workspaceId: workspace.id,
+        actorUserId: user.id,
+        action: "settings.preferences_updated",
+        entityType: "user",
+        entityId: user.id,
+        metaJson: {
+          notificationsEnabled: parsed.notificationsEnabled,
+          themePreference: parsed.themePreference,
+        },
+      });
+
+      revalidatePath("/settings");
+      redirect(buildSettingsUrl({ success: "Preferences updated." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      const context = await getRequestContext("/settings");
+      const errorId = crypto.randomUUID().slice(0, 12);
+      redirect(
+        buildSettingsUrl({
+          error: getErrorMessage(error),
+          requestId: context.requestId,
+          errorId,
+        }),
+      );
+    }
+  }, "/settings");
 }
 
 export async function revokeSessionAction(formData: FormData) {
@@ -269,275 +274,287 @@ export async function revokeAllSessionsAction(formData: FormData) {
 }
 
 export async function createShortcutAction(formData: FormData) {
-  const parsed = createShortcutSchema.parse({
-    userId: formData.get("userId"),
-    workspaceId: formData.get("workspaceId"),
-    label: formData.get("label"),
-    command: formData.get("command"),
-    keybinding: formData.get("keybinding") || undefined,
-  });
+  return withDbAction(async () => {
+    const parsed = createShortcutSchema.parse({
+      userId: formData.get("userId"),
+      workspaceId: formData.get("workspaceId"),
+      label: formData.get("label"),
+      command: formData.get("command"),
+      keybinding: formData.get("keybinding") || undefined,
+    });
 
-  try {
-    const { user, workspace } = await assertCurrentUser(parsed.userId);
+    try {
+      const { user, workspace } = await assertCurrentUser(parsed.userId);
 
-    await db.userShortcut.create({
-      data: {
+      await db.userShortcut.create({
+        data: {
+          workspaceId: workspace.id,
+          userId: user.id,
+          label: parsed.label,
+          command: parsed.command,
+          keybinding: parsed.keybinding ?? null,
+        },
+      });
+
+      await appendAuditLog({
         workspaceId: workspace.id,
-        userId: user.id,
-        label: parsed.label,
-        command: parsed.command,
-        keybinding: parsed.keybinding ?? null,
-      },
-    });
+        actorUserId: user.id,
+        action: "settings.shortcut_created",
+        entityType: "user_shortcut",
+        entityId: user.id,
+        metaJson: {
+          label: parsed.label,
+        },
+      });
 
-    await appendAuditLog({
-      workspaceId: workspace.id,
-      actorUserId: user.id,
-      action: "settings.shortcut_created",
-      entityType: "user_shortcut",
-      entityId: user.id,
-      metaJson: {
-        label: parsed.label,
-      },
-    });
-
-    revalidatePath("/settings");
-    redirect(buildSettingsUrl({ success: "Shortcut saved." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    const context = await getRequestContext("/settings");
-    const errorId = crypto.randomUUID().slice(0, 12);
-    redirect(
-      buildSettingsUrl({
-        error: getErrorMessage(error),
-        requestId: context.requestId,
-        errorId,
-      }),
-    );
-  }
+      revalidatePath("/settings");
+      redirect(buildSettingsUrl({ success: "Shortcut saved." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      const context = await getRequestContext("/settings");
+      const errorId = crypto.randomUUID().slice(0, 12);
+      redirect(
+        buildSettingsUrl({
+          error: getErrorMessage(error),
+          requestId: context.requestId,
+          errorId,
+        }),
+      );
+    }
+  }, "/settings");
 }
 
 export async function deleteShortcutAction(formData: FormData) {
-  const parsed = deleteShortcutSchema.parse({
-    userId: formData.get("userId"),
-    workspaceId: formData.get("workspaceId"),
-    shortcutId: formData.get("shortcutId"),
-  });
+  return withDbAction(async () => {
+    const parsed = deleteShortcutSchema.parse({
+      userId: formData.get("userId"),
+      workspaceId: formData.get("workspaceId"),
+      shortcutId: formData.get("shortcutId"),
+    });
 
-  try {
-    const { user, workspace } = await assertCurrentUser(parsed.userId);
+    try {
+      const { user, workspace } = await assertCurrentUser(parsed.userId);
 
-    await db.userShortcut.deleteMany({
-      where: {
-        id: parsed.shortcutId,
+      await db.userShortcut.deleteMany({
+        where: {
+          id: parsed.shortcutId,
+          workspaceId: workspace.id,
+          userId: user.id,
+        },
+      });
+
+      await appendAuditLog({
         workspaceId: workspace.id,
-        userId: user.id,
-      },
-    });
+        actorUserId: user.id,
+        action: "settings.shortcut_deleted",
+        entityType: "user_shortcut",
+        entityId: parsed.shortcutId,
+        metaJson: {},
+      });
 
-    await appendAuditLog({
-      workspaceId: workspace.id,
-      actorUserId: user.id,
-      action: "settings.shortcut_deleted",
-      entityType: "user_shortcut",
-      entityId: parsed.shortcutId,
-      metaJson: {},
-    });
-
-    revalidatePath("/settings");
-    redirect(buildSettingsUrl({ success: "Shortcut removed." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    const context = await getRequestContext("/settings");
-    const errorId = crypto.randomUUID().slice(0, 12);
-    redirect(
-      buildSettingsUrl({
-        error: getErrorMessage(error),
-        requestId: context.requestId,
-        errorId,
-      }),
-    );
-  }
+      revalidatePath("/settings");
+      redirect(buildSettingsUrl({ success: "Shortcut removed." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      const context = await getRequestContext("/settings");
+      const errorId = crypto.randomUUID().slice(0, 12);
+      redirect(
+        buildSettingsUrl({
+          error: getErrorMessage(error),
+          requestId: context.requestId,
+          errorId,
+        }),
+      );
+    }
+  }, "/settings");
 }
 
 export async function createActionButtonAction(formData: FormData) {
-  const parsed = createActionButtonSchema.parse({
-    userId: formData.get("userId"),
-    workspaceId: formData.get("workspaceId"),
-    label: formData.get("label"),
-    action: formData.get("action"),
-    position: formData.get("position") || undefined,
-  });
+  return withDbAction(async () => {
+    const parsed = createActionButtonSchema.parse({
+      userId: formData.get("userId"),
+      workspaceId: formData.get("workspaceId"),
+      label: formData.get("label"),
+      action: formData.get("action"),
+      position: formData.get("position") || undefined,
+    });
 
-  try {
-    const { user, workspace } = await assertCurrentUser(parsed.userId);
+    try {
+      const { user, workspace } = await assertCurrentUser(parsed.userId);
 
-    await db.userActionButton.create({
-      data: {
+      await db.userActionButton.create({
+        data: {
+          workspaceId: workspace.id,
+          userId: user.id,
+          label: parsed.label,
+          action: parsed.action,
+          position: parsed.position ?? 0,
+        },
+      });
+
+      await appendAuditLog({
         workspaceId: workspace.id,
-        userId: user.id,
-        label: parsed.label,
-        action: parsed.action,
-        position: parsed.position ?? 0,
-      },
-    });
+        actorUserId: user.id,
+        action: "settings.action_button_created",
+        entityType: "user_action_button",
+        entityId: user.id,
+        metaJson: {
+          label: parsed.label,
+        },
+      });
 
-    await appendAuditLog({
-      workspaceId: workspace.id,
-      actorUserId: user.id,
-      action: "settings.action_button_created",
-      entityType: "user_action_button",
-      entityId: user.id,
-      metaJson: {
-        label: parsed.label,
-      },
-    });
-
-    revalidatePath("/settings");
-    redirect(buildSettingsUrl({ success: "Quick action button saved." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    const context = await getRequestContext("/settings");
-    const errorId = crypto.randomUUID().slice(0, 12);
-    redirect(
-      buildSettingsUrl({
-        error: getErrorMessage(error),
-        requestId: context.requestId,
-        errorId,
-      }),
-    );
-  }
+      revalidatePath("/settings");
+      redirect(buildSettingsUrl({ success: "Quick action button saved." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      const context = await getRequestContext("/settings");
+      const errorId = crypto.randomUUID().slice(0, 12);
+      redirect(
+        buildSettingsUrl({
+          error: getErrorMessage(error),
+          requestId: context.requestId,
+          errorId,
+        }),
+      );
+    }
+  }, "/settings");
 }
 
 export async function deleteActionButtonAction(formData: FormData) {
-  const parsed = deleteActionButtonSchema.parse({
-    userId: formData.get("userId"),
-    workspaceId: formData.get("workspaceId"),
-    buttonId: formData.get("buttonId"),
-  });
+  return withDbAction(async () => {
+    const parsed = deleteActionButtonSchema.parse({
+      userId: formData.get("userId"),
+      workspaceId: formData.get("workspaceId"),
+      buttonId: formData.get("buttonId"),
+    });
 
-  try {
-    const { user, workspace } = await assertCurrentUser(parsed.userId);
+    try {
+      const { user, workspace } = await assertCurrentUser(parsed.userId);
 
-    await db.userActionButton.deleteMany({
-      where: {
-        id: parsed.buttonId,
+      await db.userActionButton.deleteMany({
+        where: {
+          id: parsed.buttonId,
+          workspaceId: workspace.id,
+          userId: user.id,
+        },
+      });
+
+      await appendAuditLog({
         workspaceId: workspace.id,
-        userId: user.id,
-      },
-    });
+        actorUserId: user.id,
+        action: "settings.action_button_deleted",
+        entityType: "user_action_button",
+        entityId: parsed.buttonId,
+        metaJson: {},
+      });
 
-    await appendAuditLog({
-      workspaceId: workspace.id,
-      actorUserId: user.id,
-      action: "settings.action_button_deleted",
-      entityType: "user_action_button",
-      entityId: parsed.buttonId,
-      metaJson: {},
-    });
-
-    revalidatePath("/settings");
-    redirect(buildSettingsUrl({ success: "Quick action button removed." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    const context = await getRequestContext("/settings");
-    const errorId = crypto.randomUUID().slice(0, 12);
-    redirect(
-      buildSettingsUrl({
-        error: getErrorMessage(error),
-        requestId: context.requestId,
-        errorId,
-      }),
-    );
-  }
+      revalidatePath("/settings");
+      redirect(buildSettingsUrl({ success: "Quick action button removed." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      const context = await getRequestContext("/settings");
+      const errorId = crypto.randomUUID().slice(0, 12);
+      redirect(
+        buildSettingsUrl({
+          error: getErrorMessage(error),
+          requestId: context.requestId,
+          errorId,
+        }),
+      );
+    }
+  }, "/settings");
 }
 
 export async function createPromptTemplateAction(formData: FormData) {
-  const parsed = createPromptTemplateSchema.parse({
-    userId: formData.get("userId"),
-    workspaceId: formData.get("workspaceId"),
-    title: formData.get("title"),
-    prompt: formData.get("prompt"),
-  });
+  return withDbAction(async () => {
+    const parsed = createPromptTemplateSchema.parse({
+      userId: formData.get("userId"),
+      workspaceId: formData.get("workspaceId"),
+      title: formData.get("title"),
+      prompt: formData.get("prompt"),
+    });
 
-  try {
-    const { user, workspace } = await assertCurrentUser(parsed.userId);
+    try {
+      const { user, workspace } = await assertCurrentUser(parsed.userId);
 
-    await db.promptTemplate.create({
-      data: {
+      await db.promptTemplate.create({
+        data: {
+          workspaceId: workspace.id,
+          userId: user.id,
+          title: parsed.title,
+          prompt: parsed.prompt,
+        },
+      });
+
+      await appendAuditLog({
         workspaceId: workspace.id,
-        userId: user.id,
-        title: parsed.title,
-        prompt: parsed.prompt,
-      },
-    });
+        actorUserId: user.id,
+        action: "settings.prompt_template_created",
+        entityType: "prompt_template",
+        entityId: user.id,
+        metaJson: {
+          title: parsed.title,
+        },
+      });
 
-    await appendAuditLog({
-      workspaceId: workspace.id,
-      actorUserId: user.id,
-      action: "settings.prompt_template_created",
-      entityType: "prompt_template",
-      entityId: user.id,
-      metaJson: {
-        title: parsed.title,
-      },
-    });
-
-    revalidatePath("/settings");
-    redirect(buildSettingsUrl({ success: "Prompt template saved." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    const context = await getRequestContext("/settings");
-    const errorId = crypto.randomUUID().slice(0, 12);
-    redirect(
-      buildSettingsUrl({
-        error: getErrorMessage(error),
-        requestId: context.requestId,
-        errorId,
-      }),
-    );
-  }
+      revalidatePath("/settings");
+      redirect(buildSettingsUrl({ success: "Prompt template saved." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      const context = await getRequestContext("/settings");
+      const errorId = crypto.randomUUID().slice(0, 12);
+      redirect(
+        buildSettingsUrl({
+          error: getErrorMessage(error),
+          requestId: context.requestId,
+          errorId,
+        }),
+      );
+    }
+  }, "/settings");
 }
 
 export async function deletePromptTemplateAction(formData: FormData) {
-  const parsed = deletePromptTemplateSchema.parse({
-    userId: formData.get("userId"),
-    workspaceId: formData.get("workspaceId"),
-    templateId: formData.get("templateId"),
-  });
+  return withDbAction(async () => {
+    const parsed = deletePromptTemplateSchema.parse({
+      userId: formData.get("userId"),
+      workspaceId: formData.get("workspaceId"),
+      templateId: formData.get("templateId"),
+    });
 
-  try {
-    const { user, workspace } = await assertCurrentUser(parsed.userId);
+    try {
+      const { user, workspace } = await assertCurrentUser(parsed.userId);
 
-    await db.promptTemplate.deleteMany({
-      where: {
-        id: parsed.templateId,
+      await db.promptTemplate.deleteMany({
+        where: {
+          id: parsed.templateId,
+          workspaceId: workspace.id,
+          userId: user.id,
+        },
+      });
+
+      await appendAuditLog({
         workspaceId: workspace.id,
-        userId: user.id,
-      },
-    });
+        actorUserId: user.id,
+        action: "settings.prompt_template_deleted",
+        entityType: "prompt_template",
+        entityId: parsed.templateId,
+        metaJson: {},
+      });
 
-    await appendAuditLog({
-      workspaceId: workspace.id,
-      actorUserId: user.id,
-      action: "settings.prompt_template_deleted",
-      entityType: "prompt_template",
-      entityId: parsed.templateId,
-      metaJson: {},
-    });
-
-    revalidatePath("/settings");
-    redirect(buildSettingsUrl({ success: "Prompt template removed." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    const context = await getRequestContext("/settings");
-    const errorId = crypto.randomUUID().slice(0, 12);
-    redirect(
-      buildSettingsUrl({
-        error: getErrorMessage(error),
-        requestId: context.requestId,
-        errorId,
-      }),
-    );
-  }
+      revalidatePath("/settings");
+      redirect(buildSettingsUrl({ success: "Prompt template removed." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      const context = await getRequestContext("/settings");
+      const errorId = crypto.randomUUID().slice(0, 12);
+      redirect(
+        buildSettingsUrl({
+          error: getErrorMessage(error),
+          requestId: context.requestId,
+          errorId,
+        }),
+      );
+    }
+  }, "/settings");
 }
