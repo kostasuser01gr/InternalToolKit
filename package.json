@@ -14,5 +14,8 @@
     "test:e2e": "pnpm --filter @internal-toolkit/web test:e2e",
     "test": "pnpm test:unit && pnpm test:e2e",
     "format": "pnpm --filter @internal-toolkit/web format"
+  },
+  "dependencies": {
+    "convex": "^1.32.0"
   }
 }

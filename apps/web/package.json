@@ -27,7 +27,9 @@
     "db:push:dev": "prisma db push",
     "db:migrate:status": "prisma migrate status",
     "prisma:seed": "prisma db seed",
-    "db:reset": "node scripts/reset-db.mjs"
+    "db:reset": "node scripts/reset-db.mjs",
+    "env:check": "tsx scripts/validate-env.ts",
+    "env:setup": "tsx scripts/setup-local-env.ts"
   },
   "dependencies": {
     "@internal-toolkit/shared": "workspace:*",
