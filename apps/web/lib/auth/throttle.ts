@@ -95,6 +95,20 @@ function windowExpired(startedAt: Date, windowMs: number, now: Date) {
 }
 
 export async function checkAuthThrottle(keys: AuthThrottleKeys): Promise<AuthThrottleResult> {
+  // Fail-open: if Prisma/DB is unreachable, allow the attempt.
+  // Auth verification itself is handled by Convex which is independent.
+  if (!db) {
+    return { allowed: true, retryAfterSeconds: 0, blockedBy: [] };
+  }
+
+  try {
+    return await checkAuthThrottleInternal(keys);
+  } catch {
+    return { allowed: true, retryAfterSeconds: 0, blockedBy: [] };
+  }
+}
+
+async function checkAuthThrottleInternal(keys: AuthThrottleKeys): Promise<AuthThrottleResult> {
   const now = nowDate();
   const entries = toEntries(keys);
 
@@ -147,6 +161,20 @@ export async function checkAuthThrottle(keys: AuthThrottleKeys): Promise<AuthThr
 }
 
 async function registerAttempt(
+  keys: AuthThrottleKeys,
+  mutate: "failure" | "success",
+  context: AuthThrottleContext,
+) {
+  if (!db) return;
+
+  try {
+    await registerAttemptInternal(keys, mutate, context);
+  } catch {
+    // Fail-open: throttle recording is non-critical
+  }
+}
+
+async function registerAttemptInternal(
   keys: AuthThrottleKeys,
   mutate: "failure" | "success",
   context: AuthThrottleContext,
@@ -237,7 +265,7 @@ async function registerAttempt(
     return;
   }
 
-  const locked = await checkAuthThrottle(keys);
+  const locked = await checkAuthThrottleInternal(keys);
   if (!locked.allowed) {
     await appendSecurityEvent({
       event: "auth.lockout_triggered",
