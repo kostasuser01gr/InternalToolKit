@@ -1,8 +1,28 @@
 import { WorkspaceRole } from "@prisma/client";
 
 import { db } from "@/lib/db";
+import { getConvexClient } from "@/lib/convex-client";
+import { api } from "@/lib/convex-api";
 
 export async function getDefaultWorkspaceForUser(userId: string) {
+  const convex = getConvexClient();
+  if (convex) {
+    const result = await convex.query(api.workspaces.getDefaultMembership, { userId });
+    if (!result) return null;
+    return {
+      ...result,
+      id: result._id,
+      createdAt: new Date(result._creationTime),
+      workspace: result.workspace
+        ? {
+            ...result.workspace,
+            id: result.workspace._id,
+            createdAt: new Date(result.workspace._creationTime),
+          }
+        : null,
+    };
+  }
+
   return db.workspaceMember.findFirst({
     where: { userId },
     include: {
@@ -21,6 +41,27 @@ export async function getWorkspaceForUser(
   workspaceId?: string,
 ) {
   if (workspaceId) {
+    const convex = getConvexClient();
+    if (convex) {
+      const result = await convex.query(api.workspaces.getMemberWithWorkspace, {
+        workspaceId,
+        userId,
+      });
+      if (!result) return null;
+      return {
+        ...result,
+        id: result._id,
+        createdAt: new Date(result._creationTime),
+        workspace: result.workspace
+          ? {
+              ...result.workspace,
+              id: result.workspace._id,
+              createdAt: new Date(result.workspace._creationTime),
+            }
+          : null,
+      };
+    }
+
     return db.workspaceMember.findFirst({
       where: {
         userId,
@@ -36,6 +77,15 @@ export async function getWorkspaceForUser(
 }
 
 export async function getWorkspaceRole(userId: string, workspaceId: string) {
+  const convex = getConvexClient();
+  if (convex) {
+    const member = await convex.query(api.workspaces.getMember, {
+      workspaceId,
+      userId,
+    });
+    return (member?.role as WorkspaceRole) ?? null;
+  }
+
   const membership = await db.workspaceMember.findUnique({
     where: {
       workspaceId_userId: {

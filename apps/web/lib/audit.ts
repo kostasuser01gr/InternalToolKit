@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
+import { getConvexClient } from "@/lib/convex-client";
+import { api } from "@/lib/convex-api";
 import { appendDemoEvent } from "@/lib/demo-events";
 
 export async function appendAuditLog(params: {
@@ -23,6 +25,18 @@ export async function appendAuditLog(params: {
         ? (params.metaJson as Record<string, unknown>)
         : {}) ?? {},
   });
+
+  const convex = getConvexClient();
+  if (convex) {
+    return convex.mutation(api.auditLogs.create, {
+      workspaceId: params.workspaceId,
+      ...(params.actorUserId ? { actorUserId: params.actorUserId } : {}),
+      action: params.action,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      metaJson: params.metaJson ?? {},
+    });
+  }
 
   return db.auditLog.create({
     data: {

@@ -2,6 +2,8 @@ import { WorkspaceRole } from "@prisma/client";
 
 import { requireSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { getConvexClient } from "@/lib/convex-client";
+import { api } from "@/lib/convex-api";
 import { getDefaultWorkspaceForUser, hasRole } from "@/lib/workspace";
 
 export class AuthError extends Error {
@@ -179,8 +181,31 @@ export async function requireAuthUser() {
 export async function requireWorkspaceMembership(workspaceId?: string) {
   const user = await requireAuthUser();
 
-  const membership = workspaceId
-    ? await db.workspaceMember.findUnique({
+  let membership: any = null;
+
+  if (workspaceId) {
+    const convex = getConvexClient();
+    if (convex) {
+      const result = await convex.query(api.workspaces.getMemberWithWorkspace, {
+        workspaceId,
+        userId: user.id,
+      });
+      if (result) {
+        membership = {
+          ...result,
+          id: result._id,
+          createdAt: new Date(result._creationTime),
+          workspace: result.workspace
+            ? {
+                ...result.workspace,
+                id: result.workspace._id,
+                createdAt: new Date(result.workspace._creationTime),
+              }
+            : null,
+        };
+      }
+    } else {
+      membership = await db.workspaceMember.findUnique({
         where: {
           workspaceId_userId: {
             workspaceId,
@@ -190,8 +215,11 @@ export async function requireWorkspaceMembership(workspaceId?: string) {
         include: {
           workspace: true,
         },
-      })
-    : await getDefaultWorkspaceForUser(user.id);
+      });
+    }
+  } else {
+    membership = await getDefaultWorkspaceForUser(user.id);
+  }
 
   if (!membership) {
     throw new AuthError("Workspace membership required.");

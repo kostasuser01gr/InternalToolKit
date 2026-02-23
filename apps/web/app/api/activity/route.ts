@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     ? await getWorkspaceForUser(session.user.id, parsed.data.workspaceId)
     : await getDefaultWorkspaceForUser(session.user.id);
 
-  if (!workspaceMembership) {
+  if (!workspaceMembership || !workspaceMembership.workspace) {
     return Response.json(
       {
         ok: false,

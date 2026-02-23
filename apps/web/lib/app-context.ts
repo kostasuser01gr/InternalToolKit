@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { WorkspaceRole } from "@prisma/client";
 
 import { requireSession } from "@/lib/auth/session";
 import { isSchemaNotReadyError } from "@/lib/prisma-errors";
@@ -23,13 +24,13 @@ export async function getAppContext(workspaceId?: string) {
     throw error;
   }
 
-  if (!membership) {
+  if (!membership || !membership.workspace) {
     redirect("/login?error=no-workspace");
   }
 
   return {
     user,
-    workspace: membership.workspace,
-    workspaceRole: membership.role,
+    workspace: membership.workspace!,
+    workspaceRole: membership.role as WorkspaceRole,
   };
 }

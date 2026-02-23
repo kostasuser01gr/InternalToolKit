@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     ? await getWorkspaceForUser(session.user.id, workspaceId)
     : await getDefaultWorkspaceForUser(session.user.id);
 
-  if (!membership) {
+  if (!membership || !membership.workspace) {
     return Response.json({ ok: false, message: "Workspace not found." }, { status: 403 });
   }
 
