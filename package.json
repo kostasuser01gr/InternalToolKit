@@ -13,7 +13,9 @@
     "test:unit": "pnpm --filter @internal-toolkit/web test:unit",
     "test:e2e": "pnpm --filter @internal-toolkit/web test:e2e",
     "test": "pnpm test:unit && pnpm test:e2e",
-    "format": "pnpm --filter @internal-toolkit/web format"
+    "format": "pnpm --filter @internal-toolkit/web format",
+    "audit:deps": "pnpm audit --prod --audit-level high",
+    "audit:deps:fix": "pnpm audit --prod --fix"
   },
   "dependencies": {
     "@types/bcryptjs": "^3.0.0",
