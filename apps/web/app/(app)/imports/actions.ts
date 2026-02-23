@@ -174,6 +174,20 @@ export async function acceptImportAction(formData: FormData) {
           },
         });
       }
+    } else if (diffData && Array.isArray(diffData.records) && batch.importType === "bookings") {
+      const { applyBookingsDiff } = await import("@/lib/imports/apply-engine");
+      const applyResult = await applyBookingsDiff(db, batch.id, batch.workspaceId, diffData, user.id);
+
+      await db.importBatch.update({
+        where: { id: parsed.batchId },
+        data: {
+          status: ImportBatchStatus.APPLIED,
+          appliedAt: new Date(),
+          errorLog: applyResult.errors.length > 0
+            ? `Applied ${applyResult.applied} shifts with ${applyResult.errors.length} errors: ${applyResult.errors.map((e) => `row ${e.rowIndex}: ${e.message}`).join("; ")}`
+            : null,
+        },
+      });
     } else {
       // Non-fleet imports or no preview data — mark as applied (no-op for unmapped types)
       await db.importBatch.update({

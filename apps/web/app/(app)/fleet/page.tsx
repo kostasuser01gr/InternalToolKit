@@ -62,9 +62,8 @@ export default async function FleetPage({ searchParams }: FleetPageProps) {
       },
     },
     orderBy: [
-      {
-        updatedAt: "desc",
-      },
+      { needByAt: "asc" },
+      { updatedAt: "desc" },
     ],
   });
 
