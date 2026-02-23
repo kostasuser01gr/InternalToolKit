@@ -19,7 +19,7 @@ import { USAGE_LIMITS } from "@/lib/constants/limits";
 import { db } from "@/lib/db";
 import { getAppContext } from "@/lib/app-context";
 import { hasRecentAdminStepUp } from "@/lib/auth/session";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 import {
   inviteMemberAction,
@@ -86,13 +86,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   function safeCount(p: Promise<number>) {
     return p.catch((err: unknown) => {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
       return 0;
     });
   }
   function safeFindMany<T>(p: Promise<T[]>) {
     return p.catch((err: unknown): T[] => {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
       return [];
     });
   }

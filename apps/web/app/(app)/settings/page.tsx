@@ -25,7 +25,7 @@ import {
 import { getAppContext } from "@/lib/app-context";
 import { listActiveSessionsForUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { mapServerError } from "@/lib/server-error";
 import { SchemaFallbackBanner } from "@/components/layout/schema-fallback-banner";
 
@@ -79,7 +79,7 @@ export default async function SettingsPage({
   const schemaFallbackFlags = { triggered: false };
   function schemaFallback<T>(fallback: T) {
     return (err: unknown): T => {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
       schemaFallbackFlags.triggered = true;
       return fallback;
     };

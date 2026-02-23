@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 import {
   AckFeedButton,
@@ -17,7 +17,7 @@ import {
 
 function schemaFallback<T>(fallback: T) {
   return (err: unknown): T => {
-    if (!isSchemaNotReadyError(err)) throw err;
+    if (!isDatabaseUnavailableError(err)) throw err;
     return fallback;
   };
 }

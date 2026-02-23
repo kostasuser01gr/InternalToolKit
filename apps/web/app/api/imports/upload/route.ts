@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { getRequestId, logWebRequest, withObservabilityHeaders } from "@/lib/http-observability";
 import { db } from "@/lib/db";
 import { requireAdminAccess } from "@/lib/rbac";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { parseFileBuffer, applyMappings } from "@/lib/imports/file-parser";
 import { computeDiff } from "@/lib/imports/diff-engine";
 import { findTemplate } from "@/lib/imports/templates";
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
       withObservabilityHeaders({ status: 201 }, requestId),
     );
   } catch (err) {
-    if (isSchemaNotReadyError(err)) {
+    if (isDatabaseUnavailableError(err)) {
       return Response.json(
         { error: "Imports module not ready — migrations may be pending." },
         withObservabilityHeaders({ status: 503 }, requestId),

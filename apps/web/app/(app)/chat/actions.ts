@@ -19,7 +19,7 @@ import {
 } from "@/lib/assistant/service";
 import { getChatErrorMessage } from "@/lib/chat-error-message";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
 import { requireWorkspaceRole } from "@/lib/rbac";
 import { logSecurityEvent } from "@/lib/security";
@@ -90,7 +90,7 @@ async function bumpUsageMeter(input: {
       },
     });
   } catch (error) {
-    if (!isSchemaNotReadyError(error)) {
+    if (!isDatabaseUnavailableError(error)) {
       throw error;
     }
 
@@ -140,7 +140,7 @@ async function createChatMessageWithSchemaFallback(input: ChatMessageCreateInput
       select: { id: true },
     });
   } catch (error) {
-    if (!isSchemaNotReadyError(error)) {
+    if (!isDatabaseUnavailableError(error)) {
       throw error;
     }
 

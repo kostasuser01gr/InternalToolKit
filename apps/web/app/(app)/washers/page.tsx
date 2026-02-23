@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { hasWorkspacePermission } from "@/lib/rbac";
 
 import { createWasherTaskAction } from "./actions";
@@ -85,7 +85,7 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
         take: 60,
       })
       .catch((err: unknown) => {
-        if (!isSchemaNotReadyError(err)) throw err;
+        if (!isDatabaseUnavailableError(err)) throw err;
         return [];
       }),
   ]);
@@ -109,7 +109,7 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
       orderBy: { createdAt: "desc" },
     })
     .catch((err: unknown) => {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
       return [];
     });
 

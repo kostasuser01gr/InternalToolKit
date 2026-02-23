@@ -14,7 +14,7 @@ import { getAppContext } from "@/lib/app-context";
 import { ensureDefaultChannels } from "@/lib/chat/default-channels";
 import { features } from "@/lib/constants/features";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { logSecurityEvent } from "@/lib/security";
 import { cn } from "@/lib/utils";
 
@@ -98,7 +98,7 @@ async function runOptionalChatQuery<T>(input: {
       degraded: false,
     };
   } catch (error) {
-    if (!isSchemaNotReadyError(error)) {
+    if (!isDatabaseUnavailableError(error)) {
       throw error;
     }
 
@@ -171,7 +171,7 @@ async function getActiveThreadView(input: {
       degraded: false,
     };
   } catch (error) {
-    if (!isSchemaNotReadyError(error)) {
+    if (!isDatabaseUnavailableError(error)) {
       throw error;
     }
 

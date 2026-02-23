@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { appendAuditLog } from "@/lib/audit";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 /**
  * Request access to a governance setting/feature.
@@ -49,7 +49,7 @@ _This request was generated automatically. Please review and respond._`;
       });
     }
   } catch (err) {
-    if (!isSchemaNotReadyError(err)) {
+    if (!isDatabaseUnavailableError(err)) {
       console.error("Failed to create access request message:", err);
     }
   }

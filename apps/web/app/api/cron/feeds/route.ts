@@ -6,7 +6,7 @@ import {
   parseRssFeed,
   processFeedItems,
 } from "@/lib/feeds/scanner";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { retryDeadLetters } from "@/lib/viber/bridge";
 
 const MAX_SOURCES_PER_RUN = 20;
@@ -156,7 +156,7 @@ export async function GET(request: Request) {
       results,
     });
   } catch (err) {
-    if (isSchemaNotReadyError(err)) {
+    if (isDatabaseUnavailableError(err)) {
       return NextResponse.json({ ok: false, error: "Feeds schema not ready" }, { status: 503 });
     }
     return NextResponse.json(

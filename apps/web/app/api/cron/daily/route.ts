@@ -6,7 +6,7 @@ import {
   parseRssFeed,
   processFeedItems,
 } from "@/lib/feeds/scanner";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { isViberBridgeReady, mirrorToViber, retryDeadLetters } from "@/lib/viber/bridge";
 import { DEFAULT_STATIONS, fetchWeatherSafe } from "@/lib/weather/client";
 
@@ -244,7 +244,7 @@ export async function GET(request: Request) {
     jobs.feeds = { sourcesScanned: results.length, totalNewItems: totalNew, results };
     await logRunToDB({ job: "feeds", startedAt: runStart, finishedAt: new Date(), status: "ok", itemsProcessed: totalNew });
   } catch (err) {
-    const msg = isSchemaNotReadyError(err) ? "Schema not ready" : (err instanceof Error ? err.message : "Failed");
+    const msg = isDatabaseUnavailableError(err) ? "Schema not ready" : (err instanceof Error ? err.message : "Failed");
     jobs.feeds = { error: msg };
     await logRunToDB({ job: "feeds", startedAt: runStart, finishedAt: new Date(), status: "error", itemsProcessed: 0, errorSummary: msg });
   }
@@ -390,7 +390,7 @@ export async function GET(request: Request) {
     jobs.automations = { rulesEvaluated: rules.length, rulesRun, rulesFailed };
     await logRunToDB({ job: "automations", startedAt: runStart, finishedAt: new Date(), status: rulesFailed > 0 ? "partial" : "ok", itemsProcessed: rulesRun });
   } catch (err) {
-    if (!isSchemaNotReadyError(err)) {
+    if (!isDatabaseUnavailableError(err)) {
       jobs.automations = { error: err instanceof Error ? err.message : "Failed" };
       await logRunToDB({ job: "automations", startedAt: runStart, finishedAt: new Date(), status: "error", itemsProcessed: 0, errorSummary: "Failed" });
     }
