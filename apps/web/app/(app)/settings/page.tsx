@@ -27,6 +27,7 @@ import { listActiveSessionsForUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { isSchemaNotReadyError } from "@/lib/prisma-errors";
 import { mapServerError } from "@/lib/server-error";
+import { SchemaFallbackBanner } from "@/components/layout/schema-fallback-banner";
 
 import {
   createActionButtonAction,
@@ -75,9 +76,11 @@ export default async function SettingsPage({
   const activeSessions = await listActiveSessionsForUser(user.id);
   // Tables added in migration 20260220181000 may not exist yet in older databases.
   // Fall back to empty arrays so the page renders instead of crashing.
+  const schemaFallbackFlags = { triggered: false };
   function schemaFallback<T>(fallback: T) {
     return (err: unknown): T => {
       if (!isSchemaNotReadyError(err)) throw err;
+      schemaFallbackFlags.triggered = true;
       return fallback;
     };
   }
@@ -119,6 +122,8 @@ export default async function SettingsPage({
         title="Settings"
         subtitle="Profile, theme, density, motion accessibility, notification preferences, and build details."
       />
+
+      <SchemaFallbackBanner active={schemaFallbackFlags.triggered} />
 
       <StatusBanner
         error={params.error}

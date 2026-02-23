@@ -46,3 +46,14 @@ export const pinMessageSchema = z.object({
   messageId: z.string().min(1),
   isPinned: z.coerce.boolean(),
 });
+
+export const editMessageSchema = z.object({
+  workspaceId: z.string().min(1),
+  messageId: z.string().min(1),
+  content: z.string().trim().min(1).max(10000),
+});
+
+export const deleteMessageSchema = z.object({
+  workspaceId: z.string().min(1),
+  messageId: z.string().min(1),
+});

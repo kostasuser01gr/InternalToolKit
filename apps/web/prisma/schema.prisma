@@ -188,6 +188,8 @@ model User {
   chatReactions        ChatReaction[]
   // Phase 11: File imports
   importBatches        ImportBatch[]        @relation("ImportBatchCreator")
+  // Ops OS: Fleet pipeline
+  qcInspections        VehicleQcLog[]       @relation("QcInspector")
 }
 
 model Workspace {
@@ -231,6 +233,10 @@ model Workspace {
   // Phase 13: Feeds
   feedSources    FeedSource[]
   feedItems      FeedItem[]
+  // Ops OS: Fleet pipeline
+  qcLogs         VehicleQcLog[]
+  vehicleBlockers VehicleBlocker[]
+  keyHandovers   KeyHandoverLog[]
 
   @@index([ownerId])
 }
@@ -548,30 +554,38 @@ model ShiftRequest {
 }
 
 model Vehicle {
-  id              String         @id @default(cuid())
+  id              String             @id @default(cuid())
   workspaceId     String
   plateNumber     String
   model           String
-  status          VehicleStatus  @default(READY)
-  mileageKm       Int            @default(0)
-  fuelPercent     Int            @default(100)
+  status          VehicleStatus      @default(READY)
+  pipelineState   FleetPipelineState @default(READY)
+  mileageKm       Int                @default(0)
+  fuelPercent     Int                @default(100)
   lastServiceAt   DateTime?
   photoDataUrl    String?
   notes           String?
   slaDeadlineAt   DateTime?
+  slaBreachedAt   DateTime?
   qcSignoffBy     String?
   qcResult        String?
   qcFailReason    String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  needByAt        DateTime?
+  keyLocation     String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   events          VehicleEvent[]
   washerTasks     WasherTask[]
-  qcSignoffUser   User?          @relation("VehicleQcSignoff", fields: [qcSignoffBy], references: [id], onDelete: SetNull)
+  qcSignoffUser   User?              @relation("VehicleQcSignoff", fields: [qcSignoffBy], references: [id], onDelete: SetNull)
   incidents       Incident[]
+  qcLogs          VehicleQcLog[]
+  blockers        VehicleBlocker[]
+  keyHandovers    KeyHandoverLog[]
 
   @@unique([workspaceId, plateNumber])
   @@index([workspaceId, status])
+  @@index([workspaceId, pipelineState])
 }
 
 model VehicleEvent {
@@ -1226,4 +1240,106 @@ model DeadLetterEntry {
 
   @@index([type, resolvedAt])
   @@index([createdAt])
+}
+
+// ─── Phase: Ops OS — Import Change-Set for rollback ─────────────────────────
+
+model ImportChangeSet {
+  id            String   @id @default(cuid())
+  batchId       String
+  entityType    String   // "vehicle" | "booking" | "shift" etc.
+  entityId      String
+  action        String   // "create" | "update" | "archive"
+  beforeJson    Json?    // snapshot before apply (null for create)
+  afterJson     Json     // snapshot after apply
+  createdAt     DateTime @default(now())
+
+  @@index([batchId])
+  @@index([entityType, entityId])
+}
+
+// ─── Phase: Ops OS — Weather Cache ──────────────────────────────────────────
+
+model WeatherCache {
+  id            String   @id @default(cuid())
+  workspaceId   String?
+  lat           Float
+  lon           Float
+  dataJson      Json
+  fetchedAt     DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([lat, lon, expiresAt])
+  @@index([workspaceId])
+}
+
+// ─── Phase: Ops OS — Fleet Pipeline Enhancements ────────────────────────────
+
+enum FleetPipelineState {
+  RETURNED
+  NEEDS_CLEANING
+  CLEANING
+  QC_PENDING
+  READY
+  RENTED
+  BLOCKED
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum QcStatus {
+  PENDING
+  PASSED
+  FAILED
+  REWORK
+}
+
+model VehicleQcLog {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  vehicleId       String
+  inspectorId     String?
+  status          QcStatus @default(PENDING)
+  checklistJson   Json?
+  failReason      String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inspector       User?    @relation("QcInspector", fields: [inspectorId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, createdAt])
+  @@index([workspaceId, status])
+}
+
+model VehicleBlocker {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  vehicleId     String
+  type          String    // "no_key" | "damage" | "low_fuel" | "docs_missing" | "waiting_parts"
+  description   String?
+  reportedBy    String?
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  vehicle       Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, resolvedAt])
+  @@index([workspaceId])
+}
+
+model KeyHandoverLog {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  vehicleId     String
+  fromUserId    String?
+  toUserId      String?
+  keyLocation   String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, createdAt])
 }

@@ -952,3 +952,101 @@ All 9 phases from the mission are now fully implemented:
 
 ### CI
 - Run pending (just pushed)
+
+---
+
+## Ops OS Upgrade — 2026-02-23
+
+### Baseline
+- **474 unit tests**: All passed after `prisma generate`
+- **Build/Lint/Typecheck**: All green
+- **Pre-existing issues documented**: `docs/INCIDENT_BASELINE.md`
+
+### Phase 1: Stability
+- Enhanced `error.tsx` with schema-error detection, always-visible errorId
+- Created `SchemaFallbackBanner` component for amber warning when schema queries fail gracefully
+- Added `schemaFallbackFlags` pattern to settings page
+- All error boundaries now show Error ID for support correlation
+
+### Phase 2: Imports End-to-End
+- **New model**: `ImportChangeSet` for rollback tracking (entityType, entityId, action, beforeJson, afterJson)
+- **Apply engine** (`lib/imports/apply-engine.ts`): `applyFleetDiff()` creates/updates vehicles from diff, stores change-sets
+- **Rollback engine**: `rollbackBatch()` reverses changes using stored change-sets
+- Wired apply engine into `acceptImportAction` and `rollbackImportAction`
+- Templates for Bookings.xlsx and Vehicles.xlsx already existed
+
+### Phase 3: Fleet v2 Turnaround Engine
+- **New enum**: `FleetPipelineState` (RETURNED, NEEDS_CLEANING, CLEANING, QC_PENDING, READY, RENTED, BLOCKED, MAINTENANCE, OUT_OF_SERVICE)
+- **New enum**: `QcStatus` (PENDING, PASSED, FAILED, REWORK)
+- **New models**: `VehicleQcLog`, `VehicleBlocker`, `KeyHandoverLog`
+- **Vehicle model**: Added `pipelineState`, `slaBreachedAt`, `needByAt`, `keyLocation` fields
+- **Pipeline transitions**: `isValidPipelineTransition()`, `allowedPipelineTransitions()`
+- **Blocker types**: no_key, damage, low_fuel, docs_missing, waiting_parts, other
+- **QC checklist**: 8-item template (exterior, interior, windows, vacuum, odor, fuel, docs, key)
+- Fleet actions already had `transitionVehicleAction`, `qcSignoffAction`, `bulkUpdateVehiclesAction`
+
+### Phase 4: Washers
+- Already complete: KPIs, task queue, daily register, share panel, export CSV
+- Kiosk app: offline queue, theming (4 themes), voice input, history
+- No changes needed — fully functional
+
+### Phase 5: Chat Viber Parity
+- **New actions**: `editMessageAction`, `deleteMessageAction` (soft-delete)
+- **New validators**: `editMessageSchema`, `deleteMessageSchema`
+- Author-or-admin permission model for edit/delete
+- Existing: reactions, pins, channel management, kiosk chat, Viber bridge
+
+### Phase 6: Feeds
+- Already complete: FeedSource registry, cron polling, relevance scoring, keyword management
+- No changes needed
+
+### Phase 7: Weather
+- Already complete: geolocation detection, station fallback, Open-Meteo client
+- **New cron endpoint**: `/api/cron/weather` — refreshes all stations
+
+### Phase 8-9: Search + Shortcuts
+- Already complete: trigram search, command palette, quick bar, role shortcuts
+- No changes needed
+
+### Phase 10: Cron + Deploy
+- **New cron endpoints**: `/api/cron/weather`, `/api/cron/housekeeping`
+- **Updated vercel.json**: 4 cron entries (daily, feeds/30min, weather/15min, housekeeping/3am)
+- Housekeeping: purges old dead-letter entries, cron logs, expired sessions
+- CRON_SECRET authorization on all cron endpoints
+
+### Gate Results (Final)
+
+| Gate | Result |
+|------|--------|
+| `pnpm test:unit` | ✅ 528 tests passed |
+| `pnpm -w typecheck` | ✅ clean |
+| `pnpm -w lint` | ✅ clean (max-warnings=0) |
+| `pnpm --filter @internal-toolkit/web build` | ✅ success |
+
+### Files Changed/Added
+
+| File | Action |
+|------|--------|
+| `prisma/schema.prisma` | Modified: +5 models, +2 enums, +4 Vehicle fields |
+| `app/(app)/error.tsx` | Modified: schema-error detection, always-visible errorId |
+| `components/layout/schema-fallback-banner.tsx` | Created: amber warning banner |
+| `app/(app)/settings/page.tsx` | Modified: schema fallback tracking + banner |
+| `lib/fleet-pipeline.ts` | Modified: FleetPipelineState utilities, blockers, QC checklist |
+| `lib/imports/apply-engine.ts` | Created: apply + rollback engine |
+| `app/(app)/imports/actions.ts` | Modified: wired apply + rollback engines |
+| `lib/validators/chat-channels.ts` | Modified: +2 schemas |
+| `app/(app)/chat/channel-actions.ts` | Modified: +2 actions (edit/delete) |
+| `app/api/cron/weather/route.ts` | Created |
+| `app/api/cron/housekeeping/route.ts` | Created |
+| `vercel.json` | Modified: +3 cron entries |
+| `docs/INCIDENT_BASELINE.md` | Created |
+| `docs/ROADMAP_NEXT.md` | Created |
+| `tests/unit/fleet-pipeline-v2.test.ts` | Created: 16 tests |
+| `tests/unit/imports-engine.test.ts` | Created: 16 tests |
+| `tests/unit/ops-os-stability.test.ts` | Created: 9 tests |
+| `tests/unit/ops-os-chat-cron.test.ts` | Created: 13 tests |
+
+### Test Summary
+- **54 new tests** added across 4 test files
+- **528 total tests** (up from 474 baseline)
+- All passing ✅

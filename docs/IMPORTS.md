@@ -68,3 +68,19 @@ Upload → Analyzing → Preview → Accept/Decline
 
 ## Environment Variables
 No additional env vars needed. Uses existing DATABASE_URL for DB access.
+
+## Ops OS Additions (2026-02-23)
+
+### Apply Engine
+- `applyFleetDiff()`: Processes preview diffs, creates/updates vehicles, stores change-sets
+- Handles create, update actions with full error tracking per row
+
+### Rollback Engine
+- `rollbackBatch()`: Reverses all change-sets for a batch
+- Created vehicles → archived (OUT_OF_SERVICE)
+- Updated vehicles → reverted to pre-import state
+
+### ImportChangeSet Model
+New Prisma model for tracking individual changes within an import batch:
+- `batchId`, `entityType`, `entityId`, `action` (create/update/archive)
+- `beforeJson` (snapshot before), `afterJson` (snapshot after)

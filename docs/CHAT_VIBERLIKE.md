@@ -65,3 +65,12 @@ Located in `app/(app)/chat/channel-actions.ts`:
 
 ## Environment Variables
 No additional env vars required for core chat. See VIBER_BRIDGE.md for external integration.
+
+## Ops OS Additions (2026-02-23)
+
+### Edit/Delete Messages
+- `editMessageAction`: Author or admin can edit messages, sets `isEdited=true`
+- `deleteMessageAction`: Soft-delete (replaces content with "[Message deleted]")
+- Validators: `editMessageSchema`, `deleteMessageSchema`
+- Permission model: message author can edit/delete own; admins can edit/delete any
+- Audit trail via `appendAuditLog` for both actions
