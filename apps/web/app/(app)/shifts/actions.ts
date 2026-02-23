@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { appendAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
+import { withDbAction } from "@/lib/prisma-errors";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
 import {
   AuthError,
@@ -111,464 +112,476 @@ async function assertNoShiftConflict(input: {
 }
 
 export async function createShiftAction(formData: FormData) {
-  const parsed = createShiftSchema.parse({
-    workspaceId: formData.get("workspaceId"),
-    title: formData.get("title"),
-    assignedUserId: formData.get("assignedUserId") || undefined,
-    startsAt: normalizeDateTimeInput(formData.get("startsAt")),
-    endsAt: normalizeDateTimeInput(formData.get("endsAt")),
-    notes: formData.get("notes") || undefined,
-    status: formData.get("status") || undefined,
-  });
-
-  try {
-    const { user } = await requireWorkspacePermission(
-      parsed.workspaceId,
-      "shifts",
-      "write",
-    );
-
-    const startsAt = new Date(parsed.startsAt);
-    const endsAt = new Date(parsed.endsAt);
-
-    await assertNoShiftConflict({
-      workspaceId: parsed.workspaceId,
-      startsAt,
-      endsAt,
-      ...(parsed.assignedUserId
-        ? { assignedUserId: parsed.assignedUserId }
-        : {}),
+  return withDbAction(async () => {
+    const parsed = createShiftSchema.parse({
+      workspaceId: formData.get("workspaceId"),
+      title: formData.get("title"),
+      assignedUserId: formData.get("assignedUserId") || undefined,
+      startsAt: normalizeDateTimeInput(formData.get("startsAt")),
+      endsAt: normalizeDateTimeInput(formData.get("endsAt")),
+      notes: formData.get("notes") || undefined,
+      status: formData.get("status") || undefined,
     });
 
-    const shift = await db.shift.create({
-      data: {
-        workspaceId: parsed.workspaceId,
-        createdBy: user.id,
-        assignedUserId: parsed.assignedUserId ?? null,
-        title: parsed.title,
-        startsAt,
-        endsAt,
-        notes: parsed.notes ?? null,
-        status: parsed.status ?? ShiftStatus.PUBLISHED,
-      },
-    });
+    try {
+      const { user } = await requireWorkspacePermission(
+        parsed.workspaceId,
+        "shifts",
+        "write",
+      );
 
-    await appendAuditLog({
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      action: "shift.created",
-      entityType: "shift",
-      entityId: shift.id,
-      metaJson: {
-        assignedUserId: parsed.assignedUserId,
-        startsAt: shift.startsAt.toISOString(),
-        endsAt: shift.endsAt.toISOString(),
-      },
-    });
-
-    revalidatePath("/shifts");
-    revalidatePath("/calendar");
-    redirect(buildShiftsUrl({ success: "Shift created." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
-  }
-}
-
-export async function importShiftsCsvAction(formData: FormData) {
-  const workspaceId = String(formData.get("workspaceId") ?? "");
-  const file = formData.get("file");
-
-  if (!(file instanceof File)) {
-    redirect(buildShiftsUrl({ error: "CSV file is required." }));
-  }
-
-  const csvContent = await file.text();
-  const parsedInput = importShiftsCsvSchema.parse({
-    workspaceId,
-    csvContent,
-  });
-
-  try {
-    const { user } = await requireWorkspacePermission(
-      parsedInput.workspaceId,
-      "shifts",
-      "write",
-    );
-
-    const parsedCsv = Papa.parse<Record<string, string>>(parsedInput.csvContent, {
-      header: true,
-      skipEmptyLines: true,
-    });
-
-    const rows = parsedCsv.data;
-    if (rows.length === 0) {
-      throw new Error("CSV import payload is empty.");
-    }
-
-    const users = await db.workspaceMember.findMany({
-      where: { workspaceId: parsedInput.workspaceId },
-      include: { user: true },
-    });
-
-    const userByLogin = new Map(
-      users
-        .map((member) => member.user)
-        .filter((member) => member.loginName)
-        .map((member) => [member.loginName?.toLowerCase() as string, member.id]),
-    );
-
-    let imported = 0;
-
-    for (const row of rows) {
-      const title = row.title?.trim();
-      const startsAtRaw = row.startsAt?.trim();
-      const endsAtRaw = row.endsAt?.trim();
-
-      if (!title || !startsAtRaw || !endsAtRaw) {
-        continue;
-      }
-
-      const startsAt = new Date(startsAtRaw);
-      const endsAt = new Date(endsAtRaw);
-
-      if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
-        continue;
-      }
-
-      const assignedUserId = row.assignedLoginName
-        ? userByLogin.get(row.assignedLoginName.toLowerCase())
-        : undefined;
+      const startsAt = new Date(parsed.startsAt);
+      const endsAt = new Date(parsed.endsAt);
 
       await assertNoShiftConflict({
-        workspaceId: parsedInput.workspaceId,
+        workspaceId: parsed.workspaceId,
         startsAt,
         endsAt,
-        ...(assignedUserId ? { assignedUserId } : {}),
+        ...(parsed.assignedUserId
+          ? { assignedUserId: parsed.assignedUserId }
+          : {}),
       });
 
-      await db.shift.create({
+      const shift = await db.shift.create({
         data: {
-          workspaceId: parsedInput.workspaceId,
+          workspaceId: parsed.workspaceId,
           createdBy: user.id,
-          assignedUserId: assignedUserId ?? null,
-          title,
+          assignedUserId: parsed.assignedUserId ?? null,
+          title: parsed.title,
           startsAt,
           endsAt,
-          status: ShiftStatus.PUBLISHED,
-          notes: row.notes?.trim() || null,
+          notes: parsed.notes ?? null,
+          status: parsed.status ?? ShiftStatus.PUBLISHED,
         },
       });
 
-      imported += 1;
+      await appendAuditLog({
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        action: "shift.created",
+        entityType: "shift",
+        entityId: shift.id,
+        metaJson: {
+          assignedUserId: parsed.assignedUserId,
+          startsAt: shift.startsAt.toISOString(),
+          endsAt: shift.endsAt.toISOString(),
+        },
+      });
+
+      revalidatePath("/shifts");
+      revalidatePath("/calendar");
+      redirect(buildShiftsUrl({ success: "Shift created." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
+    }
+  }, "/shifts");
+}
+
+export async function importShiftsCsvAction(formData: FormData) {
+  return withDbAction(async () => {
+    const workspaceId = String(formData.get("workspaceId") ?? "");
+    const file = formData.get("file");
+
+    if (!(file instanceof File)) {
+      redirect(buildShiftsUrl({ error: "CSV file is required." }));
     }
 
-    await appendAuditLog({
-      workspaceId: parsedInput.workspaceId,
-      actorUserId: user.id,
-      action: "shift.csv_imported",
-      entityType: "shift",
-      entityId: parsedInput.workspaceId,
-      metaJson: { imported },
+    const csvContent = await file.text();
+    const parsedInput = importShiftsCsvSchema.parse({
+      workspaceId,
+      csvContent,
     });
 
-    revalidatePath("/shifts");
-    revalidatePath("/calendar");
-    redirect(buildShiftsUrl({ success: `Imported ${imported} shifts from CSV.` }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
-  }
+    try {
+      const { user } = await requireWorkspacePermission(
+        parsedInput.workspaceId,
+        "shifts",
+        "write",
+      );
+
+      const parsedCsv = Papa.parse<Record<string, string>>(parsedInput.csvContent, {
+        header: true,
+        skipEmptyLines: true,
+      });
+
+      const rows = parsedCsv.data;
+      if (rows.length === 0) {
+        throw new Error("CSV import payload is empty.");
+      }
+
+      const users = await db.workspaceMember.findMany({
+        where: { workspaceId: parsedInput.workspaceId },
+        include: { user: true },
+      });
+
+      const userByLogin = new Map(
+        users
+          .map((member) => member.user)
+          .filter((member) => member.loginName)
+          .map((member) => [member.loginName?.toLowerCase() as string, member.id]),
+      );
+
+      let imported = 0;
+
+      for (const row of rows) {
+        const title = row.title?.trim();
+        const startsAtRaw = row.startsAt?.trim();
+        const endsAtRaw = row.endsAt?.trim();
+
+        if (!title || !startsAtRaw || !endsAtRaw) {
+          continue;
+        }
+
+        const startsAt = new Date(startsAtRaw);
+        const endsAt = new Date(endsAtRaw);
+
+        if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+          continue;
+        }
+
+        const assignedUserId = row.assignedLoginName
+          ? userByLogin.get(row.assignedLoginName.toLowerCase())
+          : undefined;
+
+        await assertNoShiftConflict({
+          workspaceId: parsedInput.workspaceId,
+          startsAt,
+          endsAt,
+          ...(assignedUserId ? { assignedUserId } : {}),
+        });
+
+        await db.shift.create({
+          data: {
+            workspaceId: parsedInput.workspaceId,
+            createdBy: user.id,
+            assignedUserId: assignedUserId ?? null,
+            title,
+            startsAt,
+            endsAt,
+            status: ShiftStatus.PUBLISHED,
+            notes: row.notes?.trim() || null,
+          },
+        });
+
+        imported += 1;
+      }
+
+      await appendAuditLog({
+        workspaceId: parsedInput.workspaceId,
+        actorUserId: user.id,
+        action: "shift.csv_imported",
+        entityType: "shift",
+        entityId: parsedInput.workspaceId,
+        metaJson: { imported },
+      });
+
+      revalidatePath("/shifts");
+      revalidatePath("/calendar");
+      redirect(buildShiftsUrl({ success: `Imported ${imported} shifts from CSV.` }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
+    }
+  }, "/shifts");
 }
 
 export async function createShiftRequestAction(formData: FormData) {
-  const parsed = createShiftRequestSchema.parse({
-    workspaceId: formData.get("workspaceId"),
-    shiftId: formData.get("shiftId") || undefined,
-    type: formData.get("type"),
-    startsAt: normalizeDateTimeInput(formData.get("startsAt")),
-    endsAt: normalizeDateTimeInput(formData.get("endsAt")),
-    reason: formData.get("reason"),
-  });
-
-  try {
-    const { user } = await requireWorkspaceRole(parsed.workspaceId, [
-      WorkspaceRole.ADMIN,
-      WorkspaceRole.EDITOR,
-      WorkspaceRole.EMPLOYEE,
-      WorkspaceRole.WASHER,
-      WorkspaceRole.VIEWER,
-    ]);
-
-    const request = await db.shiftRequest.create({
-      data: {
-        workspaceId: parsed.workspaceId,
-        requesterId: user.id,
-        shiftId: parsed.shiftId ?? null,
-        type: parsed.type,
-        startsAt: new Date(parsed.startsAt),
-        endsAt: new Date(parsed.endsAt),
-        reason: parsed.reason,
-      },
+  return withDbAction(async () => {
+    const parsed = createShiftRequestSchema.parse({
+      workspaceId: formData.get("workspaceId"),
+      shiftId: formData.get("shiftId") || undefined,
+      type: formData.get("type"),
+      startsAt: normalizeDateTimeInput(formData.get("startsAt")),
+      endsAt: normalizeDateTimeInput(formData.get("endsAt")),
+      reason: formData.get("reason"),
     });
 
-    const adminMembers = await db.workspaceMember.findMany({
-      where: {
-        workspaceId: parsed.workspaceId,
-        role: WorkspaceRole.ADMIN,
-      },
-      select: { userId: true },
-    });
+    try {
+      const { user } = await requireWorkspaceRole(parsed.workspaceId, [
+        WorkspaceRole.ADMIN,
+        WorkspaceRole.EDITOR,
+        WorkspaceRole.EMPLOYEE,
+        WorkspaceRole.WASHER,
+        WorkspaceRole.VIEWER,
+      ]);
 
-    if (adminMembers.length > 0) {
-      await db.notification.createMany({
-        data: adminMembers.map((member) => ({
-          userId: member.userId,
-          type: "shift_request",
-          title: "New shift request",
-          body: `${user.name} submitted ${parsed.type.toLowerCase()} request.`,
-        })),
+      const request = await db.shiftRequest.create({
+        data: {
+          workspaceId: parsed.workspaceId,
+          requesterId: user.id,
+          shiftId: parsed.shiftId ?? null,
+          type: parsed.type,
+          startsAt: new Date(parsed.startsAt),
+          endsAt: new Date(parsed.endsAt),
+          reason: parsed.reason,
+        },
       });
+
+      const adminMembers = await db.workspaceMember.findMany({
+        where: {
+          workspaceId: parsed.workspaceId,
+          role: WorkspaceRole.ADMIN,
+        },
+        select: { userId: true },
+      });
+
+      if (adminMembers.length > 0) {
+        await db.notification.createMany({
+          data: adminMembers.map((member) => ({
+            userId: member.userId,
+            type: "shift_request",
+            title: "New shift request",
+            body: `${user.name} submitted ${parsed.type.toLowerCase()} request.`,
+          })),
+        });
+      }
+
+      await appendAuditLog({
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        action: "shift.request_created",
+        entityType: "shift_request",
+        entityId: request.id,
+        metaJson: {
+          type: parsed.type,
+        },
+      });
+
+      revalidatePath("/shifts");
+      revalidatePath("/calendar");
+      redirect(buildShiftsUrl({ success: "Shift request submitted." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
     }
-
-    await appendAuditLog({
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      action: "shift.request_created",
-      entityType: "shift_request",
-      entityId: request.id,
-      metaJson: {
-        type: parsed.type,
-      },
-    });
-
-    revalidatePath("/shifts");
-    revalidatePath("/calendar");
-    redirect(buildShiftsUrl({ success: "Shift request submitted." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
-  }
+  }, "/shifts");
 }
 
 export async function reviewShiftRequestAction(formData: FormData) {
-  const parsed = reviewShiftRequestSchema.parse({
-    workspaceId: formData.get("workspaceId"),
-    requestId: formData.get("requestId"),
-    decision: formData.get("decision"),
-    reviewNote: formData.get("reviewNote") || undefined,
-  });
-
-  try {
-    const { user } = await requireWorkspacePermission(
-      parsed.workspaceId,
-      "shifts",
-      "approve_requests",
-    );
-
-    const nextStatus =
-      parsed.decision === "approve"
-        ? ShiftRequestStatus.APPROVED
-        : ShiftRequestStatus.REJECTED;
-
-    const request = await db.shiftRequest.update({
-      where: { id: parsed.requestId },
-      data: {
-        status: nextStatus,
-        reviewedBy: user.id,
-        reviewedAt: new Date(),
-        reviewNote: parsed.reviewNote ?? null,
-      },
-      include: {
-        requester: true,
-      },
+  return withDbAction(async () => {
+    const parsed = reviewShiftRequestSchema.parse({
+      workspaceId: formData.get("workspaceId"),
+      requestId: formData.get("requestId"),
+      decision: formData.get("decision"),
+      reviewNote: formData.get("reviewNote") || undefined,
     });
 
-    await db.notification.create({
-      data: {
-        userId: request.requesterId,
-        type: "shift_request",
-        title: "Shift request reviewed",
-        body: `Your request was ${nextStatus.toLowerCase()}.`,
-      },
-    });
+    try {
+      const { user } = await requireWorkspacePermission(
+        parsed.workspaceId,
+        "shifts",
+        "approve_requests",
+      );
 
-    await appendAuditLog({
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      action: "shift.request_reviewed",
-      entityType: "shift_request",
-      entityId: request.id,
-      metaJson: {
-        status: nextStatus,
-        reviewNote: parsed.reviewNote,
-      },
-    });
+      const nextStatus =
+        parsed.decision === "approve"
+          ? ShiftRequestStatus.APPROVED
+          : ShiftRequestStatus.REJECTED;
 
-    revalidatePath("/shifts");
-    revalidatePath("/calendar");
-    redirect(buildShiftsUrl({ success: `Request ${nextStatus.toLowerCase()}.` }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
-  }
+      const request = await db.shiftRequest.update({
+        where: { id: parsed.requestId },
+        data: {
+          status: nextStatus,
+          reviewedBy: user.id,
+          reviewedAt: new Date(),
+          reviewNote: parsed.reviewNote ?? null,
+        },
+        include: {
+          requester: true,
+        },
+      });
+
+      await db.notification.create({
+        data: {
+          userId: request.requesterId,
+          type: "shift_request",
+          title: "Shift request reviewed",
+          body: `Your request was ${nextStatus.toLowerCase()}.`,
+        },
+      });
+
+      await appendAuditLog({
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        action: "shift.request_reviewed",
+        entityType: "shift_request",
+        entityId: request.id,
+        metaJson: {
+          status: nextStatus,
+          reviewNote: parsed.reviewNote,
+        },
+      });
+
+      revalidatePath("/shifts");
+      revalidatePath("/calendar");
+      redirect(buildShiftsUrl({ success: `Request ${nextStatus.toLowerCase()}.` }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
+    }
+  }, "/shifts");
 }
 
 export async function transitionShiftAction(formData: FormData) {
-  const parsed = transitionShiftSchema.parse({
-    workspaceId: formData.get("workspaceId"),
-    shiftId: formData.get("shiftId"),
-    targetStatus: formData.get("targetStatus"),
-    notes: formData.get("notes") || undefined,
-  });
-
-  try {
-    const { user } = await requireWorkspacePermission(
-      parsed.workspaceId,
-      "shifts",
-      "write",
-    );
-
-    const shift = await db.shift.findUniqueOrThrow({
-      where: { id: parsed.shiftId },
-      select: {
-        status: true,
-        title: true,
-        assignedUserId: true,
-        startsAt: true,
-        endsAt: true,
-        notes: true,
-        version: true,
-      },
+  return withDbAction(async () => {
+    const parsed = transitionShiftSchema.parse({
+      workspaceId: formData.get("workspaceId"),
+      shiftId: formData.get("shiftId"),
+      targetStatus: formData.get("targetStatus"),
+      notes: formData.get("notes") || undefined,
     });
 
-    if (!isValidScheduleTransition(shift.status, parsed.targetStatus)) {
-      throw new Error(
-        `Invalid shift transition from ${shift.status} to ${parsed.targetStatus}.`,
+    try {
+      const { user } = await requireWorkspacePermission(
+        parsed.workspaceId,
+        "shifts",
+        "write",
       );
+
+      const shift = await db.shift.findUniqueOrThrow({
+        where: { id: parsed.shiftId },
+        select: {
+          status: true,
+          title: true,
+          assignedUserId: true,
+          startsAt: true,
+          endsAt: true,
+          notes: true,
+          version: true,
+        },
+      });
+
+      if (!isValidScheduleTransition(shift.status, parsed.targetStatus)) {
+        throw new Error(
+          `Invalid shift transition from ${shift.status} to ${parsed.targetStatus}.`,
+        );
+      }
+
+      const snapshot =
+        parsed.targetStatus === ShiftStatus.PUBLISHED ||
+        parsed.targetStatus === ShiftStatus.LOCKED
+          ? createShiftSnapshot(shift)
+          : undefined;
+
+      const bumpVersion =
+        parsed.targetStatus === ShiftStatus.PUBLISHED ||
+        parsed.targetStatus === ShiftStatus.LOCKED;
+
+      await db.shift.update({
+        where: { id: parsed.shiftId },
+        data: {
+          status: parsed.targetStatus,
+          notes: parsed.notes ?? shift.notes,
+          ...(parsed.targetStatus === ShiftStatus.PUBLISHED
+            ? { publishedAt: new Date() }
+            : {}),
+          ...(parsed.targetStatus === ShiftStatus.LOCKED
+            ? { lockedAt: new Date(), lockedBy: user.id }
+            : {}),
+          ...(bumpVersion ? { version: shift.version + 1 } : {}),
+          ...(snapshot ? { snapshotJson: snapshot } : {}),
+        },
+      });
+
+      await appendAuditLog({
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        action: "shift.transition",
+        entityType: "shift",
+        entityId: parsed.shiftId,
+        metaJson: {
+          from: shift.status,
+          to: parsed.targetStatus,
+          title: shift.title,
+          version: bumpVersion ? shift.version + 1 : shift.version,
+        },
+      });
+
+      revalidatePath("/shifts");
+      revalidatePath("/calendar");
+      redirect(
+        buildShiftsUrl({
+          success: `${shift.title}: ${shift.status} → ${parsed.targetStatus}`,
+        }),
+      );
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
     }
-
-    const snapshot =
-      parsed.targetStatus === ShiftStatus.PUBLISHED ||
-      parsed.targetStatus === ShiftStatus.LOCKED
-        ? createShiftSnapshot(shift)
-        : undefined;
-
-    const bumpVersion =
-      parsed.targetStatus === ShiftStatus.PUBLISHED ||
-      parsed.targetStatus === ShiftStatus.LOCKED;
-
-    await db.shift.update({
-      where: { id: parsed.shiftId },
-      data: {
-        status: parsed.targetStatus,
-        notes: parsed.notes ?? shift.notes,
-        ...(parsed.targetStatus === ShiftStatus.PUBLISHED
-          ? { publishedAt: new Date() }
-          : {}),
-        ...(parsed.targetStatus === ShiftStatus.LOCKED
-          ? { lockedAt: new Date(), lockedBy: user.id }
-          : {}),
-        ...(bumpVersion ? { version: shift.version + 1 } : {}),
-        ...(snapshot ? { snapshotJson: snapshot } : {}),
-      },
-    });
-
-    await appendAuditLog({
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      action: "shift.transition",
-      entityType: "shift",
-      entityId: parsed.shiftId,
-      metaJson: {
-        from: shift.status,
-        to: parsed.targetStatus,
-        title: shift.title,
-        version: bumpVersion ? shift.version + 1 : shift.version,
-      },
-    });
-
-    revalidatePath("/shifts");
-    revalidatePath("/calendar");
-    redirect(
-      buildShiftsUrl({
-        success: `${shift.title}: ${shift.status} → ${parsed.targetStatus}`,
-      }),
-    );
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
-  }
+  }, "/shifts");
 }
 
 export async function rollbackShiftAction(formData: FormData) {
-  const parsed = rollbackShiftSchema.parse({
-    workspaceId: formData.get("workspaceId"),
-    shiftId: formData.get("shiftId"),
-  });
-
-  try {
-    const { user } = await requireWorkspacePermission(
-      parsed.workspaceId,
-      "shifts",
-      "write",
-    );
-
-    const shift = await db.shift.findUniqueOrThrow({
-      where: { id: parsed.shiftId },
-      select: { snapshotJson: true, title: true, version: true },
+  return withDbAction(async () => {
+    const parsed = rollbackShiftSchema.parse({
+      workspaceId: formData.get("workspaceId"),
+      shiftId: formData.get("shiftId"),
     });
 
-    if (!shift.snapshotJson) {
-      throw new Error("No previous version available for rollback.");
+    try {
+      const { user } = await requireWorkspacePermission(
+        parsed.workspaceId,
+        "shifts",
+        "write",
+      );
+
+      const shift = await db.shift.findUniqueOrThrow({
+        where: { id: parsed.shiftId },
+        select: { snapshotJson: true, title: true, version: true },
+      });
+
+      if (!shift.snapshotJson) {
+        throw new Error("No previous version available for rollback.");
+      }
+
+      const snapshot = JSON.parse(shift.snapshotJson) as {
+        title: string;
+        assignedUserId: string | null;
+        startsAt: string;
+        endsAt: string;
+        notes: string | null;
+        status: string;
+      };
+
+      await db.shift.update({
+        where: { id: parsed.shiftId },
+        data: {
+          title: snapshot.title,
+          assignedUserId: snapshot.assignedUserId,
+          startsAt: new Date(snapshot.startsAt),
+          endsAt: new Date(snapshot.endsAt),
+          notes: snapshot.notes,
+          status: snapshot.status as ShiftStatus,
+          version: shift.version + 1,
+          snapshotJson: null,
+          lockedAt: null,
+          lockedBy: null,
+        },
+      });
+
+      await appendAuditLog({
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        action: "shift.rollback",
+        entityType: "shift",
+        entityId: parsed.shiftId,
+        metaJson: {
+          title: shift.title,
+          restoredVersion: shift.version,
+        },
+      });
+
+      revalidatePath("/shifts");
+      revalidatePath("/calendar");
+      redirect(
+        buildShiftsUrl({
+          success: `"${shift.title}" rolled back to previous version.`,
+        }),
+      );
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
     }
-
-    const snapshot = JSON.parse(shift.snapshotJson) as {
-      title: string;
-      assignedUserId: string | null;
-      startsAt: string;
-      endsAt: string;
-      notes: string | null;
-      status: string;
-    };
-
-    await db.shift.update({
-      where: { id: parsed.shiftId },
-      data: {
-        title: snapshot.title,
-        assignedUserId: snapshot.assignedUserId,
-        startsAt: new Date(snapshot.startsAt),
-        endsAt: new Date(snapshot.endsAt),
-        notes: snapshot.notes,
-        status: snapshot.status as ShiftStatus,
-        version: shift.version + 1,
-        snapshotJson: null,
-        lockedAt: null,
-        lockedBy: null,
-      },
-    });
-
-    await appendAuditLog({
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      action: "shift.rollback",
-      entityType: "shift",
-      entityId: parsed.shiftId,
-      metaJson: {
-        title: shift.title,
-        restoredVersion: shift.version,
-      },
-    });
-
-    revalidatePath("/shifts");
-    revalidatePath("/calendar");
-    redirect(
-      buildShiftsUrl({
-        success: `"${shift.title}" rolled back to previous version.`,
-      }),
-    );
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    redirect(buildShiftsUrl({ error: getErrorMessage(error) }));
-  }
+  }, "/shifts");
 }

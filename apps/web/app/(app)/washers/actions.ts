@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { appendAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
+import { withDbAction } from "@/lib/prisma-errors";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
 import { AuthError, requireWorkspacePermission } from "@/lib/rbac";
 import {
@@ -48,116 +49,120 @@ function checkboxValue(formData: FormData, key: string) {
 }
 
 export async function createWasherTaskAction(formData: FormData) {
-  const parsed = createWasherTaskSchema.parse({
-    workspaceId: formData.get("workspaceId"),
-    vehicleId: formData.get("vehicleId"),
-    washerUserId: formData.get("washerUserId") || undefined,
-    status: formData.get("status") || WasherTaskStatus.TODO,
-    exteriorDone: checkboxValue(formData, "exteriorDone"),
-    interiorDone: checkboxValue(formData, "interiorDone"),
-    vacuumDone: checkboxValue(formData, "vacuumDone"),
-    notes: formData.get("notes") || undefined,
-    voiceTranscript: formData.get("voiceTranscript") || undefined,
-  });
+  return withDbAction(async () => {
+    const parsed = createWasherTaskSchema.parse({
+      workspaceId: formData.get("workspaceId"),
+      vehicleId: formData.get("vehicleId"),
+      washerUserId: formData.get("washerUserId") || undefined,
+      status: formData.get("status") || WasherTaskStatus.TODO,
+      exteriorDone: checkboxValue(formData, "exteriorDone"),
+      interiorDone: checkboxValue(formData, "interiorDone"),
+      vacuumDone: checkboxValue(formData, "vacuumDone"),
+      notes: formData.get("notes") || undefined,
+      voiceTranscript: formData.get("voiceTranscript") || undefined,
+    });
 
-  try {
-    const { user } = await requireWorkspacePermission(
-      parsed.workspaceId,
-      "washers",
-      "write",
-    );
+    try {
+      const { user } = await requireWorkspacePermission(
+        parsed.workspaceId,
+        "washers",
+        "write",
+      );
 
-    const task = await db.washerTask.create({
-      data: {
+      const task = await db.washerTask.create({
+        data: {
+          workspaceId: parsed.workspaceId,
+          vehicleId: parsed.vehicleId,
+          washerUserId: parsed.washerUserId ?? user.id,
+          status: parsed.status,
+          exteriorDone: parsed.exteriorDone ?? false,
+          interiorDone: parsed.interiorDone ?? false,
+          vacuumDone: parsed.vacuumDone ?? false,
+          notes: parsed.notes ?? null,
+          voiceTranscript: parsed.voiceTranscript ?? null,
+        },
+      });
+
+      await appendAuditLog({
         workspaceId: parsed.workspaceId,
-        vehicleId: parsed.vehicleId,
-        washerUserId: parsed.washerUserId ?? user.id,
-        status: parsed.status,
-        exteriorDone: parsed.exteriorDone ?? false,
-        interiorDone: parsed.interiorDone ?? false,
-        vacuumDone: parsed.vacuumDone ?? false,
-        notes: parsed.notes ?? null,
-        voiceTranscript: parsed.voiceTranscript ?? null,
-      },
-    });
+        actorUserId: user.id,
+        action: "washers.task_created",
+        entityType: "washer_task",
+        entityId: task.id,
+        metaJson: {
+          vehicleId: task.vehicleId,
+          status: task.status,
+        },
+      });
 
-    await appendAuditLog({
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      action: "washers.task_created",
-      entityType: "washer_task",
-      entityId: task.id,
-      metaJson: {
-        vehicleId: task.vehicleId,
-        status: task.status,
-      },
-    });
-
-    revalidatePath("/washers");
-    revalidatePath("/fleet");
-    revalidatePath("/calendar");
-    redirect(buildWashersUrl({ success: "Washer task created." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    redirect(buildWashersUrl({ error: getErrorMessage(error) }));
-  }
+      revalidatePath("/washers");
+      revalidatePath("/fleet");
+      revalidatePath("/calendar");
+      redirect(buildWashersUrl({ success: "Washer task created." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      redirect(buildWashersUrl({ error: getErrorMessage(error) }));
+    }
+  }, "/washers");
 }
 
 export async function updateWasherTaskAction(formData: FormData) {
-  const parsed = updateWasherTaskSchema.parse({
-    workspaceId: formData.get("workspaceId"),
-    taskId: formData.get("taskId"),
-    status: formData.get("status"),
-    exteriorDone: checkboxValue(formData, "exteriorDone"),
-    interiorDone: checkboxValue(formData, "interiorDone"),
-    vacuumDone: checkboxValue(formData, "vacuumDone"),
-    notes: formData.get("notes") || undefined,
-    voiceTranscript: formData.get("voiceTranscript") || undefined,
-  });
-
-  try {
-    const { user } = await requireWorkspacePermission(
-      parsed.workspaceId,
-      "washers",
-      "write",
-    );
-
-    const task = await db.washerTask.update({
-      where: {
-        id: parsed.taskId,
-      },
-      data: {
-        status: parsed.status,
-        exteriorDone: parsed.exteriorDone,
-        interiorDone: parsed.interiorDone,
-        vacuumDone: parsed.vacuumDone,
-        notes: parsed.notes ?? null,
-        voiceTranscript: parsed.voiceTranscript ?? null,
-      },
+  return withDbAction(async () => {
+    const parsed = updateWasherTaskSchema.parse({
+      workspaceId: formData.get("workspaceId"),
+      taskId: formData.get("taskId"),
+      status: formData.get("status"),
+      exteriorDone: checkboxValue(formData, "exteriorDone"),
+      interiorDone: checkboxValue(formData, "interiorDone"),
+      vacuumDone: checkboxValue(formData, "vacuumDone"),
+      notes: formData.get("notes") || undefined,
+      voiceTranscript: formData.get("voiceTranscript") || undefined,
     });
 
-    await appendAuditLog({
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      action: "washers.task_updated",
-      entityType: "washer_task",
-      entityId: task.id,
-      metaJson: {
-        status: task.status,
-        exteriorDone: task.exteriorDone,
-        interiorDone: task.interiorDone,
-        vacuumDone: task.vacuumDone,
-      },
-    });
+    try {
+      const { user } = await requireWorkspacePermission(
+        parsed.workspaceId,
+        "washers",
+        "write",
+      );
 
-    revalidatePath("/washers");
-    revalidatePath("/fleet");
-    revalidatePath("/calendar");
-    redirect(buildWashersUrl({ success: "Washer task updated." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    redirect(buildWashersUrl({ error: getErrorMessage(error) }));
-  }
+      const task = await db.washerTask.update({
+        where: {
+          id: parsed.taskId,
+        },
+        data: {
+          status: parsed.status,
+          exteriorDone: parsed.exteriorDone,
+          interiorDone: parsed.interiorDone,
+          vacuumDone: parsed.vacuumDone,
+          notes: parsed.notes ?? null,
+          voiceTranscript: parsed.voiceTranscript ?? null,
+        },
+      });
+
+      await appendAuditLog({
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        action: "washers.task_updated",
+        entityType: "washer_task",
+        entityId: task.id,
+        metaJson: {
+          status: task.status,
+          exteriorDone: task.exteriorDone,
+          interiorDone: task.interiorDone,
+          vacuumDone: task.vacuumDone,
+        },
+      });
+
+      revalidatePath("/washers");
+      revalidatePath("/fleet");
+      revalidatePath("/calendar");
+      redirect(buildWashersUrl({ success: "Washer task updated." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      redirect(buildWashersUrl({ error: getErrorMessage(error) }));
+    }
+  }, "/washers");
 }
 
 // ---------------------------------------------------------------------------
@@ -189,99 +194,103 @@ export type BulkUpdateResult = {
 export async function bulkUpdateWasherTasksAction(
   input: z.infer<typeof bulkUpdateSchema>,
 ): Promise<BulkUpdateResult> {
-  const parsed = bulkUpdateSchema.parse(input);
+  return withDbAction(async () => {
+    const parsed = bulkUpdateSchema.parse(input);
 
-  try {
-    const { user } = await requireWorkspacePermission(
-      parsed.workspaceId,
-      "washers",
-      "write",
-    );
+    try {
+      const { user } = await requireWorkspacePermission(
+        parsed.workspaceId,
+        "washers",
+        "write",
+      );
 
-    // Snapshot previous states for undo
-    const tasks = await db.washerTask.findMany({
-      where: { id: { in: parsed.taskIds }, workspaceId: parsed.workspaceId },
-      select: { id: true, status: true, exteriorDone: true, interiorDone: true, vacuumDone: true },
-    });
+      // Snapshot previous states for undo
+      const tasks = await db.washerTask.findMany({
+        where: { id: { in: parsed.taskIds }, workspaceId: parsed.workspaceId },
+        select: { id: true, status: true, exteriorDone: true, interiorDone: true, vacuumDone: true },
+      });
 
-    const previousStates = tasks.map((t) => ({
-      id: t.id,
-      status: t.status,
-      exteriorDone: t.exteriorDone,
-      interiorDone: t.interiorDone,
-      vacuumDone: t.vacuumDone,
-    }));
+      const previousStates = tasks.map((t) => ({
+        id: t.id,
+        status: t.status,
+        exteriorDone: t.exteriorDone,
+        interiorDone: t.interiorDone,
+        vacuumDone: t.vacuumDone,
+      }));
 
-    // Build update data (only set fields that were provided)
-    const data: Record<string, unknown> = {};
-    if (parsed.status !== undefined) data.status = parsed.status;
-    if (parsed.exteriorDone !== undefined) data.exteriorDone = parsed.exteriorDone;
-    if (parsed.interiorDone !== undefined) data.interiorDone = parsed.interiorDone;
-    if (parsed.vacuumDone !== undefined) data.vacuumDone = parsed.vacuumDone;
+      // Build update data (only set fields that were provided)
+      const data: Record<string, unknown> = {};
+      if (parsed.status !== undefined) data.status = parsed.status;
+      if (parsed.exteriorDone !== undefined) data.exteriorDone = parsed.exteriorDone;
+      if (parsed.interiorDone !== undefined) data.interiorDone = parsed.interiorDone;
+      if (parsed.vacuumDone !== undefined) data.vacuumDone = parsed.vacuumDone;
 
-    const result = await db.washerTask.updateMany({
-      where: { id: { in: parsed.taskIds }, workspaceId: parsed.workspaceId },
-      data,
-    });
+      const result = await db.washerTask.updateMany({
+        where: { id: { in: parsed.taskIds }, workspaceId: parsed.workspaceId },
+        data,
+      });
 
-    await appendAuditLog({
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      action: "washers.bulk_updated",
-      entityType: "washer_task",
-      entityId: parsed.taskIds.join(","),
-      metaJson: { count: result.count, ...data },
-    });
+      await appendAuditLog({
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        action: "washers.bulk_updated",
+        entityType: "washer_task",
+        entityId: parsed.taskIds.join(","),
+        metaJson: { count: result.count, ...data },
+      });
 
-    revalidatePath("/washers");
-    return { ok: true, updated: result.count, previousStates };
-  } catch (error) {
-    return {
-      ok: false,
-      updated: 0,
-      previousStates: [],
-      error: getErrorMessage(error),
-    };
-  }
+      revalidatePath("/washers");
+      return { ok: true, updated: result.count, previousStates };
+    } catch (error) {
+      return {
+        ok: false,
+        updated: 0,
+        previousStates: [],
+        error: getErrorMessage(error),
+      };
+    }
+  }, "/washers");
 }
 
 export async function undoWasherTasksAction(
   workspaceId: string,
   previousStates: BulkUpdateResult["previousStates"],
 ): Promise<{ ok: boolean; restored: number; error?: string }> {
-  try {
-    const { user } = await requireWorkspacePermission(
-      workspaceId,
-      "washers",
-      "write",
-    );
+  return withDbAction(async () => {
+    try {
+      const { user } = await requireWorkspacePermission(
+        workspaceId,
+        "washers",
+        "write",
+      );
 
-    let restored = 0;
-    for (const prev of previousStates) {
-      await db.washerTask.update({
-        where: { id: prev.id },
-        data: {
-          status: prev.status,
-          exteriorDone: prev.exteriorDone,
-          interiorDone: prev.interiorDone,
-          vacuumDone: prev.vacuumDone,
-        },
+      let restored = 0;
+      for (const prev of previousStates) {
+        await db.washerTask.update({
+          where: { id: prev.id },
+          data: {
+            status: prev.status,
+            exteriorDone: prev.exteriorDone,
+            interiorDone: prev.interiorDone,
+            vacuumDone: prev.vacuumDone,
+          },
+        });
+        restored++;
+      }
+
+      await appendAuditLog({
+        workspaceId,
+        actorUserId: user.id,
+        action: "washers.bulk_undo",
+        entityType: "washer_task",
+        entityId: previousStates.map((p) => p.id).join(","),
+        metaJson: { restored },
       });
-      restored++;
+
+      revalidatePath("/washers");
+      return { ok: true, restored };
+    } catch (error) {
+      return { ok: false, restored: 0, error: getErrorMessage(error) };
     }
-
-    await appendAuditLog({
-      workspaceId,
-      actorUserId: user.id,
-      action: "washers.bulk_undo",
-      entityType: "washer_task",
-      entityId: previousStates.map((p) => p.id).join(","),
-      metaJson: { restored },
-    });
-
-    revalidatePath("/washers");
-    return { ok: true, restored };
-  } catch (error) {
-    return { ok: false, restored: 0, error: getErrorMessage(error) };
-  }
+  }, "/washers");
 }

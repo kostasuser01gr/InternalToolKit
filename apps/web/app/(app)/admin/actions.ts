@@ -8,6 +8,7 @@ import { createWorkspaceInvite } from "@/lib/auth/invite";
 import { hasRecentAdminStepUp, verifyAdminStepUpPin } from "@/lib/auth/session";
 import { appendAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
+import { withDbAction } from "@/lib/prisma-errors";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
 import { getRequestContext } from "@/lib/request-context";
 import { AuthError, requireAdminAccess } from "@/lib/rbac";
@@ -179,114 +180,118 @@ export async function inviteMemberAction(formData: FormData) {
 }
 
 export async function updateMemberRoleAction(formData: FormData) {
-  const parsed = updateMemberRoleSchema.parse({
-    workspaceId: formData.get("workspaceId"),
-    userId: formData.get("userId"),
-    role: formData.get("role"),
-  });
+  return withDbAction(async () => {
+    const parsed = updateMemberRoleSchema.parse({
+      workspaceId: formData.get("workspaceId"),
+      userId: formData.get("userId"),
+      role: formData.get("role"),
+    });
 
-  try {
-    const { user } = await ensureAdminStepUp(parsed.workspaceId);
+    try {
+      const { user } = await ensureAdminStepUp(parsed.workspaceId);
 
-    await db.workspaceMember.update({
-      where: {
-        workspaceId_userId: {
-          workspaceId: parsed.workspaceId,
-          userId: parsed.userId,
+      await db.workspaceMember.update({
+        where: {
+          workspaceId_userId: {
+            workspaceId: parsed.workspaceId,
+            userId: parsed.userId,
+          },
         },
-      },
-      data: {
+        data: {
+          role: parsed.role,
+        },
+      });
+
+      await appendAuditLog({
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        action: "admin.member_role_updated",
+        entityType: "workspace_member",
+        entityId: parsed.userId,
+        metaJson: {
+          role: parsed.role,
+        },
+      });
+
+      logSecurityEvent("admin.member_role_updated", {
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        memberUserId: parsed.userId,
         role: parsed.role,
-      },
-    });
+      });
 
-    await appendAuditLog({
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      action: "admin.member_role_updated",
-      entityType: "workspace_member",
-      entityId: parsed.userId,
-      metaJson: {
-        role: parsed.role,
-      },
-    });
-
-    logSecurityEvent("admin.member_role_updated", {
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      memberUserId: parsed.userId,
-      role: parsed.role,
-    });
-
-    revalidatePath("/admin");
-    redirect(buildAdminUrl({ success: "Member role updated." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    const context = await getRequestContext("/admin");
-    const errorId = crypto.randomUUID().slice(0, 12);
-    redirect(
-      buildAdminUrl({
-        error: getErrorMessage(error),
-        requestId: context.requestId,
-        errorId,
-      }),
-    );
-  }
+      revalidatePath("/admin");
+      redirect(buildAdminUrl({ success: "Member role updated." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      const context = await getRequestContext("/admin");
+      const errorId = crypto.randomUUID().slice(0, 12);
+      redirect(
+        buildAdminUrl({
+          error: getErrorMessage(error),
+          requestId: context.requestId,
+          errorId,
+        }),
+      );
+    }
+  }, "/admin");
 }
 
 export async function removeMemberAction(formData: FormData) {
-  const parsed = removeMemberSchema.parse({
-    workspaceId: formData.get("workspaceId"),
-    userId: formData.get("userId"),
-  });
-
-  try {
-    const { user } = await ensureAdminStepUp(parsed.workspaceId);
-
-    const workspace = await db.workspace.findUnique({
-      where: { id: parsed.workspaceId },
+  return withDbAction(async () => {
+    const parsed = removeMemberSchema.parse({
+      workspaceId: formData.get("workspaceId"),
+      userId: formData.get("userId"),
     });
 
-    if (workspace?.ownerId === parsed.userId) {
-      throw new Error("Cannot remove workspace owner.");
-    }
+    try {
+      const { user } = await ensureAdminStepUp(parsed.workspaceId);
 
-    await db.workspaceMember.delete({
-      where: {
-        workspaceId_userId: {
-          workspaceId: parsed.workspaceId,
-          userId: parsed.userId,
+      const workspace = await db.workspace.findUnique({
+        where: { id: parsed.workspaceId },
+      });
+
+      if (workspace?.ownerId === parsed.userId) {
+        throw new Error("Cannot remove workspace owner.");
+      }
+
+      await db.workspaceMember.delete({
+        where: {
+          workspaceId_userId: {
+            workspaceId: parsed.workspaceId,
+            userId: parsed.userId,
+          },
         },
-      },
-    });
+      });
 
-    await appendAuditLog({
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      action: "admin.member_removed",
-      entityType: "workspace_member",
-      entityId: parsed.userId,
-      metaJson: {},
-    });
+      await appendAuditLog({
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        action: "admin.member_removed",
+        entityType: "workspace_member",
+        entityId: parsed.userId,
+        metaJson: {},
+      });
 
-    logSecurityEvent("admin.member_removed", {
-      workspaceId: parsed.workspaceId,
-      actorUserId: user.id,
-      removedUserId: parsed.userId,
-    });
+      logSecurityEvent("admin.member_removed", {
+        workspaceId: parsed.workspaceId,
+        actorUserId: user.id,
+        removedUserId: parsed.userId,
+      });
 
-    revalidatePath("/admin");
-    redirect(buildAdminUrl({ success: "Member removed." }));
-  } catch (error) {
-    rethrowIfRedirectError(error);
-    const context = await getRequestContext("/admin");
-    const errorId = crypto.randomUUID().slice(0, 12);
-    redirect(
-      buildAdminUrl({
-        error: getErrorMessage(error),
-        requestId: context.requestId,
-        errorId,
-      }),
-    );
-  }
+      revalidatePath("/admin");
+      redirect(buildAdminUrl({ success: "Member removed." }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      const context = await getRequestContext("/admin");
+      const errorId = crypto.randomUUID().slice(0, 12);
+      redirect(
+        buildAdminUrl({
+          error: getErrorMessage(error),
+          requestId: context.requestId,
+          errorId,
+        }),
+      );
+    }
+  }, "/admin");
 }
