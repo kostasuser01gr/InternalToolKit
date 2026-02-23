@@ -26,6 +26,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@convex/*": [
+        "../../convex/*"
       ]
     },
     "allowJs": true

@@ -13,8 +13,11 @@ import {
 import { generateOneTimeToken, hashOpaqueToken, normalizeEmail, normalizeLoginName } from "@/lib/auth/tokens";
 import { getServerEnv } from "@/lib/env";
 import type { AppSession, SessionUser } from "@/lib/auth/types";
-import { db } from "@/lib/db";
+import type { GlobalRole } from "@prisma/client";
+import { getConvexClient } from "@/lib/convex-client";
+import { api } from "@/lib/convex-api";
 import { logSecurityEvent } from "@/lib/security";
+import { db } from "@/lib/db";
 
 type SessionPayload = {
   uid: string;
@@ -157,6 +160,46 @@ function isPinCredentials(input: AuthCredentials): input is {
 
 async function resolveSession(payload: SessionPayload): Promise<AppSession | null> {
   try {
+    const convex = getConvexClient();
+
+    if (convex) {
+      // ── Convex path ──
+      const result = await convex.query(api.auth.resolveSession, {
+        sessionId: payload.sid as any,
+        userId: payload.uid as any,
+      });
+      if (!result) return null;
+
+      if (!tokenHashesMatch(result.session.tokenHash, hashOpaqueToken(payload.st))) {
+        return null;
+      }
+
+      // Touch session if stale (> 30s)
+      const nowMs = Date.now();
+      const lastSeenMs = result.session.lastSeenAt ?? 0;
+      if (nowMs - lastSeenMs >= 30_000) {
+        void convex.mutation(api.auth.touch, { id: payload.sid as any }).catch(() => {});
+      }
+
+      return {
+        user: {
+          id: result.user._id,
+          email: result.user.email,
+          name: result.user.name,
+          roleGlobal: result.user.roleGlobal as GlobalRole,
+        },
+        session: {
+          id: result.session._id,
+          createdAt: new Date(result.session._creationTime),
+          lastSeenAt: new Date(nowMs - lastSeenMs >= 30_000 ? nowMs : lastSeenMs),
+          expiresAt: new Date(result.session.expiresAt),
+          elevatedUntil: result.session.elevatedUntil ? new Date(result.session.elevatedUntil) : null,
+        },
+      };
+    }
+
+    // ── Prisma fallback ──
+    if (!db) return null;
     const now = new Date();
     const record = await db.authSession.findFirst({
       where: {
@@ -230,6 +273,38 @@ export const cookieAuthAdapter: AuthAdapter = {
       ? normalizeLoginName(input.loginName)
       : normalizeEmail(input.email);
 
+    const convex = getConvexClient();
+
+    if (convex) {
+      // ── Convex path: bcrypt runs in Convex action ──
+      const verifyArgs = isPinCredentials(input)
+        ? { loginName: normalizeLoginName(input.loginName), pin: input.pin }
+        : { email: normalizeEmail(input.email), password: input.password };
+      const result = await convex.action(api.authActions.verifyCredentials, verifyArgs);
+
+      if (!result.ok || !result.user) {
+        logSecurityEvent("auth.login_failed", {
+          reason: "bad_credentials",
+          mode,
+          identifier,
+          ip,
+        });
+        return { ok: false, message: result.message ?? "Invalid credentials." };
+      }
+
+      logSecurityEvent("auth.login_success", {
+        userId: result.user.id,
+        email: result.user.email,
+        mode,
+        ip,
+      });
+
+      return { ok: true, user: { ...result.user, roleGlobal: result.user.roleGlobal as GlobalRole } };
+    }
+
+    // ── Prisma fallback ──
+    if (!db) return { ok: false, message: "Database not configured." };
+
     const user = isPinCredentials(input)
       ? await db.user.findUnique({
           where: { loginName: normalizeLoginName(input.loginName) },
@@ -286,6 +361,30 @@ export const cookieAuthAdapter: AuthAdapter = {
     const expiresAt = issuedAt + SESSION_TTL_SECONDS;
     const sessionToken = generateOneTimeToken();
 
+    const convex = getConvexClient();
+
+    if (convex) {
+      const sessionId = await convex.mutation(api.auth.create, {
+        userId,
+        tokenHash: hashOpaqueToken(sessionToken),
+        ...(context?.userAgent ? { userAgent: context.userAgent } : {}),
+        ...(context?.deviceId ? { deviceId: context.deviceId } : {}),
+        ...(context?.ipAddress ? { ipAddress: context.ipAddress } : {}),
+        expiresAt: expiresAt * 1000,
+      });
+
+      await setSessionCookie({
+        uid: userId,
+        sid: sessionId,
+        st: sessionToken,
+        iat: issuedAt,
+        exp: expiresAt,
+      });
+      return;
+    }
+
+    // Prisma fallback
+    if (!db) throw new Error("No database configured");
     const session = await db.authSession.create({
       data: {
         userId,
@@ -310,16 +409,18 @@ export const cookieAuthAdapter: AuthAdapter = {
     const payload = await getSessionPayload();
 
     if (payload?.sid) {
-      await db.authSession.updateMany({
-        where: {
-          id: payload.sid,
-          revokedAt: null,
-        },
-        data: {
-          revokedAt: new Date(),
-          revokedReason: reason,
-        },
-      });
+      const convex = getConvexClient();
+      if (convex) {
+        await convex.mutation(api.auth.revoke, {
+          id: payload.sid as any,
+          reason,
+        }).catch(() => {});
+      } else if (db) {
+        await db.authSession.updateMany({
+          where: { id: payload.sid, revokedAt: null },
+          data: { revokedAt: new Date(), revokedReason: reason },
+        });
+      }
     }
 
     await clearSessionCookie();
@@ -337,22 +438,38 @@ export const cookieAuthAdapter: AuthAdapter = {
 
   async listActiveSessions(userId) {
     const currentSessionId = await this.getCurrentSessionId();
-    const now = new Date();
 
+    const convex = getConvexClient();
+    if (convex) {
+      const sessions = await convex.query(api.auth.listActiveSessions, {
+        userId: userId as any,
+      });
+      return sessions.map((s: any) => ({
+        id: s._id,
+        userAgent: s.userAgent ?? null,
+        deviceId: s.deviceId ?? null,
+        ipAddress: s.ipAddress ?? null,
+        createdAt: new Date(s._creationTime),
+        lastSeenAt: new Date(s.lastSeenAt ?? s._creationTime),
+        expiresAt: new Date(s.expiresAt),
+        elevatedUntil: s.elevatedUntil ? new Date(s.elevatedUntil) : null,
+        isCurrent: currentSessionId === s._id,
+      }));
+    }
+
+    // Prisma fallback
+    if (!db) return [];
+    const now = new Date();
     const sessions = await db.authSession.findMany({
       where: {
         userId,
         revokedAt: null,
-        expiresAt: {
-          gt: now,
-        },
+        expiresAt: { gt: now },
       },
-      orderBy: {
-        lastSeenAt: "desc",
-      },
+      orderBy: { lastSeenAt: "desc" },
     });
 
-    return sessions.map((session) => ({
+    return sessions.map((session: any) => ({
       id: session.id,
       userAgent: session.userAgent,
       deviceId: session.deviceId,
@@ -366,17 +483,19 @@ export const cookieAuthAdapter: AuthAdapter = {
   },
 
   async revokeSessionById(userId, sessionId) {
-    await db.authSession.updateMany({
-      where: {
-        id: sessionId,
-        userId,
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: new Date(),
-        revokedReason: "user_revoked",
-      },
-    });
+    const convex = getConvexClient();
+    if (convex) {
+      await convex.mutation(api.auth.revokeBySessionAndUser, {
+        sessionId: sessionId as any,
+        userId: userId as any,
+        reason: "user_revoked",
+      });
+    } else if (db) {
+      await db.authSession.updateMany({
+        where: { id: sessionId, userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: "user_revoked" },
+      });
+    }
 
     const currentSessionId = await this.getCurrentSessionId();
     if (currentSessionId === sessionId) {
@@ -385,26 +504,39 @@ export const cookieAuthAdapter: AuthAdapter = {
   },
 
   async revokeAllSessions(userId, exceptSessionId) {
-    await db.authSession.updateMany({
-      where: {
-        userId,
-        revokedAt: null,
-        ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}),
-      },
-      data: {
-        revokedAt: new Date(),
-        revokedReason: "user_revoked_all",
-      },
-    });
+    const convex = getConvexClient();
+    if (convex) {
+      await convex.mutation(api.auth.revokeAllExcept, {
+        userId: userId as any,
+        exceptSessionId: exceptSessionId ? (exceptSessionId as any) : undefined,
+        reason: "user_revoked_all",
+      });
+    } else if (db) {
+      await db.authSession.updateMany({
+        where: {
+          userId,
+          revokedAt: null,
+          ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}),
+        },
+        data: { revokedAt: new Date(), revokedReason: "user_revoked_all" },
+      });
+    }
   },
 
   async elevateCurrentSessionUntil(userId, until) {
     const payload = await getSessionPayload();
+    if (!payload) return false;
 
-    if (!payload) {
-      return false;
+    const convex = getConvexClient();
+    if (convex) {
+      return convex.mutation(api.auth.elevateSession, {
+        sessionId: payload.sid as any,
+        userId: userId as any,
+        elevatedUntil: until.getTime(),
+      });
     }
 
+    if (!db) return false;
     const result = await db.authSession.updateMany({
       where: {
         id: payload.sid,
@@ -412,11 +544,8 @@ export const cookieAuthAdapter: AuthAdapter = {
         revokedAt: null,
         expiresAt: { gt: new Date() },
       },
-      data: {
-        elevatedUntil: until,
-      },
+      data: { elevatedUntil: until },
     });
-
     return result.count > 0;
   },
 
