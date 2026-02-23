@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { SESSION_COOKIE_NAME } from "@/lib/auth/constants";
 import { requireSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { getDefaultWorkspaceForUser } from "@/lib/workspace";
@@ -27,12 +29,21 @@ export default async function MainAppLayout({
   const session = await requireSession();
 
   if (!session?.user?.id) {
+    // Clear stale/invalid cookie to prevent redirect loop with proxy.ts
+    const cookieStore = await cookies();
+    if (cookieStore.get(SESSION_COOKIE_NAME)?.value) {
+      cookieStore.delete(SESSION_COOKIE_NAME);
+    }
     redirect("/login");
   }
 
   const membership = await getDefaultWorkspaceForUser(session.user.id);
 
   if (!membership) {
+    const cookieStore = await cookies();
+    if (cookieStore.get(SESSION_COOKIE_NAME)?.value) {
+      cookieStore.delete(SESSION_COOKIE_NAME);
+    }
     redirect("/login");
   }
 

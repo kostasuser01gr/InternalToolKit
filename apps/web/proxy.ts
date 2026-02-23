@@ -88,18 +88,18 @@ function safeStringCompare(left: string, right: string) {
   return mismatch === 0;
 }
 
-async function isValidSessionCookie(token: string) {
+async function isValidSessionCookie(token: string): Promise<"valid" | "invalid" | "unverified"> {
   const [body, signature, extraPart] = token.split(".");
 
   if (!body || !signature || extraPart) {
-    return false;
+    return "invalid";
   }
 
   let payload: SessionPayload;
   try {
     payload = JSON.parse(atob(toBase64(body))) as SessionPayload;
   } catch {
-    return false;
+    return "invalid";
   }
 
   if (
@@ -109,18 +109,18 @@ async function isValidSessionCookie(token: string) {
     typeof payload.iat !== "number" ||
     typeof payload.exp !== "number"
   ) {
-    return false;
+    return "invalid";
   }
 
   if (payload.exp * 1000 <= Date.now()) {
-    return false;
+    return "invalid";
   }
 
   const secret = (process.env.SESSION_SECRET ?? process.env.NEXTAUTH_SECRET)?.trim();
   if (!secret || secret.length < 32) {
     // Edge runtime can miss secure env injection in some deploy contexts.
-    // Route handlers still perform authoritative session validation.
-    return true;
+    // Cannot verify signature — let server-side handle auth decisions.
+    return "unverified";
   }
 
   const cryptoKey = await crypto.subtle.importKey(
@@ -138,10 +138,10 @@ async function isValidSessionCookie(token: string) {
   );
   const expectedSignature = toBase64Url(new Uint8Array(expectedSignatureBuffer));
   if (!safeStringCompare(signature, expectedSignature)) {
-    return false;
+    return "invalid";
   }
 
-  return true;
+  return "valid";
 }
 
 function clearSessionCookie(response: NextResponse) {
@@ -226,12 +226,14 @@ export async function proxy(request: NextRequest) {
   }
 
   const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const hasValidSessionCookie = sessionCookie
+  const cookieStatus = sessionCookie
     ? await isValidSessionCookie(sessionCookie)
-    : false;
-  const hasInvalidSessionCookie = Boolean(sessionCookie) && !hasValidSessionCookie;
+    : "invalid";
+  const hasValidSessionCookie = cookieStatus === "valid";
+  const hasCryptographicallyVerifiedCookie = cookieStatus === "valid";
+  const hasInvalidSessionCookie = Boolean(sessionCookie) && cookieStatus === "invalid";
 
-  if (isAppRoute(pathname) && !hasValidSessionCookie) {
+  if (isAppRoute(pathname) && !hasValidSessionCookie && cookieStatus !== "unverified") {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     response = NextResponse.redirect(loginUrl);
@@ -242,7 +244,9 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  if (isAuthPath(pathname) && hasValidSessionCookie) {
+  // Only redirect away from auth pages if cookie is cryptographically verified.
+  // If "unverified", let server-side handle it to avoid redirect loops.
+  if (isAuthPath(pathname) && hasCryptographicallyVerifiedCookie) {
     const callbackUrl = request.nextUrl.searchParams.get("callbackUrl");
     const target = new URL(
       callbackUrl && isSafeRelativePath(callbackUrl) ? callbackUrl : "/overview",
