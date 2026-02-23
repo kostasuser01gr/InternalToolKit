@@ -1092,3 +1092,41 @@ The initial Ops OS commit triggered a CI failure:
 - `supabase` CLI available but Docker not running locally
 - 12 migrations present in `prisma/migrations/`, all apply cleanly in CI
 - Schema has 58+ models covering all Ops OS modules
+
+---
+
+## Wave 12 — Import Parsing, Fleet SLA Cron, Chat Default Channels, Washers Enhancements
+
+### Changes Summary
+| Category | Change |
+|----------|--------|
+| **Imports** | Added `file-parser.ts` with XLSX/CSV/JSON/TXT parsing via `xlsx` + `papaparse`. Upload route now auto-parses, applies template mappings, computes diff preview, and stores diff in batch. Accept action reads diff from `diffSummary` field. |
+| **Fleet** | SLA breach detection in housekeeping cron — detects vehicles exceeding SLA in NEEDS_CLEANING/CLEANING/QC_PENDING, marks `slaBreachedAt`, creates notification for admins, creates VehicleEvent timeline entry. Added `FLEET_VIEW_PRESETS` for Ready/Stuck/QC/Blocked saved views. |
+| **Chat** | Auto-creates `#ops-general` and `#washers-only` default channels on chat page load via `ensureDefaultChannels()`. Mention notification creation wired into `sendChannelMessageAction` — mentioned users get notifications. |
+| **Washers** | Added date picker to kiosk history tab. Added QR code (`qrcode.react`) to Share Washer App panel. Added SLA breach KPI (45min threshold) to dashboard. |
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `lib/imports/file-parser.ts` | NEW: XLSX/CSV/JSON/TXT parser + mapping transform engine |
+| `app/api/imports/upload/route.ts` | Wire auto-parse + diff preview on upload |
+| `app/(app)/imports/page.tsx` | Show diff preview counts + parse metadata in BatchCard |
+| `app/(app)/imports/actions.ts` | Accept reads diffSummary field instead of previewJson |
+| `app/api/cron/housekeeping/route.ts` | SLA breach detection + admin notifications + vehicle events |
+| `lib/fleet-pipeline.ts` | Added FLEET_VIEW_PRESETS for 4 saved view presets |
+| `lib/chat/default-channels.ts` | NEW: ensureDefaultChannels() utility |
+| `app/(app)/chat/page.tsx` | Call ensureDefaultChannels on page load |
+| `app/(app)/chat/channel-actions.ts` | Create notifications for @mentioned users |
+| `app/(kiosk)/washers/app/kiosk-client.tsx` | Date picker in history tab |
+| `app/(app)/washers/page.tsx` | SLA breach KPI + QR code in share panel |
+| `app/(app)/washers/share-qr-code.tsx` | NEW: QR code client component |
+| `tests/unit/file-parser.test.ts` | 11 tests: CSV/JSON/TXT parse + mapping transforms |
+| `tests/unit/wave12-enhancements.test.ts` | 17 tests: SLA, view presets, channels, date filter, QR |
+
+### Quality Gates
+| Gate | Result |
+|------|--------|
+| Tests | **556 passing** (+28 new) |
+| Typecheck | ✅ Clean |
+| Lint | ✅ Clean (0 warnings) |
+| Build | ✅ Success |

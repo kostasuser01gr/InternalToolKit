@@ -245,6 +245,24 @@ export async function sendChannelMessageAction(formData: FormData) {
       },
     });
 
+    // Create notifications for mentioned users
+    if (mentions && Array.isArray(mentions)) {
+      const mentionedUserIds = mentions
+        .map((m: { userId?: string }) => m.userId)
+        .filter((id): id is string => !!id && id !== user.id);
+
+      for (const mentionedUserId of mentionedUserIds) {
+        await db.notification.create({
+          data: {
+            userId: mentionedUserId,
+            type: "mention",
+            title: `${user.name ?? "Someone"} mentioned you in ${channel.name}`,
+            body: parsed.content.slice(0, 200),
+          },
+        }).catch(() => {/* swallow if user doesn't exist */});
+      }
+    }
+
     revalidatePath("/chat");
     return { success: true };
   } catch (error) {

@@ -83,6 +83,22 @@ function ImportUploadCard({ workspaceId }: { workspaceId: string }) {
   );
 }
 
+type DiffSummaryData = {
+  totalRows?: number;
+  creates?: number;
+  updates?: number;
+  archives?: number;
+  skips?: number;
+  errors?: number;
+};
+
+type PreviewData = {
+  rowCount?: number;
+  headers?: string[];
+  parseErrors?: string[];
+  sheetName?: string;
+};
+
 type Batch = {
   id: string;
   status: string;
@@ -91,6 +107,9 @@ type Batch = {
   fileSizeBytes: number | null;
   createdAt: Date;
   appliedAt: Date | null;
+  diffSummary: DiffSummaryData | null;
+  previewJson: PreviewData | null;
+  errorLog: string | null;
   creator: { name: string | null; email: string | null } | null;
 };
 
@@ -100,6 +119,9 @@ function BatchCard({ batch, workspaceId }: { batch: Batch; workspaceId: string }
       ? `${(batch.fileSizeBytes / 1048576).toFixed(1)} MB`
       : `${Math.round(batch.fileSizeBytes / 1024)} KB`
     : null;
+
+  const diff = batch.diffSummary as DiffSummaryData | null;
+  const preview = batch.previewJson as PreviewData | null;
 
   return (
     <GlassCard className="flex flex-col gap-3 p-4">
@@ -112,6 +134,35 @@ function BatchCard({ batch, workspaceId }: { batch: Batch; workspaceId: string }
         </div>
         <StatusBadge status={batch.status} />
       </div>
+
+      {/* Parsed data summary */}
+      {preview?.rowCount != null && (
+        <div className="rounded-md bg-white/5 px-3 py-2 text-xs">
+          <span className="font-medium">{preview.rowCount} rows parsed</span>
+          {preview.sheetName && <span className="text-[var(--text-muted)]"> · sheet: {preview.sheetName}</span>}
+          {preview.parseErrors && preview.parseErrors.length > 0 && (
+            <span className="ml-2 text-amber-400">⚠ {preview.parseErrors.length} parse warning(s)</span>
+          )}
+        </div>
+      )}
+
+      {/* Diff preview */}
+      {diff && (diff.creates != null || diff.updates != null) && (
+        <div className="flex flex-wrap gap-3 rounded-md border border-[var(--border)] bg-white/5 px-3 py-2 text-xs">
+          <span className="font-medium text-[var(--text-muted)]">Preview:</span>
+          {!!diff.creates && <span className="text-emerald-400">+{diff.creates} create</span>}
+          {!!diff.updates && <span className="text-sky-400">~{diff.updates} update</span>}
+          {!!diff.skips && <span className="text-[var(--text-muted)]">{diff.skips} unchanged</span>}
+          {!!diff.errors && <span className="text-rose-400">{diff.errors} error(s)</span>}
+        </div>
+      )}
+
+      {batch.errorLog && (
+        <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+          {batch.errorLog}
+        </div>
+      )}
+
       <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
         <Clock className="h-3 w-3" />
         <span>{batch.createdAt.toLocaleString()}</span>
@@ -173,7 +224,8 @@ async function ImportBatchList({ workspaceId }: { workspaceId: string }) {
       orderBy: { createdAt: "desc" },
       take: 50,
       include: { creator: { select: { name: true, email: true } } },
-    });
+      // diffSummary, previewJson, errorLog included by default
+    }) as unknown as Batch[];
   } catch (err) {
     if (isSchemaNotReadyError(err)) {
       return (

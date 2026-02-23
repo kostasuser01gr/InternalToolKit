@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { getAppContext } from "@/lib/app-context";
+import { ensureDefaultChannels } from "@/lib/chat/default-channels";
 import { features } from "@/lib/constants/features";
 import { db } from "@/lib/db";
 import { isSchemaNotReadyError } from "@/lib/prisma-errors";
@@ -231,6 +232,9 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
   const params = await searchParams;
   const { workspace, user } = await getAppContext(params.workspaceId);
   const modelId = params.modelId ?? DEFAULT_MODEL_ID;
+
+  // ─── Ensure default channels exist ─────────────────────────────────
+  await ensureDefaultChannels(workspace.id);
 
   // ─── Load channels (if Viber-like chat enabled) ───────────────────
   const channelsResult = await runOptionalChatQuery({

@@ -176,6 +176,11 @@ export function KioskClient({
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [chatLoaded, setChatLoaded] = useState(false);
+  const [historyDate, setHistoryDate] = useState("");
+
+  const filteredTasks = historyDate
+    ? tasks.filter((t) => new Date(t.createdAt).toISOString().slice(0, 10) === historyDate)
+    : tasks;
 
   // Apply theme on mount and change
   useEffect(() => {
@@ -799,20 +804,38 @@ export function KioskClient({
         <div className="space-y-4" data-testid="kiosk-history">
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)]/60 p-4 backdrop-blur">
             <h2 className="mb-3 text-lg font-semibold text-[var(--text)]">Task History</h2>
-            {tasks.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)]">No tasks recorded on this device yet.</p>
+            <div className="mb-3">
+              <input
+                type="date"
+                className="rounded-md border border-[var(--border)] bg-transparent px-3 py-1.5 text-sm text-[var(--text)]"
+                value={historyDate}
+                onChange={(e) => setHistoryDate(e.target.value)}
+              />
+              {historyDate && (
+                <button
+                  onClick={() => setHistoryDate("")}
+                  className="ml-2 text-xs text-[var(--accent)] hover:underline"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {filteredTasks.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)]">
+                {historyDate ? "No tasks for this date." : "No tasks recorded on this device yet."}
+              </p>
             ) : (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                  <span>Total: {tasks.length}</span>
+                  <span>Total: {filteredTasks.length}</span>
                   <span>·</span>
-                  <span>Synced: {tasks.filter((t) => t.status === "synced").length}</span>
+                  <span>Synced: {filteredTasks.filter((t) => t.status === "synced").length}</span>
                   <span>·</span>
-                  <span>Pending: {tasks.filter((t) => t.status === "pending").length}</span>
+                  <span>Pending: {filteredTasks.filter((t) => t.status === "pending").length}</span>
                   <span>·</span>
-                  <span>Failed: {tasks.filter((t) => t.status === "failed").length}</span>
+                  <span>Failed: {filteredTasks.filter((t) => t.status === "failed").length}</span>
                 </div>
-                {tasks.map((task) => (
+                {filteredTasks.map((task) => (
                   <div
                     key={task.idempotencyKey}
                     className="flex items-center justify-between rounded border border-[var(--border)] bg-white/5 px-3 py-2"
