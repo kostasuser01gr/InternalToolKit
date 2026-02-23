@@ -57,7 +57,7 @@ export async function GET() {
     const status = errorCode === "DB_UNREACHABLE" ? 503 : 500;
 
     return Response.json(
-      { ok: false, errorCode },
+      { ok: false, errorCode, hint: error instanceof Error ? error.message.slice(0, 200) : undefined },
       {
         status,
       },
