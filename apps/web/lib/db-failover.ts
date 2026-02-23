@@ -1,5 +1,5 @@
 const DB_CONNECTIVITY_ERROR_RE =
-  /(invalid url|can't reach database server|econnrefused|econnreset|timed out|timeout|p1001)/i;
+  /(invalid url|can't reach database server|econnrefused|econnreset|timed out|timeout|p1001|tenant or user not found)/i;
 
 export function isDatabaseConnectivityError(error: unknown) {
   if (error instanceof Error) {
