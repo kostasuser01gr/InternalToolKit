@@ -6,7 +6,7 @@ import { DataTable } from "@/components/kit/data-table";
 import { ExportButton } from "@/components/kit/export-button";
 import { FilterBar } from "@/components/kit/filter-bar";
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
 import { Badge } from "@/components/ui/badge";
@@ -384,10 +384,10 @@ export default async function DataPage({ searchParams }: DataPageProps) {
                   placeholder="What does this table track?"
                 />
               </div>
-              <PrimaryButton type="submit" className="w-full">
+              <SubmitButton className="w-full">
                 <Plus className="size-4" />
                 Create table
-              </PrimaryButton>
+              </SubmitButton>
             </form>
           ) : null}
         </GlassCard>
@@ -728,7 +728,7 @@ export default async function DataPage({ searchParams }: DataPageProps) {
                       {selectedTable.fields.map((field) => (
                         <DataInputField key={field.id} field={field} />
                       ))}
-                      <PrimaryButton type="submit">Save record</PrimaryButton>
+                      <SubmitButton>Save record</SubmitButton>
                     </form>
                   </GlassCard>
 
@@ -767,9 +767,9 @@ export default async function DataPage({ searchParams }: DataPageProps) {
                             }
                           />
                         ))}
-                        <PrimaryButton type="submit">
+                        <SubmitButton>
                           Update record
-                        </PrimaryButton>
+                        </SubmitButton>
                       </form>
                     ) : (
                       <p className="text-sm text-[var(--text-muted)]">
@@ -814,7 +814,7 @@ export default async function DataPage({ searchParams }: DataPageProps) {
                           ))}
                         </SelectContent>
                       </Select>
-                      <PrimaryButton type="submit">Add field</PrimaryButton>
+                      <SubmitButton>Add field</SubmitButton>
                     </form>
 
                     <div className="space-y-3">
@@ -910,10 +910,10 @@ export default async function DataPage({ searchParams }: DataPageProps) {
                           placeholder='{"Title": "Title", "Priority": "Priority"}'
                         />
                       </div>
-                      <PrimaryButton type="submit">
+                      <SubmitButton>
                         <Upload className="size-4" />
                         Import rows
-                      </PrimaryButton>
+                      </SubmitButton>
                     </form>
                   </GlassCard>
                 </section>

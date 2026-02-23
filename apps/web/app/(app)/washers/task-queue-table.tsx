@@ -86,7 +86,14 @@ export function TaskQueueTable({ tasks, workspaceId, canWrite }: TaskQueueTableP
       if (task.exteriorDone) fd.set("exteriorDone", "on");
       if (task.interiorDone) fd.set("interiorDone", "on");
       if (task.vacuumDone) fd.set("vacuumDone", "on");
-      await updateWasherTaskAction(fd);
+
+      try {
+        await updateWasherTaskAction(fd);
+      } catch {
+        // Revert optimistic update on error
+        setOptimisticTask({ id: task.id, status: prevStatus });
+        return;
+      }
 
       pushUndo({
         id: `task-status-${task.id}-${Date.now()}`,

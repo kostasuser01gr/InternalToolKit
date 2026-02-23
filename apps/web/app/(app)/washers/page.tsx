@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { ExportButton } from "@/components/kit/export-button";
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { VoiceInput } from "@/components/kit/voice-input";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
@@ -334,9 +334,9 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
               />
             </div>
 
-            <PrimaryButton type="submit" disabled={!canWrite}>
+            <SubmitButton disabled={!canWrite}>
               Save wash task
-            </PrimaryButton>
+            </SubmitButton>
           </form>
         </GlassCard>
 
@@ -373,9 +373,9 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
                 defaultValue={registerDateStr}
                 className="h-9 w-40"
               />
-              <PrimaryButton type="submit" className="h-9 px-3 text-sm">
+              <SubmitButton className="h-9 px-3 text-sm">
                 Go
-              </PrimaryButton>
+              </SubmitButton>
             </form>
             <ExportButton
               href={`/api/washers/export?workspaceId=${workspace.id}&date=${registerDateStr}`}

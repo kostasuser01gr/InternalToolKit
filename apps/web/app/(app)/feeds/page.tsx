@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { FormSubmitButton } from "@/components/kit/form-submit-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
 import { Input } from "@/components/ui/input";
@@ -131,9 +132,9 @@ export default async function FeedsPage({ searchParams }: FeedsPageProps) {
               <p className="text-sm text-[var(--text-muted)]">No sources configured.</p>
               <form action={seedDefaultSourcesAction}>
                 <input type="hidden" name="workspaceId" value={workspace.id} />
-                <PrimaryButton type="submit" className="w-full">
+                <SubmitButton className="w-full">
                   Add Default Sources
-                </PrimaryButton>
+                </SubmitButton>
               </form>
             </div>
           )}
@@ -148,16 +149,16 @@ export default async function FeedsPage({ searchParams }: FeedsPageProps) {
                   <form action={deleteFeedSourceAction}>
                     <input type="hidden" name="sourceId" value={src.id} />
                     <input type="hidden" name="workspaceId" value={workspace.id} />
-                    <button type="submit" className="text-rose-400 hover:underline">
+                    <FormSubmitButton className="text-rose-400 hover:underline" pendingText="Deleting…">
                       Delete
-                    </button>
+                    </FormSubmitButton>
                   </form>
                   <form action={scanFeedSourceAction}>
                     <input type="hidden" name="sourceId" value={src.id} />
                     <input type="hidden" name="workspaceId" value={workspace.id} />
-                    <button type="submit" className="text-[var(--accent)] hover:underline">
+                    <FormSubmitButton className="text-[var(--accent)] hover:underline" pendingText="Scanning…">
                       Scan Now
-                    </button>
+                    </FormSubmitButton>
                   </form>
                 </div>
               </div>
@@ -177,9 +178,9 @@ export default async function FeedsPage({ searchParams }: FeedsPageProps) {
             <Input id="feed-name" name="name" placeholder="Industry News" required />
             <Label htmlFor="feed-url">RSS URL</Label>
             <Input id="feed-url" name="url" placeholder="https://..." required />
-            <PrimaryButton type="submit" className="w-full">
+            <SubmitButton className="w-full">
               Add Source
-            </PrimaryButton>
+            </SubmitButton>
           </form>
         </GlassCard>
 

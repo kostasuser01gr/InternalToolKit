@@ -2,7 +2,7 @@ import { AutomationRunStatus, WorkspaceRole } from "@prisma/client";
 import { Play, WandSparkles } from "lucide-react";
 
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
 import { Badge } from "@/components/ui/badge";
@@ -230,9 +230,9 @@ export default async function AutomationsPage({
                 Enabled
               </label>
 
-              <PrimaryButton type="submit" className="w-full">
+              <SubmitButton className="w-full">
                 Save automation
-              </PrimaryButton>
+              </SubmitButton>
             </form>
           ) : (
             <p className="text-sm text-[var(--text-muted)]">

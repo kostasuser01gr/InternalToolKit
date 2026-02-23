@@ -1,7 +1,7 @@
 import { Bot, FileText, Sparkles, Workflow } from "lucide-react";
 
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatusBanner } from "@/components/layout/status-banner";
 import { Badge } from "@/components/ui/badge";
@@ -114,9 +114,9 @@ export default async function AssistantPage({
                 </SelectContent>
               </Select>
               <Input name="filterText" placeholder="Optional filter text" />
-              <PrimaryButton type="submit" className="w-full">
+              <SubmitButton className="w-full">
                 Summarize
-              </PrimaryButton>
+              </SubmitButton>
             </form>
           </GlassCard>
 
@@ -135,9 +135,9 @@ export default async function AssistantPage({
                 placeholder="When a high-priority incident is created, notify on-call and log it in audit trail."
                 required
               />
-              <PrimaryButton type="submit" className="w-full">
+              <SubmitButton className="w-full">
                 Draft JSON
-              </PrimaryButton>
+              </SubmitButton>
             </form>
           </GlassCard>
 
@@ -156,9 +156,9 @@ export default async function AssistantPage({
                 placeholder="Create an executive dashboard for throughput, quality, and SLA risk."
                 required
               />
-              <PrimaryButton type="submit" className="w-full">
+              <SubmitButton className="w-full">
                 Generate layout
-              </PrimaryButton>
+              </SubmitButton>
             </form>
           </GlassCard>
         </div>

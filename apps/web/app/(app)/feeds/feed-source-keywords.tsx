@@ -22,13 +22,17 @@ export function FeedSourceKeywords({ workspaceId, sourceId, sourceName, initial 
 
   const save = () => {
     startTransition(async () => {
-      const result = await updateFeedSourceKeywordsAction({
-        workspaceId,
-        sourceId,
-        boostKeywords: boost.split(",").map((s) => s.trim()).filter(Boolean),
-        suppressKeywords: suppress.split(",").map((s) => s.trim()).filter(Boolean),
-      });
-      setMsg(result.ok ? "Saved" : `Error: ${result.error}`);
+      try {
+        const result = await updateFeedSourceKeywordsAction({
+          workspaceId,
+          sourceId,
+          boostKeywords: boost.split(",").map((s) => s.trim()).filter(Boolean),
+          suppressKeywords: suppress.split(",").map((s) => s.trim()).filter(Boolean),
+        });
+        setMsg(result.ok ? "Saved" : `Error: ${result.error}`);
+      } catch {
+        setMsg("Error: action failed");
+      }
       setTimeout(() => setMsg(null), 3000);
     });
   };

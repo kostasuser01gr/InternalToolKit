@@ -76,27 +76,31 @@ export function DailyRegisterClient({
     if (selected.size === 0 || !canWrite) return;
 
     startTransition(async () => {
-      const result = await bulkUpdateWasherTasksAction({
-        workspaceId,
-        taskIds: Array.from(selected),
-        status: status as "TODO" | "IN_PROGRESS" | "DONE" | "BLOCKED",
-      });
-
-      if (result.ok) {
-        setMessage({
-          type: "success",
-          text: `Updated ${result.updated} task(s) to ${status}`,
+      try {
+        const result = await bulkUpdateWasherTasksAction({
+          workspaceId,
+          taskIds: Array.from(selected),
+          status: status as "TODO" | "IN_PROGRESS" | "DONE" | "BLOCKED",
         });
-        setUndoState(result);
-        setSelected(new Set());
 
-        setTimeout(() => {
-          setUndoState((current) =>
-            current === result ? null : current,
-          );
-        }, UNDO_TIMEOUT_MS);
-      } else {
-        setMessage({ type: "error", text: result.error ?? "Bulk update failed" });
+        if (result.ok) {
+          setMessage({
+            type: "success",
+            text: `Updated ${result.updated} task(s) to ${status}`,
+          });
+          setUndoState(result);
+          setSelected(new Set());
+
+          setTimeout(() => {
+            setUndoState((current) =>
+              current === result ? null : current,
+            );
+          }, UNDO_TIMEOUT_MS);
+        } else {
+          setMessage({ type: "error", text: result.error ?? "Bulk update failed" });
+        }
+      } catch {
+        setMessage({ type: "error", text: "Bulk update failed" });
       }
     });
   }
@@ -105,18 +109,22 @@ export function DailyRegisterClient({
     if (!undoState) return;
 
     startTransition(async () => {
-      const result = await undoWasherTasksAction(
-        workspaceId,
-        undoState.previousStates,
-      );
+      try {
+        const result = await undoWasherTasksAction(
+          workspaceId,
+          undoState.previousStates,
+        );
 
-      if (result.ok) {
-        setMessage({
-          type: "success",
-          text: `Restored ${result.restored} task(s)`,
-        });
-      } else {
-        setMessage({ type: "error", text: result.error ?? "Undo failed" });
+        if (result.ok) {
+          setMessage({
+            type: "success",
+            text: `Restored ${result.restored} task(s)`,
+          });
+        } else {
+          setMessage({ type: "error", text: result.error ?? "Undo failed" });
+        }
+      } catch {
+        setMessage({ type: "error", text: "Undo failed" });
       }
       setUndoState(null);
     });

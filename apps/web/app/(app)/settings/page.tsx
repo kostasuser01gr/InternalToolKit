@@ -4,7 +4,7 @@ import { ThemePreference } from "@prisma/client";
 
 import { RequestAccessButton } from "@/components/kit/request-access-button";
 import { GlassCard } from "@/components/kit/glass-card";
-import { PrimaryButton } from "@/components/kit/primary-button";
+import { SubmitButton } from "@/components/kit/submit-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { SignOutButton } from "@/components/layout/signout-button";
 import { StatusBanner } from "@/components/layout/status-banner";
@@ -155,7 +155,7 @@ export default async function SettingsPage({
                 aria-readonly="true"
               />
             </div>
-            <PrimaryButton type="submit">Save profile</PrimaryButton>
+            <SubmitButton>Save profile</SubmitButton>
           </form>
         </GlassCard>
 
@@ -196,7 +196,7 @@ export default async function SettingsPage({
               </Select>
             </div>
 
-            <PrimaryButton type="submit">Save preferences</PrimaryButton>
+            <SubmitButton>Save preferences</SubmitButton>
           </form>
         </GlassCard>
       </div>
@@ -242,7 +242,7 @@ export default async function SettingsPage({
               <Input name="label" placeholder="Label (e.g. Daily Summary)" required />
               <Input name="command" placeholder="/summarize-table incidents" required />
               <Input name="keybinding" placeholder="Ctrl+Shift+S (optional)" />
-              <PrimaryButton type="submit">Add shortcut</PrimaryButton>
+              <SubmitButton>Add shortcut</SubmitButton>
             </form>
             <div className="space-y-2">
               {shortcuts.map((shortcut) => (
@@ -259,7 +259,7 @@ export default async function SettingsPage({
                     <input type="hidden" name="userId" value={profile.id} />
                     <input type="hidden" name="workspaceId" value={workspace.id} />
                     <input type="hidden" name="shortcutId" value={shortcut.id} />
-                    <PrimaryButton type="submit">Remove</PrimaryButton>
+                    <SubmitButton>Remove</SubmitButton>
                   </form>
                 </article>
               ))}
@@ -279,7 +279,7 @@ export default async function SettingsPage({
               <Input name="label" placeholder="Label (e.g. New Shift)" required />
               <Input name="action" placeholder="/create-shift Title|Start|End" required />
               <Input name="position" placeholder="Position index (optional)" />
-              <PrimaryButton type="submit">Add quick action</PrimaryButton>
+              <SubmitButton>Add quick action</SubmitButton>
             </form>
             <div className="space-y-2">
               {actionButtons.map((button) => (
@@ -295,7 +295,7 @@ export default async function SettingsPage({
                     <input type="hidden" name="userId" value={profile.id} />
                     <input type="hidden" name="workspaceId" value={workspace.id} />
                     <input type="hidden" name="buttonId" value={button.id} />
-                    <PrimaryButton type="submit">Remove</PrimaryButton>
+                    <SubmitButton>Remove</SubmitButton>
                   </form>
                 </article>
               ))}
@@ -318,7 +318,7 @@ export default async function SettingsPage({
                 placeholder="Prompt text..."
                 required
               />
-              <PrimaryButton type="submit">Add template</PrimaryButton>
+              <SubmitButton>Add template</SubmitButton>
             </form>
             <div className="space-y-2">
               {promptTemplates.map((template) => (
@@ -334,7 +334,7 @@ export default async function SettingsPage({
                     <input type="hidden" name="userId" value={profile.id} />
                     <input type="hidden" name="workspaceId" value={workspace.id} />
                     <input type="hidden" name="templateId" value={template.id} />
-                    <PrimaryButton type="submit">Remove</PrimaryButton>
+                    <SubmitButton>Remove</SubmitButton>
                   </form>
                 </article>
               ))}
@@ -354,11 +354,11 @@ export default async function SettingsPage({
           <div className="flex items-center gap-2">
             <form action={revokeAllSessionsAction}>
               <input type="hidden" name="userId" value={profile.id} />
-              <PrimaryButton type="submit">Revoke all others</PrimaryButton>
+              <SubmitButton>Revoke all others</SubmitButton>
             </form>
             <form action={revokeCurrentSessionAction}>
               <input type="hidden" name="userId" value={profile.id} />
-              <PrimaryButton type="submit">Revoke current</PrimaryButton>
+              <SubmitButton>Revoke current</SubmitButton>
             </form>
           </div>
         </div>
@@ -392,7 +392,7 @@ export default async function SettingsPage({
                 <form action={revokeSessionAction} className="mt-2">
                   <input type="hidden" name="userId" value={profile.id} />
                   <input type="hidden" name="sessionId" value={session.id} />
-                  <PrimaryButton type="submit">Revoke session</PrimaryButton>
+                  <SubmitButton>Revoke session</SubmitButton>
                 </form>
               ) : null}
             </article>

@@ -60,36 +60,38 @@ export function BulkShiftBar({ shifts, workspaceId, canWrite }: BulkShiftBarProp
     startTransition(async () => {
       setOptimisticShifts({ ids, status: targetStatus });
 
-      const result = await bulkUpdateShiftsAction({
-        workspaceId,
-        shiftIds: ids,
-        targetStatus,
-      });
-
-      if (result.ok) {
-        setMessage(`${result.count} shifts → ${targetStatus}`);
-        setSelected(new Set());
-
-        // Push undo entry
-        pushUndo({
-          id: `bulk-shifts-${Date.now()}`,
-          label: `Undo bulk ${targetStatus.toLowerCase()}`,
-          undo: async () => {
-            // Restore each shift to its previous status
-            for (const prev of result.previous) {
-              await bulkUpdateShiftsAction({
-                workspaceId,
-                shiftIds: [prev.id],
-                targetStatus: prev.status,
-              });
-            }
-            router.refresh();
-          },
+      try {
+        const result = await bulkUpdateShiftsAction({
+          workspaceId,
+          shiftIds: ids,
+          targetStatus,
         });
 
-        router.refresh();
-      } else {
-        setMessage(`Error: ${result.error}`);
+        if (result.ok) {
+          setMessage(`${result.count} shifts → ${targetStatus}`);
+          setSelected(new Set());
+
+          pushUndo({
+            id: `bulk-shifts-${Date.now()}`,
+            label: `Undo bulk ${targetStatus.toLowerCase()}`,
+            undo: async () => {
+              for (const prev of result.previous) {
+                await bulkUpdateShiftsAction({
+                  workspaceId,
+                  shiftIds: [prev.id],
+                  targetStatus: prev.status,
+                });
+              }
+              router.refresh();
+            },
+          });
+
+          router.refresh();
+        } else {
+          setMessage(`Error: ${result.error}`);
+        }
+      } catch {
+        setMessage("Error: bulk update failed");
       }
     });
   };
