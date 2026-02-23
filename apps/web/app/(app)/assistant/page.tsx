@@ -18,7 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 import {
   generateAutomationDraftAction,
@@ -63,7 +63,7 @@ export default async function AssistantPage({
         },
       })
       .catch((err: unknown) => {
-        if (!isSchemaNotReadyError(err)) throw err;
+        if (!isDatabaseUnavailableError(err)) throw err;
         return null;
       }),
   ]);

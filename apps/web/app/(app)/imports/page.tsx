@@ -3,7 +3,7 @@ import { Upload, FileSpreadsheet, CheckCircle, XCircle, RotateCcw, Clock, AlertT
 
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { GlassCard } from "@/components/kit/glass-card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -227,7 +227,7 @@ async function ImportBatchList({ workspaceId }: { workspaceId: string }) {
       // diffSummary, previewJson, errorLog included by default
     }) as unknown as Batch[];
   } catch (err) {
-    if (isSchemaNotReadyError(err)) {
+    if (isDatabaseUnavailableError(err)) {
       return (
         <GlassCard className="p-6">
           <div className="flex items-center gap-2 text-amber-400">

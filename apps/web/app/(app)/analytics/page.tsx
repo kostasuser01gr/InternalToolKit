@@ -6,14 +6,14 @@ import { StatCard } from "@/components/kit/stat-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 export default async function AnalyticsPage() {
   const { workspace } = await getAppContext();
 
   function safeCount(p: Promise<number>) {
     return p.catch((err: unknown) => {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
       return 0;
     });
   }

@@ -4,6 +4,15 @@ const SCHEMA_NOT_READY_ERROR_RE =
 const CONNECTION_ERROR_RE =
   /(ECONNREFUSED|ENOTFOUND|ETIMEDOUT|connection.*refused|connect.*timeout|endpoint.*unavailable)/i;
 
+/** Prisma error codes indicating the database server is unreachable or misconfigured. */
+const DB_UNAVAILABLE_CODES = new Set([
+  "P1001", // Can't reach database server
+  "P1002", // Database server timed out
+  "P1003", // Database does not exist
+  "P1008", // Operations timed out
+  "P1017", // Server has closed the connection
+]);
+
 export function isPrismaKnownErrorCode(error: unknown, code: string) {
   if (!error || typeof error !== "object") {
     return false;
@@ -17,9 +26,28 @@ export function isPrismaKnownErrorCode(error: unknown, code: string) {
 }
 
 export function isConnectionError(error: unknown) {
+  if (isPrismaKnownErrorCode(error, "P1001") || isPrismaKnownErrorCode(error, "P1002")) {
+    return true;
+  }
   if (error instanceof Error) {
     return CONNECTION_ERROR_RE.test(error.message);
   }
+  return false;
+}
+
+/**
+ * Returns true when the database is unavailable (connection, timeout, or schema errors).
+ * Use this in SSR pages to degrade gracefully instead of crashing with 500.
+ */
+export function isDatabaseUnavailableError(error: unknown): boolean {
+  if (isConnectionError(error)) return true;
+  if (isSchemaNotReadyError(error)) return true;
+
+  if (error && typeof error === "object" && "code" in error) {
+    const code = String((error as { code: unknown }).code).toUpperCase();
+    if (DB_UNAVAILABLE_CODES.has(code)) return true;
+  }
+
   return false;
 }
 

@@ -13,7 +13,7 @@ import {
   hashUrl,
   DEFAULT_FEED_SOURCES,
 } from "@/lib/feeds/scanner";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 export async function addFeedSourceAction(formData: FormData) {
   const workspaceId = formData.get("workspaceId") as string;
@@ -30,7 +30,7 @@ export async function addFeedSourceAction(formData: FormData) {
       entityType: "feed", entityId: "new", metaJson: { name, url },
     });
   } catch (err) {
-    if (isSchemaNotReadyError(err)) redirect("/feeds?error=Feeds+module+not+ready");
+    if (isDatabaseUnavailableError(err)) redirect("/feeds?error=Feeds+module+not+ready");
     throw err;
   }
   revalidatePath("/feeds");
@@ -54,7 +54,7 @@ export async function seedDefaultSourcesAction(formData: FormData) {
       });
     }
   } catch (err) {
-    if (isSchemaNotReadyError(err)) redirect("/feeds?error=Feeds+module+not+ready");
+    if (isDatabaseUnavailableError(err)) redirect("/feeds?error=Feeds+module+not+ready");
     throw err;
   }
   revalidatePath("/feeds");
@@ -105,7 +105,7 @@ export async function scanFeedSourceAction(formData: FormData) {
     revalidatePath("/feeds");
     redirect(`/feeds?success=${newCount}+new+items`);
   } catch (err) {
-    if (isSchemaNotReadyError(err)) redirect("/feeds?error=Feeds+module+not+ready");
+    if (isDatabaseUnavailableError(err)) redirect("/feeds?error=Feeds+module+not+ready");
     // redirect throws are re-thrown by Next.js — only catch non-redirect errors
     throw err;
   }
@@ -131,7 +131,7 @@ export async function pinFeedItemAction(formData: FormData) {
       metaJson: { title: item.title },
     });
   } catch (err) {
-    if (isSchemaNotReadyError(err)) redirect("/feeds?error=Feeds+module+not+ready");
+    if (isDatabaseUnavailableError(err)) redirect("/feeds?error=Feeds+module+not+ready");
     throw err;
   }
   revalidatePath("/feeds");
@@ -196,7 +196,7 @@ export async function sendFeedToChatAction(formData: FormData) {
       metaJson: { title: item.title, channelSlug: targetChannel },
     });
   } catch (err) {
-    if (isSchemaNotReadyError(err)) redirect("/feeds?error=Chat+module+not+ready");
+    if (isDatabaseUnavailableError(err)) redirect("/feeds?error=Chat+module+not+ready");
     throw err;
   }
   revalidatePath("/feeds");
@@ -225,7 +225,7 @@ export async function deleteFeedSourceAction(formData: FormData) {
       metaJson: { name: source.name },
     });
   } catch (err) {
-    if (isSchemaNotReadyError(err)) redirect("/feeds?error=Feeds+module+not+ready");
+    if (isDatabaseUnavailableError(err)) redirect("/feeds?error=Feeds+module+not+ready");
     throw err;
   }
   revalidatePath("/feeds");
@@ -256,7 +256,7 @@ export async function updateFeedSourceKeywordsAction(input: {
     revalidatePath("/feeds");
     return { ok: true };
   } catch (err) {
-    if (isSchemaNotReadyError(err)) return { ok: false, error: "Feeds module not ready" };
+    if (isDatabaseUnavailableError(err)) return { ok: false, error: "Feeds module not ready" };
     return { ok: false, error: err instanceof Error ? err.message : "Unexpected error" };
   }
 }

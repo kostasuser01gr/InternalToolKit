@@ -1,7 +1,7 @@
 import { getRequestId, withObservabilityHeaders } from "@/lib/http-observability";
 import { db } from "@/lib/db";
 import { getAppContext } from "@/lib/app-context";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 const MAX_RESULTS = 20;
 const MIN_SIMILARITY = 0.15;
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
         });
       }
     } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
     }
 
     // Chat threads — trigram on title
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
         });
       }
     } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
     }
 
     // Users — trigram on name + email
@@ -112,7 +112,7 @@ export async function GET(request: Request) {
         });
       }
     } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
     }
 
     // Shifts — trigram on title
@@ -129,7 +129,7 @@ export async function GET(request: Request) {
         });
       }
     } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
     }
 
     // Feed items — trigram on title + summary
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
         });
       }
     } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
     }
 
     // Washer tasks — trigram on notes (vehicle plate via join is complex, keep Prisma)
@@ -169,7 +169,7 @@ export async function GET(request: Request) {
         });
       }
     } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
     }
 
     // Full-text search for chat messages (RBAC) — uses Postgres FTS with ILIKE fallback
@@ -253,7 +253,7 @@ export async function GET(request: Request) {
         });
       }
     } catch (err) {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
     }
 
     // Sort all results by score descending (scored results first)
@@ -264,7 +264,7 @@ export async function GET(request: Request) {
       withObservabilityHeaders({ status: 200 }, requestId),
     );
   } catch (err) {
-    if (isSchemaNotReadyError(err)) {
+    if (isDatabaseUnavailableError(err)) {
       return Response.json(
         { results: [], query: q, error: "Search not available" },
         withObservabilityHeaders({ status: 200 }, requestId),

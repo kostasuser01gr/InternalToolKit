@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 /**
  * /api/cron/housekeeping — cleanup old data, resolve dead letters, etc.
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     });
     results["dead_letters_purged"] = String(deleted.count);
   } catch (err) {
-    if (isSchemaNotReadyError(err)) {
+    if (isDatabaseUnavailableError(err)) {
       results["dead_letters_purged"] = "schema_not_ready";
     } else {
       results["dead_letters_purged"] = err instanceof Error ? err.message : "error";
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     });
     results["cron_logs_purged"] = String(deleted.count);
   } catch (err) {
-    if (isSchemaNotReadyError(err)) {
+    if (isDatabaseUnavailableError(err)) {
       results["cron_logs_purged"] = "schema_not_ready";
     } else {
       results["cron_logs_purged"] = err instanceof Error ? err.message : "error";
@@ -122,7 +122,7 @@ export async function GET(request: Request) {
     }
     results["sla_breaches_detected"] = String(breachCount);
   } catch (err) {
-    if (isSchemaNotReadyError(err)) {
+    if (isDatabaseUnavailableError(err)) {
       results["sla_breaches_detected"] = "schema_not_ready";
     } else {
       results["sla_breaches_detected"] = err instanceof Error ? err.message : "error";

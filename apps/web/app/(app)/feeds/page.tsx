@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 import {
   addFeedSourceAction,
@@ -82,7 +82,7 @@ export default async function FeedsPage({ searchParams }: FeedsPageProps) {
       }),
     ]);
   } catch (err) {
-    if (!isSchemaNotReadyError(err)) throw err;
+    if (!isDatabaseUnavailableError(err)) throw err;
   }
 
   const categories = Object.entries(CATEGORY_LABELS);

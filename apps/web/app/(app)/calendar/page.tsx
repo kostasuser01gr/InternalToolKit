@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { hasWorkspacePermission } from "@/lib/rbac";
 import { calendarRangeSchema } from "@/lib/validators/calendar";
 
@@ -67,7 +67,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
 
   function schemaFallback<T>(fallback: T) {
     return (err: unknown): T => {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
       return fallback;
     };
   }

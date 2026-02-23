@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import type { WorkspaceRole } from "@prisma/client";
 
 import { requireSession } from "@/lib/auth/session";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 import { getWorkspaceForUser } from "@/lib/workspace";
 
 export async function getAppContext(workspaceId?: string) {
@@ -18,7 +18,7 @@ export async function getAppContext(workspaceId?: string) {
   try {
     membership = await getWorkspaceForUser(user.id, workspaceId);
   } catch (error) {
-    if (isSchemaNotReadyError(error)) {
+    if (isDatabaseUnavailableError(error)) {
       redirect("/login?error=schema");
     }
     throw error;

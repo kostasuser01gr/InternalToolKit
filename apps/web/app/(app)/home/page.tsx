@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { WeatherWidgetGeo } from "@/components/widgets/weather-widget-geo";
 import { db } from "@/lib/db";
 import { getAppContext } from "@/lib/app-context";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 type HomePageProps = {
   searchParams: Promise<{ error?: string; success?: string }>;
@@ -21,13 +21,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   function safeCount(p: Promise<number>) {
     return p.catch((err: unknown) => {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
       return 0;
     });
   }
   function safeFindMany<T>(p: Promise<T[]>) {
     return p.catch((err: unknown): T[] => {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
       return [];
     });
   }

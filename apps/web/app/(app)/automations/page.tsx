@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
-import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
 import { createAutomationAction, runAutomationNowAction } from "./actions";
 
@@ -51,7 +51,7 @@ export default async function AutomationsPage({
 
   function safeFindMany<T>(p: Promise<T[]>) {
     return p.catch((err: unknown): T[] => {
-      if (!isSchemaNotReadyError(err)) throw err;
+      if (!isDatabaseUnavailableError(err)) throw err;
       return [];
     });
   }
