@@ -2,6 +2,8 @@ import { Prisma, type GlobalRole, WorkspaceRole } from "@prisma/client";
 import { hashSync } from "bcryptjs";
 
 import { appendAuditLog } from "@/lib/audit";
+import { getConvexClient } from "@/lib/convex-client";
+import { api } from "@/lib/convex-api";
 import { isDatabaseConnectivityError } from "@/lib/db-failover";
 import { db } from "@/lib/db";
 import { logSecurityEvent } from "@/lib/security";
@@ -67,43 +69,69 @@ export async function signupWithPassword(input: {
   const ip = input.ip ?? "unknown";
 
   try {
-    const created = await db.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
+    const convex = getConvexClient();
+
+    let created: { user: { id: string; email: string; name: string; roleGlobal: GlobalRole }; workspaceId: string };
+
+    if (convex) {
+      // ── Convex path: signup action hashes passwords and creates user+workspace atomically ──
+      const result = await convex.action(api.authActions.signup, {
+        email: normalizedEmail,
+        loginName: normalizedLoginName,
+        name: normalizedName,
+        password: normalizedPassword,
+        pin: normalizedPin,
+        workspaceName: createWorkspaceName(normalizedName),
+      });
+      created = {
+        user: {
+          id: result.userId,
           email: normalizedEmail,
-          loginName: normalizedLoginName,
           name: normalizedName,
-          passwordHash: hashSync(normalizedPassword, 12),
-          pinHash: hashSync(normalizedPin, 12),
+          roleGlobal: "USER" as GlobalRole,
         },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          roleGlobal: true,
-        },
-      });
-
-      const workspace = await tx.workspace.create({
-        data: {
-          name: createWorkspaceName(normalizedName),
-          ownerId: user.id,
-        },
-      });
-
-      await tx.workspaceMember.create({
-        data: {
-          workspaceId: workspace.id,
-          userId: user.id,
-          role: WorkspaceRole.ADMIN,
-        },
-      });
-
-      return {
-        user,
-        workspaceId: workspace.id,
+        workspaceId: result.workspaceId,
       };
-    });
+    } else {
+      // ── Prisma fallback ──
+      created = await db.$transaction(async (tx: any) => {
+        const user = await tx.user.create({
+          data: {
+            email: normalizedEmail,
+            loginName: normalizedLoginName,
+            name: normalizedName,
+            passwordHash: hashSync(normalizedPassword, 12),
+            pinHash: hashSync(normalizedPin, 12),
+          },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            roleGlobal: true,
+          },
+        });
+
+        const workspace = await tx.workspace.create({
+          data: {
+            name: createWorkspaceName(normalizedName),
+            ownerId: user.id,
+          },
+        });
+
+        await tx.workspaceMember.create({
+          data: {
+            workspaceId: workspace.id,
+            userId: user.id,
+            role: WorkspaceRole.ADMIN,
+          },
+        });
+
+        return {
+          user,
+          workspaceId: workspace.id,
+        };
+      });
+    }
 
     try {
       await appendAuditLog({

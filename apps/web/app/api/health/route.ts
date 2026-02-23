@@ -48,10 +48,21 @@ export async function GET() {
   try {
     getServerEnv();
 
+    // Try Convex first (preferred backend)
+    const { getConvexClient } = await import("@/lib/convex-client");
+    const convex = getConvexClient();
+    if (convex) {
+      // Simple query to verify Convex connectivity
+      const { api } = await import("@/lib/convex-api");
+      await convex.query(api.users.getByEmail, { email: "__health_check__" });
+      return Response.json({ ok: true, db: "convex" });
+    }
+
+    // Prisma fallback
     const { db } = await import("@/lib/db");
     await db.$queryRaw`SELECT 1`;
 
-    return Response.json({ ok: true, db: "ok" });
+    return Response.json({ ok: true, db: "prisma" });
   } catch (error) {
     const errorCode = toErrorCode(error);
     const status = errorCode === "DB_UNREACHABLE" ? 503 : 500;
