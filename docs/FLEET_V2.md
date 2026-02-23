@@ -86,3 +86,24 @@ Physical keys and documents (registration, insurance) are tracked through the in
 
 - Key handovers are logged as vehicle events.
 - Missing documents are raised as incidents for resolution.
+
+## Ops OS Additions (2026-02-23)
+
+### New Pipeline State: FleetPipelineState
+Extended the vehicle pipeline with a dedicated `FleetPipelineState` enum:
+- RETURNED, NEEDS_CLEANING, CLEANING, QC_PENDING, READY, RENTED, BLOCKED, MAINTENANCE, OUT_OF_SERVICE
+- New functions: `isValidPipelineTransition()`, `allowedPipelineTransitions()`
+
+### New Models
+- **VehicleQcLog**: QC inspection records with checklist, pass/fail, inspector
+- **VehicleBlocker**: Blocker tracking (no_key, damage, low_fuel, docs_missing, waiting_parts)
+- **KeyHandoverLog**: Key location and handover tracking
+
+### New Vehicle Fields
+- `pipelineState`: FleetPipelineState enum
+- `slaBreachedAt`: When SLA was breached
+- `needByAt`: Priority from bookings import
+- `keyLocation`: Current key location
+
+### QC Checklist
+8-item template: exterior_clean, interior_clean, windows_clear, vacuum_done, no_odor, fuel_ok, docs_present, key_present

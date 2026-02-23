@@ -150,17 +150,41 @@ export async function acceptImportAction(formData: FormData) {
       data: { status: ImportBatchStatus.APPLYING },
     });
 
-    // TODO: Apply the diff (create/update records based on previewJson + mappingJson)
-    // For now, mark as applied with a note that actual record creation
-    // will be implemented when the specific domain handlers are wired up.
+    // Apply the diff using preview data
+    const previewJson = batch.previewJson as { records?: Array<Record<string, unknown>> } | null;
+    if (previewJson && Array.isArray(previewJson.records) && batch.importType === "fleet") {
+      const { applyFleetDiff } = await import("@/lib/imports/apply-engine");
+      const diffSummary = batch.previewJson as unknown as import("@/lib/imports/diff-engine").DiffSummary;
+      const applyResult = await applyFleetDiff(db, batch.id, batch.workspaceId, diffSummary);
 
-    await db.importBatch.update({
-      where: { id: parsed.batchId },
-      data: {
-        status: ImportBatchStatus.APPLIED,
-        appliedAt: new Date(),
-      },
-    });
+      if (applyResult.errors.length > 0) {
+        await db.importBatch.update({
+          where: { id: parsed.batchId },
+          data: {
+            status: ImportBatchStatus.APPLIED,
+            appliedAt: new Date(),
+            errorLog: `Applied ${applyResult.applied} records with ${applyResult.errors.length} errors: ${applyResult.errors.map((e) => `row ${e.rowIndex}: ${e.message}`).join("; ")}`,
+          },
+        });
+      } else {
+        await db.importBatch.update({
+          where: { id: parsed.batchId },
+          data: {
+            status: ImportBatchStatus.APPLIED,
+            appliedAt: new Date(),
+          },
+        });
+      }
+    } else {
+      // Non-fleet imports or no preview data — mark as applied (no-op for unmapped types)
+      await db.importBatch.update({
+        where: { id: parsed.batchId },
+        data: {
+          status: ImportBatchStatus.APPLIED,
+          appliedAt: new Date(),
+        },
+      });
+    }
 
     await appendAuditLog({
       workspaceId: parsed.workspaceId,
@@ -227,13 +251,18 @@ export async function rollbackImportAction(formData: FormData) {
       throw new Error(`Cannot rollback batch in status ${batch.status}. Must be APPLIED.`);
     }
 
-    // TODO: Implement domain-specific rollback (mark created records, revert updates)
+    // Rollback using stored change-sets
+    const { rollbackBatch } = await import("@/lib/imports/apply-engine");
+    const rollbackResult = await rollbackBatch(db, parsed.batchId);
 
     await db.importBatch.update({
       where: { id: parsed.batchId },
       data: {
         status: ImportBatchStatus.ROLLED_BACK,
         rolledBackAt: new Date(),
+        errorLog: rollbackResult.errors.length > 0
+          ? `Rollback: ${rollbackResult.reverted} reverted, ${rollbackResult.errors.length} errors: ${rollbackResult.errors.join("; ")}`
+          : null,
       },
     });
 

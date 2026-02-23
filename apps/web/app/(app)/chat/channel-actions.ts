@@ -16,6 +16,8 @@ import {
   sendChannelMessageSchema,
   reactToMessageSchema,
   pinMessageSchema,
+  editMessageSchema,
+  deleteMessageSchema,
 } from "@/lib/validators/chat-channels";
 
 function buildUrl(base: string, params: Record<string, string | undefined>) {
@@ -316,6 +318,113 @@ export async function pinMessageAction(formData: FormData) {
       workspaceId: parsed.workspaceId,
       actorUserId: user.id,
       action: parsed.isPinned ? "chat.message_pinned" : "chat.message_unpinned",
+      entityType: "chat_message",
+      entityId: parsed.messageId,
+      metaJson: {},
+    });
+
+    revalidatePath("/chat");
+    return { success: true };
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
+export async function editMessageAction(formData: FormData) {
+  const parsed = editMessageSchema.parse({
+    workspaceId: formData.get("workspaceId"),
+    messageId: formData.get("messageId"),
+    content: formData.get("content"),
+  });
+
+  try {
+    const { user } = await requireWorkspaceRole(parsed.workspaceId, [
+      WorkspaceRole.ADMIN, WorkspaceRole.EDITOR, WorkspaceRole.EMPLOYEE, WorkspaceRole.WASHER,
+    ]);
+
+    const message = await db.chatMessage.findUnique({
+      where: { id: parsed.messageId },
+      select: { authorUserId: true },
+    });
+
+    if (!message) {
+      return { success: false, error: "Message not found." };
+    }
+
+    // Only the author or admin can edit
+    if (message.authorUserId !== user.id) {
+      const isAdmin = await requireWorkspaceRole(parsed.workspaceId, [WorkspaceRole.ADMIN]).then(() => true).catch(() => false);
+      if (!isAdmin) {
+        return { success: false, error: "You can only edit your own messages." };
+      }
+    }
+
+    await db.chatMessage.update({
+      where: { id: parsed.messageId },
+      data: {
+        content: parsed.content,
+        isEdited: true,
+      },
+    });
+
+    await appendAuditLog({
+      workspaceId: parsed.workspaceId,
+      actorUserId: user.id,
+      action: "chat.message_edited",
+      entityType: "chat_message",
+      entityId: parsed.messageId,
+      metaJson: {},
+    });
+
+    revalidatePath("/chat");
+    return { success: true };
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
+export async function deleteMessageAction(formData: FormData) {
+  const parsed = deleteMessageSchema.parse({
+    workspaceId: formData.get("workspaceId"),
+    messageId: formData.get("messageId"),
+  });
+
+  try {
+    const { user } = await requireWorkspaceRole(parsed.workspaceId, [
+      WorkspaceRole.ADMIN, WorkspaceRole.EDITOR, WorkspaceRole.EMPLOYEE, WorkspaceRole.WASHER,
+    ]);
+
+    const message = await db.chatMessage.findUnique({
+      where: { id: parsed.messageId },
+      select: { authorUserId: true },
+    });
+
+    if (!message) {
+      return { success: false, error: "Message not found." };
+    }
+
+    if (message.authorUserId !== user.id) {
+      const isAdmin = await requireWorkspaceRole(parsed.workspaceId, [WorkspaceRole.ADMIN]).then(() => true).catch(() => false);
+      if (!isAdmin) {
+        return { success: false, error: "You can only delete your own messages." };
+      }
+    }
+
+    // Soft-delete: replace content, keep record for audit
+    await db.chatMessage.update({
+      where: { id: parsed.messageId },
+      data: {
+        content: "[Message deleted]",
+        isEdited: true,
+      },
+    });
+
+    await appendAuditLog({
+      workspaceId: parsed.workspaceId,
+      actorUserId: user.id,
+      action: "chat.message_deleted",
       entityType: "chat_message",
       entityId: parsed.messageId,
       metaJson: {},

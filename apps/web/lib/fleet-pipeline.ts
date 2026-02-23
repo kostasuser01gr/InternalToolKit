@@ -5,8 +5,11 @@
  *   RETURNED → NEEDS_CLEANING → CLEANING → QC_PENDING → READY
  *   Any state may also transition to OUT_OF_SERVICE.
  *   IN_SERVICE vehicles return via RETURNED.
+ *
+ * FleetPipelineState mirrors VehicleStatus for the new pipeline engine
+ * and adds BLOCKED / MAINTENANCE / RENTED.
  */
-import type { VehicleStatus } from "@prisma/client";
+import type { VehicleStatus, FleetPipelineState } from "@prisma/client";
 
 /** Pipeline stages in display order. */
 export const PIPELINE_STAGES: VehicleStatus[] = [
@@ -122,3 +125,61 @@ export function slaMinutesRemaining(
   const elapsed = nowMs - enteredMs;
   return Math.max(0, config.maxMinutes - elapsed / 60_000);
 }
+
+// ─── FleetPipelineState utilities ────────────────────────────────────────────
+
+/** Map FleetPipelineState → allowed next states. */
+const FLEET_PIPELINE_TRANSITIONS: Record<string, FleetPipelineState[]> = {
+  RETURNED: ["NEEDS_CLEANING", "BLOCKED", "MAINTENANCE", "OUT_OF_SERVICE"],
+  NEEDS_CLEANING: ["CLEANING", "BLOCKED", "OUT_OF_SERVICE"],
+  CLEANING: ["QC_PENDING", "BLOCKED", "OUT_OF_SERVICE"],
+  QC_PENDING: ["READY", "NEEDS_CLEANING", "BLOCKED", "OUT_OF_SERVICE"],
+  READY: ["RENTED", "BLOCKED", "MAINTENANCE", "OUT_OF_SERVICE"],
+  RENTED: ["RETURNED", "BLOCKED", "OUT_OF_SERVICE"],
+  BLOCKED: ["RETURNED", "NEEDS_CLEANING", "CLEANING", "QC_PENDING", "READY", "MAINTENANCE", "OUT_OF_SERVICE"],
+  MAINTENANCE: ["RETURNED", "NEEDS_CLEANING", "READY", "OUT_OF_SERVICE"],
+  OUT_OF_SERVICE: ["RETURNED", "NEEDS_CLEANING"],
+};
+
+export function isValidPipelineTransition(
+  current: FleetPipelineState,
+  next: FleetPipelineState,
+): boolean {
+  if (current === next) return false;
+  return (FLEET_PIPELINE_TRANSITIONS[current] ?? []).includes(next);
+}
+
+export function allowedPipelineTransitions(
+  current: FleetPipelineState,
+): FleetPipelineState[] {
+  return FLEET_PIPELINE_TRANSITIONS[current] ?? [];
+}
+
+// ─── Blocker types ───────────────────────────────────────────────────────────
+
+export const BLOCKER_TYPES = [
+  "no_key",
+  "damage",
+  "low_fuel",
+  "docs_missing",
+  "waiting_parts",
+  "other",
+] as const;
+
+export type BlockerType = (typeof BLOCKER_TYPES)[number];
+
+// ─── QC checklist template ──────────────────────────────────────────────────
+
+export const QC_CHECKLIST_ITEMS = [
+  { id: "exterior_clean", label: "Exterior clean" },
+  { id: "interior_clean", label: "Interior clean" },
+  { id: "windows_clear", label: "Windows clear" },
+  { id: "vacuum_done", label: "Vacuum done" },
+  { id: "no_odor", label: "No odor" },
+  { id: "fuel_ok", label: "Fuel level OK" },
+  { id: "docs_present", label: "Documents present" },
+  { id: "key_present", label: "Key present" },
+] as const;
+
+export type QcChecklistItemId = (typeof QC_CHECKLIST_ITEMS)[number]["id"];
+
