@@ -1,7 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-const PAGES_TO_SCAN = ["/login", "/api/health"];
+// Only scan real HTML pages users visit — never JSON API routes.
+const PAGES_TO_SCAN = ["/login"];
 
 for (const path of PAGES_TO_SCAN) {
   test(`accessibility: ${path} has no critical violations`, async ({
