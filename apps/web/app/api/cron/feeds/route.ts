@@ -12,6 +12,7 @@ import { retryDeadLetters } from "@/lib/viber/bridge";
 const MAX_SOURCES_PER_RUN = 20;
 const FETCH_TIMEOUT_MS = 15_000;
 const FEED_ITEM_RETENTION_DAYS = 90;
+const INTER_SOURCE_DELAY_MS = 1_000; // Rate limit: 1s between sources
 
 function verifyCronSecret(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -96,12 +97,32 @@ export async function GET(request: Request) {
 
         results.push({ sourceId: source.id, name: source.name, newItems: newCount });
       } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "Unknown error";
         results.push({
           sourceId: source.id,
           name: source.name,
           newItems: 0,
-          error: err instanceof Error ? err.message : "Unknown error",
+          error: errorMsg,
         });
+        // Dead-letter: record failed scan for retry
+        try {
+          await db.deadLetterEntry.create({
+            data: {
+              workspaceId: source.workspaceId,
+              type: "feed_scan",
+              payload: JSON.stringify({ sourceId: source.id, url: source.url }),
+              error: errorMsg,
+              attempts: 1,
+            },
+          });
+        } catch {
+          // non-critical
+        }
+      }
+
+      // Rate limit between sources
+      if (sources.indexOf(source) < sources.length - 1) {
+        await new Promise((r) => setTimeout(r, INTER_SOURCE_DELAY_MS));
       }
     }
 

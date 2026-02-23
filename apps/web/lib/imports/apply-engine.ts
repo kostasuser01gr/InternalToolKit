@@ -119,8 +119,87 @@ export async function applyFleetDiff(
 }
 
 /**
- * Rollback a batch by reversing all change-sets.
+ * Apply bookings import diffs — creates draft Shifts for staffing proposals.
+ * Each booking with check-in data produces a DRAFT shift.
  */
+export async function applyBookingsDiff(
+  prisma: PrismaClient,
+  batchId: string,
+  workspaceId: string,
+  diff: DiffSummary,
+  createdBy: string,
+): Promise<ApplyResult> {
+  const result: ApplyResult = { applied: 0, skipped: 0, errors: [] };
+
+  for (const record of diff.records) {
+    if (record.action === "skip" || record.action === "error") {
+      result.skipped++;
+      continue;
+    }
+
+    try {
+      const d = record.mappedData;
+      const checkInStr = String(d["checkInDate"] ?? "");
+      const checkOutStr = String(d["checkOutDate"] ?? "");
+
+      if (!checkInStr && !checkOutStr) {
+        result.skipped++;
+        continue;
+      }
+
+      const startsAt = checkOutStr ? new Date(checkOutStr) : new Date();
+      const endsAt = checkInStr ? new Date(checkInStr) : new Date(startsAt.getTime() + 86400000);
+
+      if (isNaN(startsAt.getTime()) || isNaN(endsAt.getTime())) {
+        result.errors.push({ rowIndex: record.rowIndex, message: "Invalid date in booking" });
+        continue;
+      }
+
+      const agreementNo = String(d["agreementNumber"] ?? d["confirmationNumber"] ?? "");
+      const driverName = [d["driverFirstName"], d["driverLastName"]].filter(Boolean).join(" ");
+      const title = `Booking ${agreementNo}${driverName ? ` — ${driverName}` : ""}`.trim();
+
+      const shift = await prisma.shift.create({
+        data: {
+          workspaceId,
+          createdBy,
+          title,
+          startsAt,
+          endsAt,
+          status: "DRAFT",
+          notes: JSON.stringify({
+            source: "bookings_import",
+            batchId,
+            agreementNumber: agreementNo,
+            vehicleModel: d["vehicleModel"] ?? null,
+            vehicleGroup: d["vehicleGroup"] ?? null,
+            station: d["checkOutStation"] ?? d["checkInStation"] ?? null,
+          }),
+        },
+      });
+
+      await prisma.importChangeSet.create({
+        data: {
+          batchId,
+          entityType: "shift",
+          entityId: shift.id,
+          action: "create",
+          afterJson: JSON.parse(JSON.stringify(record.mappedData)),
+        },
+      });
+
+      result.applied++;
+    } catch (err) {
+      result.errors.push({
+        rowIndex: record.rowIndex,
+        message: err instanceof Error ? err.message : "Unknown error",
+      });
+    }
+  }
+
+  return result;
+}
+
 export async function rollbackBatch(
   prisma: PrismaClient,
   batchId: string,
@@ -136,10 +215,16 @@ export async function rollbackBatch(
   for (const cs of changeSets) {
     try {
       if (cs.action === "create" && cs.entityType === "vehicle") {
-        // Soft-delete: archive the created vehicle
         await prisma.vehicle.update({
           where: { id: cs.entityId },
           data: { status: "OUT_OF_SERVICE", notes: `[Rolled back from import ${batchId}]` },
+        });
+        reverted++;
+      } else if (cs.action === "create" && cs.entityType === "shift") {
+        // Rollback booking-imported shifts: mark as cancelled
+        await prisma.shift.update({
+          where: { id: cs.entityId },
+          data: { status: "CANCELLED", notes: `[Rolled back from import ${batchId}]` },
         });
         reverted++;
       } else if (cs.action === "update" && cs.entityType === "vehicle" && cs.beforeJson) {

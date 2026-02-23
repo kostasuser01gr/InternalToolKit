@@ -172,7 +172,7 @@ export async function GET(request: Request) {
       if (!isSchemaNotReadyError(err)) throw err;
     }
 
-    // Chat messages (RBAC) — trigram on content
+    // Full-text search for chat messages (RBAC) — uses Postgres FTS with ILIKE fallback
     try {
       const { user } = await getAppContext(wId ?? undefined);
 
@@ -187,7 +187,6 @@ export async function GET(request: Request) {
         // schema not ready
       }
 
-      // Build RBAC-safe channel filter for raw SQL
       const publicChannelIds = await db.chatChannel.findMany({
         where: { type: "PUBLIC", ...(wId ? { workspaceId: wId } : {}) },
         select: { id: true },
@@ -195,22 +194,56 @@ export async function GET(request: Request) {
 
       const allowedChannelIds = [...new Set([...publicChannelIds, ...memberChannelIds])];
 
-      // Use Prisma for RBAC-safe message search (complex joins)
-      const messages = await db.chatMessage.findMany({
-        where: {
-          content: { contains: q, mode: "insensitive" as const },
-          thread: {
-            ...(wId ? { workspaceId: wId } : {}),
-            OR: [
-              { channelId: null },
-              ...(allowedChannelIds.length > 0 ? [{ channelId: { in: allowedChannelIds } }] : []),
-            ],
+      // Try FTS first (plainto_tsquery), fall back to ILIKE
+      let messages: Array<{ id: string; content: string; threadId: string; thread: { title: string } }> = [];
+      if (allowedChannelIds.length > 0 && q.length >= 3) {
+        try {
+          const ftsResults = await db.$queryRawUnsafe<Array<{ id: string; content: string; threadId: string }>>(
+            `SELECT m."id", m."content", m."threadId"
+             FROM "ChatMessage" m
+             JOIN "ChatThread" t ON m."threadId" = t."id"
+             WHERE t."channelId" = ANY($1::text[])
+             AND to_tsvector('simple', m."content") @@ plainto_tsquery('simple', $2)
+             ORDER BY m."createdAt" DESC LIMIT 5`,
+            allowedChannelIds,
+            q,
+          );
+          if (ftsResults.length > 0) {
+            const threadIds = [...new Set(ftsResults.map((r) => r.threadId))];
+            const threads = await db.chatThread.findMany({
+              where: { id: { in: threadIds } },
+              select: { id: true, title: true },
+            });
+            const threadMap = new Map(threads.map((t) => [t.id, t]));
+            messages = ftsResults.map((r) => ({
+              ...r,
+              thread: threadMap.get(r.threadId) ?? { title: "Chat" },
+            }));
+          }
+        } catch {
+          // FTS not available, fall through to ILIKE
+        }
+      }
+
+      // ILIKE fallback
+      if (messages.length === 0) {
+        messages = await db.chatMessage.findMany({
+          where: {
+            content: { contains: q, mode: "insensitive" as const },
+            thread: {
+              ...(wId ? { workspaceId: wId } : {}),
+              OR: [
+                { channelId: null },
+                ...(allowedChannelIds.length > 0 ? [{ channelId: { in: allowedChannelIds } }] : []),
+              ],
+            },
           },
-        },
-        take: 5,
-        orderBy: { createdAt: "desc" },
-        select: { id: true, content: true, threadId: true, thread: { select: { title: true } } },
-      });
+          take: 5,
+          orderBy: { createdAt: "desc" },
+          select: { id: true, content: true, threadId: true, thread: { select: { title: true } } },
+        });
+      }
+
       for (const m of messages) {
         results.push({
           type: "message", id: m.id,

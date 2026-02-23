@@ -1,51 +1,64 @@
 # Incident Baseline Report
 
-## Date: 2026-02-23
+## Date: 2026-02-23 (Updated after Wave 12 + Connection Wiring)
 
 ## Baseline Gate Results (Phase 0)
 
 | Gate | Result | Notes |
 |------|--------|-------|
-| `pnpm test:unit` | ✅ PASS | 474/474 tests pass (after `prisma generate`) |
-| `pnpm -w typecheck` | ✅ PASS | No type errors |
-| `pnpm -w lint` | ✅ PASS | Zero warnings |
-| `pnpm --filter @internal-toolkit/web build` | ✅ PASS | All routes compile |
-| Playwright e2e | ⏭️ SKIP | Requires running DB |
+| `pnpm test:unit` | ✅ PASS | 556/556 tests pass |
+| `pnpm typecheck` | ✅ PASS | No type errors |
+| `pnpm lint` | ✅ PASS | Zero warnings |
+| `pnpm build` | ✅ PASS | 57 static pages, all routes compile |
+| Vercel deploy | ✅ PASS | Production live |
+| CI (GitHub Actions) | ✅ PASS | Last 4 runs green |
+| Supabase migrations | ✅ PASS | 12 migrations applied, schema up to date |
+| Cloudflare Worker | ✅ PASS | Deployed at workers.dev |
 
-## Pre-existing Issues
+## Remaining Gaps (Post Wave 12)
 
-### P0 — Build-blocking / Crash
-1. **Prisma client not generated before test** — `pnpm test:unit` fails without `prisma generate` first.
-   - Root cause: No pre-test hook for prisma generate.
-   - Fix: Add `pretest:unit` script.
+### P1 — Functional Gaps
 
-### P1 — Error UX
-2. **Error boundary shows "Something went wrong" without requestId** — `error.tsx` only shows `error.digest` which is Next.js internal, not the app's `requestId`.
-   - Root cause: `mapServerError()` in `lib/server-error.ts` generates `requestId` but it's not surfaced to error boundary.
-   - Fix: Pass requestId through error metadata.
+| # | Module | Gap | Impact |
+|---|--------|-----|--------|
+| 1 | **Imports** | Bookings apply logic missing (only fleet apply works) | Bookings import → preview works but Accept does nothing |
+| 2 | **Fleet** | No priority queue sorting by `needByAt` | Can't prioritize urgent turnarounds |
+| 3 | **Chat** | No voice notes UI (field exists as generic attachment) | Missing Viber parity feature |
+| 4 | **Chat** | Edit/delete limited to author/admin (no "for everyone") | Admin needs ability to clean any message |
+| 5 | **Search** | No Postgres FTS (only pg_trgm similarity) | No full-text search for long messages/feeds |
+| 6 | **Feeds** | No rate limiting in cron scanner | Could hammer external RSS sources |
+| 7 | **Stability** | No middleware.ts for auth/rate limiting | All routes accessible without early rejection |
 
-3. **Schema fallback pages silently degrade** — Settings, calendar, chat, imports, feeds, washers all silently return empty data when schema is not ready, no user feedback.
-   - Root cause: `isSchemaNotReadyError()` catches but doesn't surface warning.
-   - Fix: Add schema-not-ready banner component.
+### P2 — Polish/Enhancement
 
-### P2 — Missing Features
-4. **Imports: No ImportChangeSet model** — Rollback not possible without change-set tracking.
-5. **Fleet: No formal state machine** — Vehicle has `VehicleStatus` enum but no pipeline states.
-6. **Weather: No WeatherCache model** — Weather data not persisted.
-7. **Chat: Missing edit/delete, reactions UI, presence** — Schema exists but UI not complete.
-8. **Search: No FTS indexes in schema** — pg_trgm and tsvector not configured.
+| # | Module | Gap | Impact |
+|---|--------|-----|--------|
+| 8 | **Fleet** | QC checklist JSON schema undefined | No type safety for checklist items |
+| 9 | **Chat** | Message search partial (search route exists but limited) | Can't search within conversations |
+| 10 | **Feeds** | No internal retry/dead-letter for failed cron | Vercel doesn't retry failed crons |
 
-### P3 — Nice-to-have
-9. **Kiosk token partially visible** — Token redaction uses simple `***`.
-10. **Device fingerprint hash truncated to 24 chars** — Low collision risk but not ideal.
-11. **Cron automation schedule matching is naive** — String comparison instead of cron parser.
+### P3 — Already Complete (Wave 12)
+
+- ✅ ImportBatch + ImportChangeSet models with rollback
+- ✅ XLSX/CSV/JSON/TXT parsing with diff preview
+- ✅ Fleet state machine (RETURNED→CLEANING→QC→READY)
+- ✅ QC pass/fail + incidents + keys/docs tracking
+- ✅ SLA breach detection in housekeeping cron
+- ✅ Washers: KPIs, queue, daily register, export, bulk edit
+- ✅ Washers PWA: token auth, quick plate, presets, offline queue, QR share
+- ✅ Chat: channels/DMs/groups, replies, pins, mentions, reactions, read receipts
+- ✅ Viber bridge outbound mirror
+- ✅ Feeds: RSS scanning, ETag/dedupe, severity scoring, Ops Inbox
+- ✅ Weather: geolocation + station fallback + Open-Meteo + stale badge
+- ✅ Shortcuts: per-user quick bar, role defaults, inline/bulk/undo
+- ✅ Error correlation (requestId/errorId)
+- ✅ Env validation scripts (env:check, env:setup)
+- ✅ Connection wiring (Vercel + Supabase + Cloudflare)
 
 ## Classification Summary
 
-| Category | Count | Items |
-|----------|-------|-------|
-| Build/Env | 1 | #1 |
-| Error UX | 2 | #2, #3 |
-| Missing Schema | 3 | #4, #6, #8 |
-| Missing Features | 2 | #5, #7 |
-| Security/Polish | 3 | #9, #10, #11 |
+| Category | Count |
+|----------|-------|
+| Functional gaps | 7 |
+| Polish items | 3 |
+| Already complete | 14+ features |

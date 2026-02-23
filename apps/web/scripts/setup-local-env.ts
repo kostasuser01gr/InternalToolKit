@@ -45,7 +45,7 @@ async function main() {
   console.log("⚠️  Values will NOT be echoed to the console.\n");
 
   // Load existing .env.local if present
-  let existing: Record<string, string> = {};
+  const existing: Record<string, string> = {};
   if (existsSync(ENV_PATH)) {
     const lines = readFileSync(ENV_PATH, "utf-8").split("\n");
     for (const line of lines) {
