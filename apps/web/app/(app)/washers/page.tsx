@@ -18,6 +18,7 @@ import { hasWorkspacePermission } from "@/lib/rbac";
 
 import { createWasherTaskAction } from "./actions";
 import { DailyRegisterClient } from "./daily-register-client";
+import { ShareQrCode } from "./share-qr-code";
 import { TaskQueueTable } from "./task-queue-table";
 
 type WashersPageProps = {
@@ -134,6 +135,18 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
       );
       return Math.round(totalMin / completed.length);
     })(),
+    slaBreaches: (() => {
+      const SLA_MINUTES = 45;
+      return todayTasks.filter((t) => {
+        if (t.status === WasherTaskStatus.DONE) {
+          return differenceInMinutes(t.updatedAt, t.createdAt) > SLA_MINUTES;
+        }
+        if (t.status === WasherTaskStatus.TODO || t.status === WasherTaskStatus.IN_PROGRESS) {
+          return differenceInMinutes(new Date(), t.createdAt) > SLA_MINUTES;
+        }
+        return false;
+      }).length;
+    })(),
     topWashers: (() => {
       const counts = new Map<string, number>();
       for (const t of todayTasks) {
@@ -165,7 +178,7 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
       <StatusBanner error={params.error} success={params.success} />
 
       {/* ─── KPI Dashboard ───────────────────────────────────────────── */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" data-testid="washers-kpis">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6" data-testid="washers-kpis">
         <GlassCard className="p-4 text-center">
           <p className="text-2xl font-bold text-[var(--accent)]">{kpi.total}</p>
           <p className="text-xs text-[var(--text-muted)]">Today Tasks</p>
@@ -185,6 +198,10 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
         <GlassCard className="p-4 text-center">
           <p className="text-2xl font-bold text-[var(--text)]">{kpi.avgTurnaround}m</p>
           <p className="text-xs text-[var(--text-muted)]">Avg Turnaround</p>
+        </GlassCard>
+        <GlassCard className="p-4 text-center">
+          <p className={`text-2xl font-bold ${kpi.slaBreaches > 0 ? "text-rose-400" : "text-emerald-400"}`}>{kpi.slaBreaches}</p>
+          <p className="text-xs text-[var(--text-muted)]">SLA Breaches</p>
         </GlassCard>
       </div>
 
@@ -223,6 +240,7 @@ export default async function WashersPage({ searchParams }: WashersPageProps) {
           <p>🤖 <strong>Android</strong>: Open in Chrome → Menu → Install App</p>
           <p>🖥️ <strong>Desktop</strong>: Open in Chrome → Address bar install icon</p>
         </div>
+        <ShareQrCode url={`/washers/app?kiosk=${hasKioskToken ? "TOKEN" : "NOT_SET"}&station=${kioskStationId}`} />
         <div className="flex items-center gap-2 text-xs">
           <span className={`inline-block size-2 rounded-full ${hasKioskToken ? "bg-emerald-400" : "bg-rose-400"}`} />
           <span className="text-[var(--text-muted)]">

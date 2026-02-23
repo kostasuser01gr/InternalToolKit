@@ -183,3 +183,32 @@ export const QC_CHECKLIST_ITEMS = [
 
 export type QcChecklistItemId = (typeof QC_CHECKLIST_ITEMS)[number]["id"];
 
+// ─── Saved View Presets ─────────────────────────────────────────────────────
+
+export const FLEET_VIEW_PRESETS = [
+  {
+    name: "Ready Now",
+    module: "fleet",
+    filtersJson: JSON.stringify({ status: ["READY"] }),
+    description: "Vehicles ready for rental",
+  },
+  {
+    name: "Stuck > 30min",
+    module: "fleet",
+    filtersJson: JSON.stringify({ slaBreached: true }),
+    description: "Vehicles that exceeded SLA in their current state",
+  },
+  {
+    name: "Needs QC",
+    module: "fleet",
+    filtersJson: JSON.stringify({ status: ["QC_PENDING"] }),
+    description: "Vehicles awaiting quality check",
+  },
+  {
+    name: "Blocked",
+    module: "fleet",
+    filtersJson: JSON.stringify({ pipelineState: ["BLOCKED"] }),
+    description: "Vehicles with active blockers",
+  },
+] as const;
+

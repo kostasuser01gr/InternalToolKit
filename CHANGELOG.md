@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### feat — Wave 12: Import Parsing, Fleet SLA, Chat Defaults, Washer UX
+
+#### Imports
+- Wired XLSX/CSV/JSON/TXT file parsing via `xlsx` + `papaparse` libraries.
+- Upload auto-parses content, applies template mappings, and computes diff preview.
+- Diff preview shown in batch card (creates/updates/skips/errors counts).
+- Accept action reads stored diff summary for fleet imports.
+
+#### Fleet v2
+- SLA breach detection in housekeeping cron (NEEDS_CLEANING 30min, CLEANING 45min, QC_PENDING 15min).
+- Auto-notifies workspace admins on breach + creates VehicleEvent timeline entry.
+- Added 4 fleet saved view presets: Ready Now, Stuck >30min, Needs QC, Blocked.
+
+#### Chat
+- Auto-creates `#ops-general` and `#washers-only` default channels on first chat page load.
+- Mention notifications: @mentioned users receive in-app notifications.
+
+#### Washers
+- History date picker in kiosk app for filtering tasks by date.
+- QR code in Share Washer App panel (via `qrcode.react`).
+- SLA breach KPI (45min threshold) added to dashboard.
+
+#### Tests
+- 28 new unit tests (556 total, all passing).
+
 ### feat — High ROI Upgrades
 
 #### Phase 1 — Washer Kiosk: Quick Plate + Presets + Next-car Mode

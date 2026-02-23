@@ -150,12 +150,11 @@ export async function acceptImportAction(formData: FormData) {
       data: { status: ImportBatchStatus.APPLYING },
     });
 
-    // Apply the diff using preview data
-    const previewJson = batch.previewJson as { records?: Array<Record<string, unknown>> } | null;
-    if (previewJson && Array.isArray(previewJson.records) && batch.importType === "fleet") {
+    // Apply the diff using stored diff summary
+    const diffData = batch.diffSummary as unknown as import("@/lib/imports/diff-engine").DiffSummary | null;
+    if (diffData && Array.isArray(diffData.records) && batch.importType === "fleet") {
       const { applyFleetDiff } = await import("@/lib/imports/apply-engine");
-      const diffSummary = batch.previewJson as unknown as import("@/lib/imports/diff-engine").DiffSummary;
-      const applyResult = await applyFleetDiff(db, batch.id, batch.workspaceId, diffSummary);
+      const applyResult = await applyFleetDiff(db, batch.id, batch.workspaceId, diffData);
 
       if (applyResult.errors.length > 0) {
         await db.importBatch.update({

@@ -64,6 +64,71 @@ export async function GET(request: Request) {
     results["expired_sessions_purged"] = err instanceof Error ? err.message : "error";
   }
 
+  // 4. Fleet SLA breach detection — notify coordinators
+  try {
+    const slaStates = ["NEEDS_CLEANING", "CLEANING", "QC_PENDING"];
+    const vehicles = await db.vehicle.findMany({
+      where: {
+        status: { in: slaStates as never[] },
+        slaBreachedAt: null,
+      },
+      select: { id: true, plateNumber: true, status: true, workspaceId: true, updatedAt: true },
+    });
+
+    const { DEFAULT_SLA_CONFIGS } = await import("@/lib/fleet-pipeline");
+    let breachCount = 0;
+    const now = Date.now();
+
+    for (const v of vehicles) {
+      const config = DEFAULT_SLA_CONFIGS[v.status];
+      if (!config) continue;
+      const elapsed = now - v.updatedAt.getTime();
+      if (elapsed > config.maxMinutes * 60_000) {
+        // Mark as breached
+        await db.vehicle.update({
+          where: { id: v.id },
+          data: { slaBreachedAt: new Date() },
+        });
+
+        // Create notification for workspace admins
+        const admins = await db.workspaceMember.findMany({
+          where: { workspaceId: v.workspaceId, role: { in: ["ADMIN", "EDITOR"] } },
+          select: { userId: true },
+        });
+
+        for (const admin of admins) {
+          await db.notification.create({
+            data: {
+              userId: admin.userId,
+              type: "sla_breach",
+              title: `SLA Breach: ${v.plateNumber}`,
+              body: `Vehicle ${v.plateNumber} has exceeded ${config.maxMinutes}min in ${v.status.replace(/_/g, " ")} state.`,
+            },
+          });
+        }
+
+        // Create vehicle event for timeline
+        await db.vehicleEvent.create({
+          data: {
+            workspaceId: v.workspaceId,
+            vehicleId: v.id,
+            type: "SLA_BREACH",
+            valueText: `Exceeded ${config.maxMinutes}min in ${v.status}`,
+          },
+        });
+
+        breachCount++;
+      }
+    }
+    results["sla_breaches_detected"] = String(breachCount);
+  } catch (err) {
+    if (isSchemaNotReadyError(err)) {
+      results["sla_breaches_detected"] = "schema_not_ready";
+    } else {
+      results["sla_breaches_detected"] = err instanceof Error ? err.message : "error";
+    }
+  }
+
   return NextResponse.json({
     success: true,
     results,

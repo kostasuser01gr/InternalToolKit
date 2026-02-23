@@ -1,9 +1,13 @@
 import { createHash } from "crypto";
+import { Prisma } from "@prisma/client";
 
 import { getRequestId, logWebRequest, withObservabilityHeaders } from "@/lib/http-observability";
 import { db } from "@/lib/db";
 import { requireAdminAccess } from "@/lib/rbac";
 import { isSchemaNotReadyError } from "@/lib/prisma-errors";
+import { parseFileBuffer, applyMappings } from "@/lib/imports/file-parser";
+import { computeDiff } from "@/lib/imports/diff-engine";
+import { findTemplate } from "@/lib/imports/templates";
 
 export async function POST(request: Request) {
   const requestId = getRequestId(request);
@@ -39,6 +43,29 @@ export async function POST(request: Request) {
       );
     }
 
+    // Parse file content
+    const template = findTemplate(importType);
+    const parsed = parseFileBuffer(buffer, file.type, file.name, template?.sheetName);
+
+    // Apply mappings if template exists
+    let mappedRows = parsed.rows;
+    if (template && parsed.rows.length > 0) {
+      mappedRows = applyMappings(parsed.rows, template.mappings);
+    }
+
+    // Compute diff against existing records (for fleet imports)
+    let diffSummary = null;
+    if (importType === "fleet" && mappedRows.length > 0) {
+      const vehicles = await db.vehicle.findMany({
+        where: { workspaceId },
+        select: { id: true, plateNumber: true, model: true, mileageKm: true, fuelPercent: true, notes: true },
+      });
+      const existingMap = new Map(
+        vehicles.map((v) => [v.plateNumber, { id: v.id, plateNumber: v.plateNumber, model: v.model, mileage: v.mileageKm, fuelLevel: v.fuelPercent, notes: v.notes }]),
+      );
+      diffSummary = computeDiff(mappedRows, existingMap, "plateNumber");
+    }
+
     const batch = await db.importBatch.create({
       data: {
         workspaceId,
@@ -47,11 +74,25 @@ export async function POST(request: Request) {
         fileName: file.name,
         fileHash,
         fileSizeBytes: buffer.length,
-        status: "ANALYZING",
+        status: diffSummary ? "PREVIEW" : "ANALYZING",
+        mappingJson: template ? (template.mappings as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
         previewJson: {
           rawBase64: buffer.toString("base64").slice(0, 500_000),
           contentType: file.type,
+          headers: parsed.headers,
+          rowCount: parsed.rows.length,
+          parseErrors: parsed.errors,
+          sheetName: parsed.sheetName,
         },
+        diffSummary: diffSummary ? ({
+          totalRows: diffSummary.totalRows,
+          creates: diffSummary.creates,
+          updates: diffSummary.updates,
+          archives: diffSummary.archives,
+          skips: diffSummary.skips,
+          errors: diffSummary.errors,
+          records: diffSummary.records,
+        } as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
       },
     });
 
@@ -65,7 +106,19 @@ export async function POST(request: Request) {
     });
 
     return Response.json(
-      { batchId: batch.id, status: batch.status, fileName: file.name },
+      {
+        batchId: batch.id,
+        status: batch.status,
+        fileName: file.name,
+        rowCount: parsed.rows.length,
+        parseErrors: parsed.errors,
+        diff: diffSummary ? {
+          creates: diffSummary.creates,
+          updates: diffSummary.updates,
+          skips: diffSummary.skips,
+          errors: diffSummary.errors,
+        } : null,
+      },
       withObservabilityHeaders({ status: 201 }, requestId),
     );
   } catch (err) {
