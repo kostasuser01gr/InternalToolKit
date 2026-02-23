@@ -181,7 +181,13 @@ export async function requireAuthUser() {
 export async function requireWorkspaceMembership(workspaceId?: string) {
   const user = await requireAuthUser();
 
-  let membership: any = null;
+  let membership: {
+    role: WorkspaceRole;
+    userId: string;
+    workspaceId: string;
+    createdAt: Date;
+    workspace: { id: string; name: string; createdAt: Date } | null;
+  } | null = null;
 
   if (workspaceId) {
     const convex = getConvexClient();
@@ -193,7 +199,7 @@ export async function requireWorkspaceMembership(workspaceId?: string) {
       if (result) {
         membership = {
           ...result,
-          id: result._id,
+          role: result.role as WorkspaceRole,
           createdAt: new Date(result._creationTime),
           workspace: result.workspace
             ? {
