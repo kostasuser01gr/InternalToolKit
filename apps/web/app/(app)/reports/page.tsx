@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { features } from "@/lib/constants/features";
 import { db } from "@/lib/db";
 import { getAppContext } from "@/lib/app-context";
+import { withDbFallback } from "@/lib/prisma-errors";
 
 type ReportsPageProps = {
   searchParams: Promise<{
@@ -24,7 +25,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const params = await searchParams;
   const { workspace } = await getAppContext(params.workspaceId);
 
-  const tables = await db.table.findMany({
+  const tables = await withDbFallback(db.table.findMany({
     where: {
       workspaceId: workspace.id,
       ...(params.q ? { name: { contains: params.q } } : {}),
@@ -35,7 +36,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       },
     },
     orderBy: { name: "asc" },
-  });
+  }), []);
 
   return (
     <div className="page-stack" data-testid="reports-page">

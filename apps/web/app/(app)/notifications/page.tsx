@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
+import { withDbFallback } from "@/lib/prisma-errors";
 
 import {
   markAllNotificationsReadAction,
@@ -21,7 +22,7 @@ export default async function NotificationsPage({
   const params = await searchParams;
   const { user } = await getAppContext();
 
-  const notifications = await db.notification.findMany({
+  const notifications = await withDbFallback(db.notification.findMany({
     where: {
       userId: user.id,
     },
@@ -29,7 +30,7 @@ export default async function NotificationsPage({
       createdAt: "desc",
     },
     take: 120,
-  });
+  }), []);
 
   const unreadCount = notifications.filter((item) => item.readAt === null).length;
 

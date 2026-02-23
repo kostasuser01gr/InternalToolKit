@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 import { hasWorkspacePermission } from "@/lib/rbac";
+import { withDbFallback } from "@/lib/prisma-errors";
 
 import {
   createShiftAction,
@@ -58,7 +59,7 @@ export default async function ShiftsPage({ searchParams }: ShiftsPageProps) {
   }
 
   const [members, shifts, shiftRequests] = await Promise.all([
-    db.workspaceMember.findMany({
+    withDbFallback(db.workspaceMember.findMany({
       where: { workspaceId: workspace.id },
       include: { user: true },
       orderBy: {
@@ -66,8 +67,8 @@ export default async function ShiftsPage({ searchParams }: ShiftsPageProps) {
           name: "asc",
         },
       },
-    }),
-    db.shift.findMany({
+    }), []),
+    withDbFallback(db.shift.findMany({
       where: { workspaceId: workspace.id },
       include: {
         assignee: true,
@@ -76,8 +77,8 @@ export default async function ShiftsPage({ searchParams }: ShiftsPageProps) {
         startsAt: "asc",
       },
       take: 200,
-    }),
-    db.shiftRequest.findMany({
+    }), []),
+    withDbFallback(db.shiftRequest.findMany({
       where: { workspaceId: workspace.id },
       include: {
         requester: true,
@@ -87,7 +88,7 @@ export default async function ShiftsPage({ searchParams }: ShiftsPageProps) {
         createdAt: "desc",
       },
       take: 50,
-    }),
+    }), []),
   ]);
 
   const now = new Date();

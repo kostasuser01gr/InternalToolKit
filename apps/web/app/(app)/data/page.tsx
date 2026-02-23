@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 import { parseDataQueryContract } from "@/lib/query-contract";
+import { withDbFallback } from "@/lib/prisma-errors";
 import { cn } from "@/lib/utils";
 
 import {
@@ -180,7 +181,7 @@ export default async function DataPage({ searchParams }: DataPageProps) {
     to: params.to,
   });
 
-  const tables = await db.table.findMany({
+  const tables = await withDbFallback(db.table.findMany({
     where: { workspaceId: workspace.id },
     include: {
       _count: {
@@ -190,12 +191,12 @@ export default async function DataPage({ searchParams }: DataPageProps) {
       },
     },
     orderBy: { name: "asc" },
-  });
+  }), []);
 
   const selectedTableId = params.tableId ?? tables[0]?.id;
 
   const selectedTable = selectedTableId
-    ? await db.table.findFirst({
+    ? await withDbFallback(db.table.findFirst({
         where: {
           id: selectedTableId,
           workspaceId: workspace.id,
@@ -208,7 +209,7 @@ export default async function DataPage({ searchParams }: DataPageProps) {
             orderBy: { createdAt: "asc" },
           },
         },
-      })
+      }), null)
     : null;
 
   const activeViewType =
@@ -239,9 +240,9 @@ export default async function DataPage({ searchParams }: DataPageProps) {
 
   const totalRecords =
     recordWhere != null
-      ? await db.record.count({
+      ? await withDbFallback(db.record.count({
           where: recordWhere,
-        })
+        }), 0)
       : 0;
 
   const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
@@ -254,22 +255,22 @@ export default async function DataPage({ searchParams }: DataPageProps) {
 
   const paginatedRecords =
     recordWhere != null
-      ? await db.record.findMany({
+      ? await withDbFallback(db.record.findMany({
           where: recordWhere,
           orderBy: recordOrderBy,
           skip: (page - 1) * pageSize,
           take: pageSize,
-        })
+        }), [])
       : [];
 
   const editingRecord =
     selectedTable && params.editRecordId
-      ? await db.record.findFirst({
+      ? await withDbFallback(db.record.findFirst({
           where: {
             id: params.editRecordId,
             tableId: selectedTable.id,
           },
-        })
+        }), null)
       : null;
   const viewRecords = paginatedRecords;
 

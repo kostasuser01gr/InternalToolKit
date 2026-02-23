@@ -51,6 +51,16 @@ export function isDatabaseUnavailableError(error: unknown): boolean {
   return false;
 }
 
+/** Run a Prisma query and return a fallback value when the database is unavailable. */
+export async function withDbFallback<T>(query: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await query;
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) return fallback;
+    throw error;
+  }
+}
+
 export function isSchemaNotReadyError(error: unknown) {
   // Connection errors are NOT schema-not-ready — they should surface as operational errors
   if (isConnectionError(error)) {

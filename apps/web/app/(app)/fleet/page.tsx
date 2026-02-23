@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 import { hasWorkspacePermission } from "@/lib/rbac";
+import { withDbFallback } from "@/lib/prisma-errors";
 
 import { addVehicleEventAction, createVehicleAction, updateVehicleAction } from "./actions";
 import { BulkFleetBar } from "./bulk-fleet-bar";
@@ -44,7 +45,7 @@ export default async function FleetPage({ searchParams }: FleetPageProps) {
     );
   }
 
-  const vehicles = await db.vehicle.findMany({
+  const vehicles = await withDbFallback(db.vehicle.findMany({
     where: {
       workspaceId: workspace.id,
     },
@@ -65,7 +66,7 @@ export default async function FleetPage({ searchParams }: FleetPageProps) {
       { needByAt: "asc" },
       { updatedAt: "desc" },
     ],
-  });
+  }), []);
 
   const selectedVehicle =
     vehicles.find((vehicle) => vehicle.id === params.vehicleId) ?? vehicles[0] ?? null;

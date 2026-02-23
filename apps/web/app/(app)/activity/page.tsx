@@ -11,6 +11,7 @@ import { ActivityEventTable, AuditTrailTable } from "./activity-tables";
 import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 import { listDemoEvents } from "@/lib/demo-events";
+import { withDbFallback } from "@/lib/prisma-errors";
 
 type ActivityPageProps = {
   searchParams: Promise<{
@@ -40,7 +41,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const to = parseDate(params.to);
   const q = params.q?.trim().toLowerCase();
 
-  const auditEntries = await db.auditLog.findMany({
+  const auditEntries = await withDbFallback(db.auditLog.findMany({
     where: {
       workspaceId: workspace.id,
       ...(params.actor ? { actorUserId: params.actor } : {}),
@@ -65,7 +66,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     include: { actor: true },
     orderBy: { createdAt: "desc" },
     take: 120,
-  });
+  }), []);
 
   const memoryEvents = listDemoEvents(200).filter((event) => {
     if (q) {

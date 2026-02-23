@@ -37,7 +37,13 @@ export default async function MainAppLayout({
     redirect("/login");
   }
 
-  const membership = await getDefaultWorkspaceForUser(session.user.id);
+  let membership: Awaited<ReturnType<typeof getDefaultWorkspaceForUser>>;
+  try {
+    membership = await getDefaultWorkspaceForUser(session.user.id);
+  } catch {
+    // Convex/DB unreachable — redirect to login instead of crashing layout
+    redirect("/login?error=schema");
+  }
 
   if (!membership || !membership.workspace) {
     const cookieStore = await cookies();
