@@ -14,6 +14,7 @@ import { generateOneTimeToken, hashOpaqueToken, normalizeEmail, normalizeLoginNa
 import { getServerEnv } from "@/lib/env";
 import type { AppSession, SessionUser } from "@/lib/auth/types";
 import type { GlobalRole } from "@prisma/client";
+import type { Id } from "@convex/_generated/dataModel";
 import { getConvexClient } from "@/lib/convex-client";
 import { api } from "@/lib/convex-api";
 import { logSecurityEvent } from "@/lib/security";
@@ -165,8 +166,8 @@ async function resolveSession(payload: SessionPayload): Promise<AppSession | nul
     if (convex) {
       // ── Convex path ──
       const result = await convex.query(api.auth.resolveSession, {
-        sessionId: payload.sid as any,
-        userId: payload.uid as any,
+        sessionId: payload.sid as Id<"authSessions">,
+        userId: payload.uid as Id<"users">,
       });
       if (!result) return null;
 
@@ -178,7 +179,7 @@ async function resolveSession(payload: SessionPayload): Promise<AppSession | nul
       const nowMs = Date.now();
       const lastSeenMs = result.session.lastSeenAt ?? 0;
       if (nowMs - lastSeenMs >= 30_000) {
-        void convex.mutation(api.auth.touch, { id: payload.sid as any }).catch(() => {});
+        void convex.mutation(api.auth.touch, { id: payload.sid as Id<"authSessions"> }).catch(() => {});
       }
 
       return {
@@ -412,7 +413,7 @@ export const cookieAuthAdapter: AuthAdapter = {
       const convex = getConvexClient();
       if (convex) {
         await convex.mutation(api.auth.revoke, {
-          id: payload.sid as any,
+          id: payload.sid as Id<"authSessions">,
           reason,
         }).catch(() => {});
       } else if (db) {
@@ -442,9 +443,9 @@ export const cookieAuthAdapter: AuthAdapter = {
     const convex = getConvexClient();
     if (convex) {
       const sessions = await convex.query(api.auth.listActiveSessions, {
-        userId: userId as any,
+        userId: userId as Id<"users">,
       });
-      return sessions.map((s: any) => ({
+      return sessions.map((s) => ({
         id: s._id,
         userAgent: s.userAgent ?? null,
         deviceId: s.deviceId ?? null,
@@ -469,7 +470,7 @@ export const cookieAuthAdapter: AuthAdapter = {
       orderBy: { lastSeenAt: "desc" },
     });
 
-    return sessions.map((session: any) => ({
+    return sessions.map((session) => ({
       id: session.id,
       userAgent: session.userAgent,
       deviceId: session.deviceId,
@@ -486,8 +487,8 @@ export const cookieAuthAdapter: AuthAdapter = {
     const convex = getConvexClient();
     if (convex) {
       await convex.mutation(api.auth.revokeBySessionAndUser, {
-        sessionId: sessionId as any,
-        userId: userId as any,
+        sessionId: sessionId as Id<"authSessions">,
+        userId: userId as Id<"users">,
         reason: "user_revoked",
       });
     } else if (db) {
@@ -507,8 +508,8 @@ export const cookieAuthAdapter: AuthAdapter = {
     const convex = getConvexClient();
     if (convex) {
       await convex.mutation(api.auth.revokeAllExcept, {
-        userId: userId as any,
-        exceptSessionId: exceptSessionId ? (exceptSessionId as any) : undefined,
+        userId: userId as Id<"users">,
+        ...(exceptSessionId ? { exceptSessionId: exceptSessionId as Id<"authSessions"> } : {}),
         reason: "user_revoked_all",
       });
     } else if (db) {
@@ -530,8 +531,8 @@ export const cookieAuthAdapter: AuthAdapter = {
     const convex = getConvexClient();
     if (convex) {
       return convex.mutation(api.auth.elevateSession, {
-        sessionId: payload.sid as any,
-        userId: userId as any,
+        sessionId: payload.sid as Id<"authSessions">,
+        userId: userId as Id<"users">,
         elevatedUntil: until.getTime(),
       });
     }

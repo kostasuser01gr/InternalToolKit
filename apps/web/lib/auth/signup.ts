@@ -94,7 +94,7 @@ export async function signupWithPassword(input: {
       };
     } else {
       // ── Prisma fallback ──
-      created = await db.$transaction(async (tx: any) => {
+      created = await db.$transaction(async (tx: Prisma.TransactionClient) => {
         const user = await tx.user.create({
           data: {
             email: normalizedEmail,

@@ -12,6 +12,7 @@ export async function getDefaultWorkspaceForUser(userId: string) {
     return {
       ...result,
       id: result._id,
+      role: result.role as WorkspaceRole,
       createdAt: new Date(result._creationTime),
       workspace: result.workspace
         ? {
@@ -51,6 +52,7 @@ export async function getWorkspaceForUser(
       return {
         ...result,
         id: result._id,
+        role: result.role as WorkspaceRole,
         createdAt: new Date(result._creationTime),
         workspace: result.workspace
           ? {

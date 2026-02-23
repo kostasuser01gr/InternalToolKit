@@ -5,7 +5,6 @@ import { cookieAuthAdapter } from "@/lib/auth/cookie-adapter";
 import type { ActiveSessionInfo } from "@/lib/auth/types";
 import { db } from "@/lib/db";
 import { getConvexClient } from "@/lib/convex-client";
-import { api } from "@/lib/convex-api";
 
 const authAdapter: AuthAdapter = cookieAuthAdapter;
 const ADMIN_STEP_UP_TTL_MS = 10 * 60 * 1000;
