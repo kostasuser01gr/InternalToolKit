@@ -43,3 +43,5 @@ next-env.d.ts
 supabase/.temp/
 supabase/.branches/
 apps/web/supabase/.temp/
+
+.env.local

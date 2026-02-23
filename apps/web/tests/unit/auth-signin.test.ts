@@ -6,6 +6,10 @@ const { findUniqueMock, logSecurityEventMock } = vi.hoisted(() => ({
   logSecurityEventMock: vi.fn(),
 }));
 
+vi.mock("@/lib/convex-client", () => ({
+  getConvexClient: () => null,
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
     user: {

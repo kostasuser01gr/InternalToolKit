@@ -2,9 +2,13 @@
 
 import { useEffect } from "react";
 import { ThemeProvider } from "next-themes";
+import { ConvexProvider, ConvexReactClient } from "convex/react";
 
 import { ToastProvider } from "@/components/layout/toast-provider";
 import { UiPreferencesProvider } from "@/components/layout/ui-preferences-provider";
+
+const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;
 
 function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -19,7 +23,7 @@ function Providers({ children }: { children: React.ReactNode }) {
     void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   }, []);
 
-  return (
+  const inner = (
     <ThemeProvider
       attribute="class"
       defaultTheme="dark"
@@ -31,6 +35,11 @@ function Providers({ children }: { children: React.ReactNode }) {
       </UiPreferencesProvider>
     </ThemeProvider>
   );
+
+  if (convex) {
+    return <ConvexProvider client={convex}>{inner}</ConvexProvider>;
+  }
+  return inner;
 }
 
 export { Providers };

@@ -14,6 +14,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./", import.meta.url)),
+      "@convex": fileURLToPath(new URL("../../convex", import.meta.url)),
     },
   },
 });
