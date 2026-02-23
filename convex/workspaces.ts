@@ -52,6 +52,54 @@ export const listMembers = query({
   },
 });
 
+/** Get a user's first (default) workspace membership with workspace details. */
+export const getDefaultMembership = query({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    const memberships = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    if (memberships.length === 0) return null;
+
+    // Get the workspace for each membership and return the oldest one
+    const withWorkspaces = await Promise.all(
+      memberships.map(async (m) => {
+        const workspace = await ctx.db
+          .query("workspaces")
+          .filter((q) => q.eq(q.field("_id"), m.workspaceId))
+          .first();
+        return { ...m, workspace };
+      }),
+    );
+
+    // Sort by workspace creation time (oldest first)
+    withWorkspaces.sort(
+      (a, b) => (a.workspace?._creationTime ?? 0) - (b.workspace?._creationTime ?? 0),
+    );
+    return withWorkspaces[0] ?? null;
+  },
+});
+
+/** Get membership for a specific workspace+user with workspace details. */
+export const getMemberWithWorkspace = query({
+  args: { workspaceId: v.string(), userId: v.string() },
+  handler: async (ctx, args) => {
+    const member = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("userId", args.userId),
+      )
+      .first();
+    if (!member) return null;
+    const workspace = await ctx.db
+      .query("workspaces")
+      .filter((q) => q.eq(q.field("_id"), member.workspaceId))
+      .first();
+    return { ...member, workspace };
+  },
+});
+
 // ─── Workspace Mutations ────────────────────────────────────────────────────
 
 export const create = mutation({

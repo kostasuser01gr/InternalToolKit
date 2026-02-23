@@ -39,7 +39,7 @@ export default async function MainAppLayout({
 
   const membership = await getDefaultWorkspaceForUser(session.user.id);
 
-  if (!membership) {
+  if (!membership || !membership.workspace) {
     const cookieStore = await cookies();
     if (cookieStore.get(SESSION_COOKIE_NAME)?.value) {
       cookieStore.delete(SESSION_COOKIE_NAME);
@@ -47,14 +47,16 @@ export default async function MainAppLayout({
     redirect("/login");
   }
 
+  const workspace = membership.workspace!;
+
   const [roleShortcuts, opsInboxCount] = await Promise.all([
-    getRoleShortcuts(membership.workspace.id),
-    getOpsInboxCount(membership.workspace.id),
+    getRoleShortcuts(workspace.id),
+    getOpsInboxCount(workspace.id),
   ]);
 
   return (
     <AppShell
-      workspaceName={membership.workspace.name}
+      workspaceName={workspace.name}
       userName={session.user.name ?? "Operator"}
       userRole={membership.role}
       roleShortcuts={Object.keys(roleShortcuts).length > 0 ? roleShortcuts : undefined}
