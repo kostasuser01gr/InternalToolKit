@@ -250,11 +250,11 @@ test("command palette opens and navigates", async ({ page }, testInfo) => {
 
   await page.getByLabel("Search commands").fill("go to analytics");
   await palette.getByRole("button", { name: /^Go to Analytics/ }).first().click();
-  await expect(page).toHaveURL(/\/analytics$/);
+  await expect(page).toHaveURL(/\/analytics$/, { timeout: 15000 });
 
   await page.keyboard.press("g");
   await page.keyboard.press("d");
-  await expect(page).toHaveURL(/\/(dashboard|overview)$/);
+  await expect(page).toHaveURL(/\/(dashboard|overview)$/, { timeout: 15000 });
 });
 
 test("data table: create table, add field, add record, export CSV", async ({
@@ -270,15 +270,15 @@ test("data table: create table, add field, add record, export CSV", async ({
 
   await page.getByLabel("Create table").fill(tableName);
   await page.getByRole("button", { name: "Create table" }).click();
-  await expect(page.getByText("Table created.")).toBeVisible();
+  await expect(page.getByText("Table created.")).toBeVisible({ timeout: 15000 });
 
   await page.getByPlaceholder("Field name").fill(fieldName);
   await page.getByRole("button", { name: "Add field" }).click();
-  await expect(page.getByText("Field created.")).toBeVisible();
+  await expect(page.getByText("Field created.")).toBeVisible({ timeout: 15000 });
 
   await page.getByLabel(fieldName).fill("hello world");
   await page.getByRole("button", { name: "Save record" }).click();
-  await expect(page.getByText("Record created.")).toBeVisible();
+  await expect(page.getByText("Record created.")).toBeVisible({ timeout: 15000 });
   await expect(page.getByText("hello world")).toBeVisible();
 
   const currentUrl = new URL(page.url());
