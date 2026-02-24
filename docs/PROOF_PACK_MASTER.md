@@ -2,7 +2,15 @@
 
 ## CI Status: ALL GREEN ✅
 
-### Latest Commit: `dc61f5f` — fix(security): fix CSP blocking inline styles and dev scripts
+### Latest Commit: `57db092` — docs: add master proof pack + CI baseline documentation
+
+| Workflow | Run ID | Status | Duration |
+|---|---|---|---|
+| CI | 22356087890 | ✅ PASSED | 11m 56s |
+| Lighthouse CI | 22356087916 | ✅ PASSED | 2m 58s |
+| CodeQL | 22356087897 | ✅ PASSED | 1m 42s |
+
+### Previous Green Run (CSP fix commit `dc61f5f`)
 
 | Workflow | Run ID | Status | Duration |
 |---|---|---|---|
@@ -158,6 +166,7 @@ After CSP fix, all 27 routes load with HTTP 200 on Desktop viewport. No crash ba
 
 | SHA | Message |
 |---|---|
+| `57db092` | docs: add master proof pack + CI baseline documentation |
 | `dc61f5f` | fix(security): fix CSP blocking inline styles and dev scripts |
 | `8e8c280` | docs: add full-scale QA proof pack with CI evidence |
 | `6f99a5b` | fix(ci): stabilize E2E + a11y + API contract tests for CI |

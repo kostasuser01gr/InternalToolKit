@@ -76,6 +76,7 @@ jobs:
           echo "Content-Type: $CONTENT_TYPE"
           echo "$CONTENT_TYPE" | grep -qi "text/html" || (echo "ERROR: /login does not serve HTML"; kill $SERVER_PID 2>/dev/null; exit 1)
           kill $SERVER_PID 2>/dev/null || true
+          sleep 3
 
       - name: Run Lighthouse CI
         run: lhci autorun

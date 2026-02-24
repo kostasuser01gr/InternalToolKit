@@ -3,6 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests",
   testMatch: "**/*.spec.ts",
+  globalSetup: "./tests/global-setup.ts",
   timeout: 45_000,
   workers: process.env.CI ? 2 : 1,
   expect: {
@@ -46,5 +47,21 @@ export default defineConfig({
     url: "http://127.0.0.1:4173/login",
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,
+    env: {
+      DATABASE_URL:
+        "postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public",
+      DIRECT_URL:
+        "postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public",
+      SESSION_SECRET: "test-session-secret-change-before-production-32chars",
+      SESSION_COOKIE_SECURE: "0",
+      APP_VERSION: "1.0.0",
+      ASSISTANT_PROVIDER: "mock",
+      NEXT_PUBLIC_CONVEX_URL: "",
+      CONVEX_DEPLOYMENT: "",
+      NEXT_PUBLIC_FEATURE_COMMAND_PALETTE: "1",
+      NEXT_PUBLIC_FEATURE_COMPONENTS_SHOWROOM: "1",
+      NEXT_PUBLIC_FEATURE_REPORTS_PDF: "1",
+      NEXT_PUBLIC_FEATURE_WINDOW_CONTROLS_OVERLAY: "0",
+    },
   },
 });

@@ -267,7 +267,7 @@ export default async function ImportsPage(props: { searchParams: SearchParams })
   const success = typeof searchParams.success === "string" ? searchParams.success : null;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
+    <div data-testid="imports-page" className="mx-auto max-w-4xl space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-bold">Imports</h1>
         <p className="text-sm text-[var(--text-muted)]">
