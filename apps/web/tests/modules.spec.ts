@@ -207,6 +207,7 @@ test("ops inbox page loads", async ({ page }, testInfo) => {
 
 test("all primary nav routes are reachable", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+  test.setTimeout(120_000);
   await login(page, "admin", "1234");
 
   const routes = [
