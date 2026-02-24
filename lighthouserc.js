@@ -4,16 +4,17 @@ module.exports = {
       startServerCommand:
         "pnpm --filter @internal-toolkit/web start --port 4174",
       startServerReadyPattern: "Ready in|listening|started",
-      startServerReadyTimeout: 30_000,
+      startServerReadyTimeout: 60_000,
       url: [
         // Only audit real HTML pages — never JSON API routes (causes NOT_HTML).
         "http://127.0.0.1:4174/login",
         "http://127.0.0.1:4174/",
       ],
-      numberOfRuns: 1,
+      numberOfRuns: 3,
       settings: {
         preset: "desktop",
-        chromeFlags: "--no-sandbox --headless",
+        chromeFlags: "--no-sandbox --headless --disable-dev-shm-usage --disable-gpu",
+        maxWaitForLoad: 45000,
       },
     },
     assert: {

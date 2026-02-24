@@ -15,7 +15,7 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "pretest:e2e": "playwright install chromium",
-    "test:e2e": "pnpm db:reset && playwright test tests/smoke.spec.ts tests/health.spec.ts",
+    "test:e2e": "pnpm db:reset && playwright test tests/smoke.spec.ts tests/health.spec.ts tests/modules.spec.ts",
     "test:full-scan": "pnpm db:reset && playwright test tests/diagnostics/full-scan.spec.ts",
     "test:a11y": "playwright test tests/a11y.spec.ts",
     "test:api": "playwright test tests/api-contracts.spec.ts",
