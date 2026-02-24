@@ -64,5 +64,14 @@ jobs:
       - name: Install LHCI
         run: npm install -g @lhci/cli@0.14.x
 
+      - name: Verify login page serves HTML
+        run: |
+          pnpm --filter @internal-toolkit/web start --port 4174 &
+          sleep 10
+          CONTENT_TYPE=$(curl -si http://127.0.0.1:4174/login | grep -i content-type | head -1)
+          echo "$CONTENT_TYPE"
+          echo "$CONTENT_TYPE" | grep -qi "text/html" || (echo "ERROR: /login does not serve HTML"; exit 1)
+          kill %1 || true
+
       - name: Run Lighthouse CI
         run: lhci autorun

@@ -8,6 +8,7 @@ module.exports = {
       url: [
         // Only audit real HTML pages — never JSON API routes (causes NOT_HTML).
         "http://127.0.0.1:4174/login",
+        "http://127.0.0.1:4174/",
       ],
       numberOfRuns: 1,
       settings: {
