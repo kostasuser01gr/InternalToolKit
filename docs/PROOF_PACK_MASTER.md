@@ -2,31 +2,34 @@
 
 ## CI Status: ALL GREEN ✅
 
-### Latest Commit: `57db092` — docs: add master proof pack + CI baseline documentation
+### Latest Commit: `88e42f3` — fix(ci): stabilize e2e timeouts + LHCI retry loop for NO_FCP
 
 | Workflow | Run ID | Status | Duration |
 |---|---|---|---|
-| CI | 22356087890 | ✅ PASSED | 11m 56s |
-| Lighthouse CI | 22356087916 | ✅ PASSED | 2m 58s |
-| CodeQL | 22356087897 | ✅ PASSED | 1m 42s |
+| CI | 22359772051 | ✅ PASSED | 15m 0s |
+| Lighthouse CI | 22359772303 | ✅ PASSED | 4m 19s |
+| CodeQL | 22359772055 | ✅ PASSED | 1m 39s |
 
-### Previous Green Run (CSP fix commit `dc61f5f`)
+### Previous Green Runs
 
-| Workflow | Run ID | Status | Duration |
+| Commit | CI | Lighthouse | CodeQL |
 |---|---|---|---|
-| CI | 22355395587 | ✅ PASSED | 11m 31s |
-| Lighthouse CI | 22355395542 | ✅ PASSED | 2m 56s |
-| CodeQL | 22355395580 | ✅ PASSED | 1m 33s |
+| `429ffa2` | ❌ 2 failed | ❌ NO_FCP | ✅ |
+| `4a17174` | ❌ 3 timeout | ✅ | ✅ |
+| `57db092` | ✅ 22356087890 | ✅ 22356087916 | ✅ 22356087897 |
+| `dc61f5f` | ✅ 22355395587 | ✅ 22355395542 | ✅ 22355395580 |
 
 ### Test Results
 
 | Suite | Count | Status |
 |---|---|---|
 | Unit tests | 583 passed | ✅ |
-| E2E smoke tests | 26 passed, 1 skipped | ✅ |
+| E2E smoke tests (Desktop) | 15 passed | ✅ |
+| E2E module tests (Desktop) | 15 passed | ✅ |
+| Health/contract tests | 4 passed | ✅ |
 | API contract tests | 33 passed | ✅ |
 | A11y scans | 31 passed | ✅ |
-| Lighthouse CI | /login + / audited | ✅ |
+| Lighthouse CI | /login + / audited (3 runs each) | ✅ |
 | CodeQL security | Clean | ✅ |
 | Build | Production build OK | ✅ |
 
@@ -100,7 +103,38 @@ All present in Production + Preview:
 ### Fix 5: E2E Test Scope (prior commit)
 **Impact**: `test:e2e` ran all spec files causing double-runs and false failures
 
-**Fix**: Scoped to `tests/smoke.spec.ts tests/health.spec.ts` only
+**Fix**: Scoped to `tests/smoke.spec.ts tests/health.spec.ts tests/modules.spec.ts`
+
+### Fix 6: Auth Throttle Lockout in Tests (commit `4a17174`)
+**Impact**: All E2E tests failed with "Account temporarily locked" after repeated login attempts
+
+**Root cause**: Auth throttle (8 attempts/10min per account, 60/10min per IP) locked out test users across Playwright workers sharing 127.0.0.1. Also, `.env.local` pointed dev server at Supabase DB (not local) and set Convex URL (routing auth through Convex without seed data).
+
+**Fix**: 
+1. Added `global-setup.ts` to clear AuthThrottle table before runs
+2. Added Playwright `webServer.env` overrides for DATABASE_URL, DIRECT_URL, SESSION_SECRET, NEXT_PUBLIC_CONVEX_URL=""
+
+### Fix 7: React Hydration Timing in Shell Test (commit `429ffa2`)
+**Impact**: Responsive shell test found 0 `data-chat-first` elements because check ran before React hydration
+
+**Fix**: Added `waitForLoadState('load')` and fallback detection via header/nav roles
+
+### Fix 8: CI Timeout Stabilization (commits `429ffa2`, `88e42f3`)
+**Impact**: Command palette and data table tests failed in slow CI runners (7s default expect timeout too short)
+
+**Fix**: 
+1. Increased CI test timeout to 90s (from 45s)
+2. Added per-assertion timeouts: 15s for navigation URLs, 15s for toast visibility
+3. Added 120s explicit timeout for signup and cross-module navigation tests
+
+### Fix 9: LHCI NO_FCP Flake (commit `88e42f3`)
+**Impact**: Lighthouse intermittently fails with "The page did not paint any content" in headless Chrome CI
+
+**Root cause**: Chrome in resource-constrained CI runner sometimes doesn't paint. `numberOfRuns: 3` doesn't help because NO_FCP is a runtime error that aborts `lhci autorun`.
+
+**Fix**: 
+1. Added retry loop (3 attempts) around `lhci autorun` in lighthouse.yml
+2. Added Chrome flags: `--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding`
 
 ---
 
