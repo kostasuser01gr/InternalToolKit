@@ -157,12 +157,9 @@ function clearSessionCookie(response: NextResponse) {
 }
 
 function buildCsp(nonce: string, isDevelopment: boolean) {
-  const scriptSources = [
-    "'self'",
-    `'nonce-${nonce}'`,
-    "'strict-dynamic'",
-    ...(isDevelopment ? ["'unsafe-eval'"] : []),
-  ];
+  const scriptSources = isDevelopment
+    ? ["'self'", "'unsafe-eval'", "'unsafe-inline'"]
+    : ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"];
 
   const connectSources = [
     "'self'",
@@ -181,7 +178,7 @@ function buildCsp(nonce: string, isDevelopment: boolean) {
     "manifest-src 'self'",
     "worker-src 'self' blob:",
     `script-src ${scriptSources.join(" ")}`,
-    `style-src 'self' 'unsafe-inline' 'nonce-${nonce}'`,
+    `style-src 'self' 'unsafe-inline'`,
     `connect-src ${connectSources.join(" ")}`,
     ...(isDevelopment ? [] : ["upgrade-insecure-requests"]),
   ];
@@ -197,7 +194,7 @@ function setSecurityHeaders(response: NextResponse, nonce: string, requestId: st
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=()",
+    "camera=(), microphone=(), geolocation=(self)",
   );
   response.headers.set("X-Request-Id", requestId);
   response.headers.set("X-CSP-Nonce", nonce);
