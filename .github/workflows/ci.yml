@@ -71,6 +71,18 @@ jobs:
       - name: E2E smoke tests
         run: pnpm test:e2e
 
+      - name: API contract tests
+        run: pnpm --filter @internal-toolkit/web test:api
+
+      - name: A11y scan (HTML pages)
+        run: pnpm --filter @internal-toolkit/web test:a11y
+        continue-on-error: true
+
+      - name: Diagnostics full scan
+        if: github.event_name == 'pull_request'
+        run: pnpm --filter @internal-toolkit/web test:full-scan
+        continue-on-error: true
+
       - name: Build
         run: pnpm build
 
@@ -83,5 +95,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
-          path: apps/web/test-results/
+          path: |
+            apps/web/test-results/
           retention-days: 7
+
+      - name: Upload full-scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-scan-report
+          path: |
+            apps/web/test-results/full-scan-report.json
+            apps/web/test-results/a11y-*.png
+          retention-days: 7
+          if-no-files-found: ignore
