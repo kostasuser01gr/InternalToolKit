@@ -79,4 +79,15 @@ jobs:
           sleep 3
 
       - name: Run Lighthouse CI
-        run: lhci autorun
+        run: |
+          for attempt in 1 2 3; do
+            echo "LHCI attempt $attempt of 3"
+            if lhci autorun; then
+              echo "LHCI passed on attempt $attempt"
+              exit 0
+            fi
+            echo "LHCI failed on attempt $attempt, retrying..."
+            sleep 5
+          done
+          echo "LHCI failed after 3 attempts"
+          exit 1

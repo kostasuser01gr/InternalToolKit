@@ -13,7 +13,7 @@ module.exports = {
       numberOfRuns: 3,
       settings: {
         preset: "desktop",
-        chromeFlags: "--no-sandbox --headless --disable-dev-shm-usage --disable-gpu",
+        chromeFlags: "--no-sandbox --headless --disable-dev-shm-usage --disable-gpu --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding",
         maxWaitForLoad: 45000,
       },
     },
