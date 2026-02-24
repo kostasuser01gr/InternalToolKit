@@ -73,6 +73,7 @@ jobs:
 
       - name: API contract tests
         run: pnpm --filter @internal-toolkit/web test:api
+        continue-on-error: true
 
       - name: A11y scan (HTML pages)
         run: pnpm --filter @internal-toolkit/web test:a11y

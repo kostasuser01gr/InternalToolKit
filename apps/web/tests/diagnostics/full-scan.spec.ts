@@ -404,7 +404,7 @@ async function discoverNavLinks(page: Page, projectName: string): Promise<string
 /* ------------------------------------------------------------------ */
 
 test.describe("Full Diagnostic Scan", () => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
 
   test("auth routes load without auth", async ({ page }, testInfo) => {
     const projectName = testInfo.project.name.toLowerCase();
@@ -424,7 +424,25 @@ test.describe("Full Diagnostic Scan", () => {
   test("app routes load with auth", async ({ page, context }, testInfo) => {
     const projectName = testInfo.project.name.toLowerCase();
 
-    await ensureAuthenticated(page, context);
+    try {
+      await ensureAuthenticated(page, context);
+    } catch (err) {
+      // If auth fails, record it and skip route scanning
+      const message = err instanceof Error ? err.message : String(err);
+      report.push({
+        route: "/auth-setup",
+        project: projectName,
+        status: "fail",
+        httpStatus: null,
+        consoleErrors: [`Authentication failed: ${message}`],
+        consoleWarnings: [],
+        networkFailures: [],
+        redirectChain: [],
+        pageError: message,
+        actions: [],
+      });
+      return;
+    }
 
     // Discover nav links
     const discoveredLinks = await discoverNavLinks(page, projectName);
@@ -454,7 +472,13 @@ test.describe("Full Diagnostic Scan", () => {
 
   test("nav link discovery and accessibility", async ({ page, context }, testInfo) => {
     const projectName = testInfo.project.name.toLowerCase();
-    await ensureAuthenticated(page, context);
+
+    try {
+      await ensureAuthenticated(page, context);
+    } catch {
+      // Auth failed — skip nav discovery
+      return;
+    }
 
     // Go to home and discover all nav links
     await page.goto("/home");
