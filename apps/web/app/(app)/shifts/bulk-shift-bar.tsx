@@ -1,6 +1,7 @@
 "use client";
 
 import { ShiftStatus } from "@prisma/client";
+import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 
@@ -191,7 +192,7 @@ export function BulkShiftBar({ shifts, workspaceId, canWrite }: BulkShiftBarProp
                   <StatusChip status={shift.status} />
                 </td>
                 <td className="px-3 py-2 text-xs text-[var(--text-muted)] tabular-nums">
-                  {new Date(shift.startsAt).toLocaleDateString()} {new Date(shift.startsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  {format(new Date(shift.startsAt), "dd/MM/yyyy HH:mm")}
                 </td>
               </tr>
             ))}

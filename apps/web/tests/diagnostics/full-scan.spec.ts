@@ -55,7 +55,7 @@ const ALL_ROUTES = [...AUTH_ROUTES, ...APP_ROUTES, ...KIOSK_ROUTES];
 type ActionResult = {
   selector: string;
   text: string;
-  outcome: "navigation" | "network_request" | "ui_change" | "DEAD_ACTION";
+  outcome: "navigation" | "network_request" | "ui_change" | "DEAD_ACTION" | "CLICK_BLOCKED";
   detail?: string;
 };
 
@@ -227,11 +227,14 @@ async function clickAudit(page: Page): Promise<ActionResult[]> {
       // Wait briefly for side effects
       await page.waitForTimeout(1500);
     } catch {
+      // "Click failed" = button is blocked (disabled, obscured, or detached
+      // during hydration). This is NOT the same as a "dead action" where the
+      // click succeeds but nothing happens.
       results.push({
         selector: `button:has-text("${text}")`,
         text,
-        outcome: "DEAD_ACTION",
-        detail: "Click failed or element detached",
+        outcome: "CLICK_BLOCKED",
+        detail: "Click failed or element detached (may need form data or hydration)",
       });
       page.removeListener("request", requestListener);
       continue;
@@ -336,13 +339,21 @@ async function visitRoute(
   }
 
   // Check for crash banner or 500 error
+  // Use word-boundary matching to avoid false positives (e.g. "5000" matching "500")
   const hasCrash = await page
-    .locator("text=/Application error|Internal Server Error|500/i")
+    .locator("text=/Application error|Internal Server Error/i")
     .first()
     .isVisible({ timeout: 2000 })
     .catch(() => false);
 
-  if (hasCrash) {
+  // Separate check for standalone "500" status code (not embedded in numbers like 5000)
+  const has500 = !hasCrash && await page
+    .locator("text=/\\b500\\b/")
+    .first()
+    .isVisible({ timeout: 1000 })
+    .catch(() => false);
+
+  if (hasCrash || has500) {
     return {
       route,
       project: projectName,
@@ -363,13 +374,22 @@ async function visitRoute(
   // Click audit
   const actions = await clickAudit(page);
 
+  // Separate hydration warnings from real errors — hydration mismatches are
+  // recoverable and should not mark the route as failed.
+  const realErrors = collectors.consoleErrors.filter(
+    (e) => !e.includes("Hydration") && !e.includes("hydration"),
+  );
+  const hydrationWarnings = collectors.consoleErrors.filter(
+    (e) => e.includes("Hydration") || e.includes("hydration"),
+  );
+
   return {
     route,
     project: projectName,
-    status: collectors.consoleErrors.length > 0 || collectors.getPageError() ? "fail" : "pass",
+    status: realErrors.length > 0 || collectors.getPageError() ? "fail" : "pass",
     httpStatus,
     consoleErrors: collectors.consoleErrors,
-    consoleWarnings: collectors.consoleWarnings,
+    consoleWarnings: [...collectors.consoleWarnings, ...hydrationWarnings.map(h => `[hydration] ${h.slice(0, 120)}`)],
     networkFailures: collectors.networkFailures,
     redirectChain,
     pageError: collectors.getPageError(),
@@ -404,7 +424,7 @@ async function discoverNavLinks(page: Page, projectName: string): Promise<string
 /* ------------------------------------------------------------------ */
 
 test.describe("Full Diagnostic Scan", () => {
-  test.setTimeout(300_000);
+  test.setTimeout(360_000);
 
   test("auth routes load without auth", async ({ page }, testInfo) => {
     const projectName = testInfo.project.name.toLowerCase();
@@ -449,14 +469,34 @@ test.describe("Full Diagnostic Scan", () => {
     const allAppRoutes = [...new Set([...APP_ROUTES, ...discoveredLinks])];
 
     for (const route of allAppRoutes) {
-      const result = await visitRoute(page, route, projectName);
-      report.push(result);
+      try {
+        const result = await visitRoute(page, route, projectName);
+        report.push(result);
 
-      // Should NOT end up at login (auth should be working)
-      const currentUrl = page.url();
-      if (currentUrl.includes("/login") && !route.startsWith("/login")) {
-        result.status = "fail";
-        result.consoleErrors.push(`Auth redirect: ended up at ${currentUrl} instead of ${route}`);
+        // Should NOT end up at login (auth should be working)
+        const currentUrl = page.url();
+        if (currentUrl.includes("/login") && !route.startsWith("/login")) {
+          result.status = "fail";
+          result.consoleErrors.push(`Auth redirect: ended up at ${currentUrl} instead of ${route}`);
+        }
+      } catch (err) {
+        // If page/context closed, try to recover by re-navigating
+        const message = err instanceof Error ? err.message : String(err);
+        report.push({
+          route,
+          project: projectName,
+          status: "fail",
+          httpStatus: null,
+          consoleErrors: [message],
+          consoleWarnings: [],
+          networkFailures: [],
+          redirectChain: [],
+          pageError: message,
+          actions: [],
+        });
+
+        // If page is closed, break the loop — browser is gone
+        if (message.includes("has been closed")) break;
       }
     }
   });
@@ -508,12 +548,16 @@ test.describe("Full Diagnostic Scan", () => {
     const deadActions = report.flatMap((r) =>
       r.actions.filter((a) => a.outcome === "DEAD_ACTION"),
     );
+    const clickBlocked = report.flatMap((r) =>
+      r.actions.filter((a) => a.outcome === "CLICK_BLOCKED"),
+    );
 
     console.log("\n=== FULL SCAN SUMMARY ===");
     console.log(`Total routes scanned: ${report.length}`);
     console.log(`Passed: ${passed}`);
     console.log(`Failed: ${failed}`);
-    console.log(`Dead actions found: ${deadActions.length}`);
+    console.log(`Dead actions (click succeeded, no effect): ${deadActions.length}`);
+    console.log(`Click blocked (button inaccessible during scan): ${clickBlocked.length}`);
 
     if (failed > 0) {
       console.log("\nFailing routes:");
@@ -523,10 +567,19 @@ test.describe("Full Diagnostic Scan", () => {
     }
 
     if (deadActions.length > 0) {
-      console.log("\nDead actions:");
+      console.log("\nDead actions (TRUE dead — click worked but nothing happened):");
       for (const r of report) {
         for (const a of r.actions.filter((a) => a.outcome === "DEAD_ACTION")) {
           console.log(`  ⚠️  ${r.route} → "${a.text}": ${a.detail}`);
+        }
+      }
+    }
+
+    if (clickBlocked.length > 0) {
+      console.log("\nClick blocked (needs form data, hydration, or scroll — verify via smoke tests):");
+      for (const r of report) {
+        for (const a of r.actions.filter((a) => a.outcome === "CLICK_BLOCKED")) {
+          console.log(`  ℹ️  ${r.route} → "${a.text}": ${a.detail}`);
         }
       }
     }

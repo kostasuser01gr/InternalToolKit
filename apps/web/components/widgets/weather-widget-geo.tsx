@@ -82,11 +82,23 @@ function setCachedData(data: WeatherPayload) {
  * Strategy: Geo → station fallback → cached data → "unavailable".
  */
 export function WeatherWidgetGeo({ stationId }: { stationId?: string | undefined }) {
-  const [weather, setWeather] = useState<WeatherPayload | null>(getCachedData);
+  const [weather, setWeather] = useState<WeatherPayload | null>(null);
   const [stale, setStale] = useState(false);
-  const [loading, setLoading] = useState(!weather);
+  const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  // Hydrate from sessionStorage cache after mount to avoid SSR mismatch
+  useEffect(() => {
+    const cached = getCachedData();
+    if (cached) {
+      setWeather(cached);
+      setLoading(false);
+    }
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
+    if (!mounted) return;
     let cancelled = false;
 
     async function fetchWithCoords(lat?: number, lon?: number) {
@@ -141,7 +153,7 @@ export function WeatherWidgetGeo({ stationId }: { stationId?: string | undefined
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stationId]);
+  }, [stationId, mounted]);
 
   if (loading && !weather) {
     return (
