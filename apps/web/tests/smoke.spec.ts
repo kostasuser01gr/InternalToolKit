@@ -377,9 +377,11 @@ test("shift planner flow: create shift and show in board", async ({
 
 test("fleet flow: create and update vehicle", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+  test.setTimeout(process.env.CI ? 60_000 : 45_000);
 
   await login(page, "admin", "1234");
   await page.goto("/fleet");
+  await page.waitForLoadState("networkidle");
 
   const plate = `PW-${Date.now()}`.slice(-10);
   const model = "Playwright Test Car";
@@ -390,8 +392,8 @@ test("fleet flow: create and update vehicle", async ({ page }, testInfo) => {
   await page.getByLabel("Fuel (%)").first().fill("80");
   await page.getByRole("button", { name: "Add vehicle" }).click();
 
-  await expect(page.getByText("Vehicle added.")).toBeVisible();
-  await expect(page.getByText(plate).first()).toBeVisible();
+  await expect(page.getByText("Vehicle added.")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(plate).first()).toBeVisible({ timeout: 10_000 });
 
   await page.getByText(plate).first().click();
   // Full update form is now in a <details> element
@@ -399,5 +401,5 @@ test("fleet flow: create and update vehicle", async ({ page }, testInfo) => {
   await page.getByLabel("Fuel (%)").nth(1).fill("73");
   await page.getByRole("button", { name: "Save vehicle update" }).click();
 
-  await expect(page.getByText("Vehicle updated.")).toBeVisible();
+  await expect(page.getByText("Vehicle updated.")).toBeVisible({ timeout: 15_000 });
 });

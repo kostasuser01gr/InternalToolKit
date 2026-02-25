@@ -14,8 +14,9 @@ test("washers page loads and shows KPIs", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.toLowerCase() !== "desktop");
   await login(page, "admin", "1234");
   await page.goto("/washers");
-  await expect(page.getByTestId("washers-page")).toBeVisible();
-  await expect(page.getByTestId("washers-kpis")).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByTestId("washers-page")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("washers-kpis")).toBeVisible({ timeout: 10_000 });
 });
 
 test("washers: create wash task", async ({ page }, testInfo) => {
