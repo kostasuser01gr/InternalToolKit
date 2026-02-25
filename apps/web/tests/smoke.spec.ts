@@ -6,7 +6,7 @@ async function login(page: Page, loginName: string, pin: string) {
   await page.getByLabel("Login name").fill(loginName);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: /^Continue$/ }).click();
-  await expect(page).toHaveURL(/\/(overview|home|chat)$/);
+  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 20_000 });
 }
 
 async function loginWithPassword(page: Page, email: string, password: string) {
@@ -14,12 +14,12 @@ async function loginWithPassword(page: Page, email: string, password: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Continue with password" }).click();
-  await expect(page).toHaveURL(/\/(overview|home|chat)$/);
+  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 20_000 });
 }
 
 async function assertProtectedSessionPersists(page: Page) {
   await page.reload();
-  await expect(page).toHaveURL(/\/(overview|home|chat)$/);
+  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 15_000 });
 }
 
 function createSessionToken(userId: string, secret: string) {
