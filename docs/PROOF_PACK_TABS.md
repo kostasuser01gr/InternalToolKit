@@ -14,6 +14,7 @@ Verify all tabs/routes work without 500 errors, redirect loops, or dead action b
 | 4 | `tests/diagnostics/full-scan.spec.ts` | Hydration warnings marking routes as failed | Separate hydration from real errors |
 | 5 | `tests/diagnostics/full-scan.spec.ts` | Browser crash on route scan error | Try-catch per route |
 | 6 | `tests/diagnostics/full-scan.spec.ts` | Form buttons classified as DEAD_ACTION | New CLICK_BLOCKED category |
+| 7 | `tests/smoke.spec.ts` | Command palette test flaky in CI | Harden timing: waitFor, blur, delays |
 
 ## Full Scan Results — AFTER fixes
 
@@ -77,13 +78,15 @@ full-scan.spec.ts → 4/4 passed per viewport (Desktop, Tablet, Mobile)
 | /admin | ✅ (false positive fix applied) |
 | /ops-inbox | ✅ |
 
-## CI Workflows (pre-push baseline)
+## CI Workflows — Final GREEN Run
 
 | Run ID | Workflow | Status |
 |--------|----------|--------|
-| 22360427508 | CodeQL | ✅ |
-| 22360427477 | Lighthouse CI | ✅ |
-| 22360419925 | CI | ✅ |
+| 22393148854 | CI | ✅ Pass (14m7s) |
+| 22393148829 | CodeQL | ✅ Pass (1m43s) |
+| 22393148872 | Lighthouse CI | ✅ Pass (5m15s) |
+
+All steps passing: Lint ✅ Typecheck ✅ Unit Tests ✅ E2E Smoke ✅ API Contracts ✅ A11y ✅ Build ✅ Dependency Audit ✅
 
 ## Dead Action Analysis
 
