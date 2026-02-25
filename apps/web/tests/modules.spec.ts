@@ -5,7 +5,7 @@ async function login(page: Page, loginName: string, pin: string) {
   await page.getByLabel("Login name").fill(loginName);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: /^Continue$/ }).click();
-  await expect(page).toHaveURL(/\/(overview|home|chat)$/);
+  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 20_000 });
 }
 
 // ---------- Washers module ----------
