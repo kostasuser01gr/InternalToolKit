@@ -62,7 +62,17 @@ jobs:
         run: pnpm build
 
       - name: Install LHCI
-        run: npm install -g @lhci/cli@0.14.x
+        run: |
+          for attempt in 1 2 3; do
+            echo "Install attempt $attempt (npm)"
+            npm install -g @lhci/cli@0.14.x && exit 0
+            echo "npm attempt $attempt failed, trying pnpm..."
+            pnpm add -g @lhci/cli@0.14.x && exit 0
+            echo "Attempt $attempt failed, retrying in 15s..."
+            sleep 15
+          done
+          echo "Failed to install @lhci/cli after 3 attempts"
+          exit 1
 
       - name: Verify login page serves HTML
         run: |
