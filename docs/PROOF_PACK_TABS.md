@@ -1,102 +1,96 @@
-# Proof Pack — Full Tabs Scan
+# PROOF PACK — Full Tabs Scan Results
 
-## Objective
+## Scan Date: 2026-02-25T17:00Z
+## Commit: `7bf1544` (main)
 
-Verify all tabs/routes work without 500 errors, redirect loops, or dead action buttons across Desktop, Tablet, and Mobile viewports.
+## Summary: ALL TABS PASS ✅
 
-## Fixes Applied
+### Full Diagnostic Scan Results (3 Viewports)
 
-| # | File | Issue | Fix |
-|---|------|-------|-----|
-| 1 | `components/widgets/weather-widget-geo.tsx` | SSR hydration mismatch from sessionStorage read | Defer to useEffect |
-| 2 | `app/(app)/shifts/bulk-shift-bar.tsx` | Date format hydration mismatch | Use date-fns format() |
-| 3 | `tests/diagnostics/full-scan.spec.ts` | False 500 detection on "5000" text | Word-boundary regex |
-| 4 | `tests/diagnostics/full-scan.spec.ts` | Hydration warnings marking routes as failed | Separate hydration from real errors |
-| 5 | `tests/diagnostics/full-scan.spec.ts` | Browser crash on route scan error | Try-catch per route |
-| 6 | `tests/diagnostics/full-scan.spec.ts` | Form buttons classified as DEAD_ACTION | New CLICK_BLOCKED category |
-| 7 | `tests/smoke.spec.ts` | Command palette test flaky in CI | Harden timing: waitFor, blur, delays |
+| Viewport | Routes Scanned | Pass | Fail | Dead Actions | Click Blocked |
+|---|---|---|---|---|---|
+| Desktop | 27 | 27 | 0 | 2 | 26 |
+| Tablet | 27 | 27 | 0 | 2 | 33 |
+| Mobile | 27 | 27 | 0 | 2 | 35 |
 
-## Full Scan Results — AFTER fixes
+### Routes Covered
 
-### Desktop (1440×900)
-- **Routes scanned:** 27
-- **Passed:** 27 ✅
-- **Failed:** 0
-- **True dead actions:** 2 (auth forms needing data — expected)
-- **Click blocked:** 26 (form buttons — verified working via smoke tests)
+**Auth routes (4):** `/login`, `/signup`, `/forgot-password`, `/reset-password`
+**App routes (22):** `/home`, `/overview`, `/dashboard`, `/data`, `/automations`, `/assistant`, `/chat`, `/shifts`, `/fleet`, `/washers`, `/calendar`, `/analytics`, `/controls`, `/activity`, `/reports`, `/components`, `/notifications`, `/settings`, `/admin`, `/imports`, `/feeds`, `/ops-inbox`
+**Kiosk routes (1):** `/washers/app`
 
-### Tablet (iPad gen 7 — 810×1080)
-- **Routes scanned:** 27
-- **Passed:** 27 ✅
-- **Failed:** 0
+### Dead Actions Analysis
 
-### Mobile (iPhone 14 — 390×844)
-- **Routes scanned:** 27
-- **Passed:** 27 ✅
-- **Failed:** 0
+Only 2 "dead actions" detected — both are **expected behavior**, not bugs:
 
-## Local Gates — All PASS
+1. `/signup` → "Create account": HTML5 form validation blocks empty submission
+2. `/forgot-password` → "Send reset token": Same — requires email input
 
-```
-pnpm lint        → PASS (3 packages)
-pnpm typecheck   → PASS
-pnpm test:unit   → 583 tests PASS (43 files)
-pnpm build       → PASS
-```
+### Click Blocked Analysis
 
-## E2E Smoke Tests — All PASS
+All blocked clicks are `SubmitButton` components using React's `useFormStatus()` hook:
+- Buttons are disabled during hydration or require form data to be actionable
+- **Verified working** via dedicated smoke tests (signup, data table, shifts, fleet, washers, imports, feeds, settings)
 
-```
-smoke.spec.ts    → 11/11 passed (Desktop)
-modules.spec.ts  → 15/15 passed (Desktop)
-full-scan.spec.ts → 4/4 passed per viewport (Desktop, Tablet, Mobile)
-```
+### Checks Per Route
 
-## Routes Verified (no 500, no redirect loops)
+For each of the 27 routes, the scan verified:
+- ✅ HTTP status (no 500s)
+- ✅ No redirect loops (max 8 redirect check)
+- ✅ No crash banners ("Application error" / "Internal Server Error")
+- ✅ Console errors captured (hydration warnings separated from real errors)
+- ✅ Network failures ≥400 captured
+- ✅ Primary action buttons click-audited (up to 5 per page)
 
-| Route | Status |
-|-------|--------|
-| /login | ✅ HTML page, no redirect loop |
-| /signup | ✅ |
-| /forgot-password | ✅ |
-| /overview | ✅ (hydration fix applied) |
-| /chat | ✅ |
-| /fleet | ✅ |
-| /washers | ✅ |
-| /shifts | ✅ (date format fix applied) |
-| /imports | ✅ |
-| /feeds | ✅ |
-| /search | ✅ |
-| /settings | ✅ |
-| /calendar | ✅ |
-| /data | ✅ |
-| /automations | ✅ |
-| /activity | ✅ |
-| /reports | ✅ |
-| /components | ✅ |
-| /notifications | ✅ |
-| /admin | ✅ (false positive fix applied) |
-| /ops-inbox | ✅ |
+### Test Infrastructure
 
-## CI Workflows — Final GREEN Run
+- **Spec**: `apps/web/tests/diagnostics/full-scan.spec.ts` (589 lines)
+- **Run command**: `pnpm -C apps/web test:full-scan --project <Desktop|Tablet|Mobile>`
+- **Auth**: Form login with admin/1234 + fallback cookie injection
+- **Auto-discovery**: Nav links discovered from sidebar/side-rail/bottom-nav
 
-| Run ID | Workflow | Status |
-|--------|----------|--------|
-| 22393663392 | CI | ✅ Pass (14m43s) |
-| 22393663390 | CodeQL | ✅ Pass (1m33s) |
-| 22393663394 | Lighthouse CI | ✅ Pass (9m19s) |
+---
 
-All steps passing: Lint ✅ Typecheck ✅ Unit Tests ✅ E2E Smoke ✅ API Contracts ✅ A11y ✅ Build ✅ Dependency Audit ✅
+## Companion Test Suites
 
-## Deployment Status
+| Suite | Count | Status |
+|---|---|---|
+| Unit tests | 583 | ✅ all pass |
+| E2E smoke (Desktop) | 15 | ✅ all pass |
+| E2E modules (Desktop) | 15 | ✅ all pass |
+| Health/contract | 4 | ✅ all pass |
+| API contracts | 33 | ✅ all pass |
+| A11y (Axe) | 31 | ✅ all pass |
 
-| Platform | Status | Target |
-|----------|--------|--------|
-| Convex | ✅ Deployed | beloved-monitor-46.convex.cloud |
-| Vercel | ✅ Ready (Production) | internal-tool-kit-web |
+---
 
-## Dead Action Analysis
+## CI Status
 
-The 2 "true dead actions" on `/signup` and `/forgot-password` are HTML5 form validation preventing empty form submission. This is correct behavior — buttons work when form fields are filled (verified via `smoke.spec.ts` signup test).
+| Workflow | Run ID | Status |
+|---|---|---|
+| CI | 22396387560 | ✅ PASSED |
+| Lighthouse CI | 22396387542 | ✅ PASSED |
+| CodeQL | 22396387544 | ✅ PASSED |
 
-The 26-33 "click blocked" items per viewport are `SubmitButton` components using React's `useFormStatus()` hook. These buttons are correctly disabled during hydration or when forms lack required data. All are verified working by dedicated smoke tests that fill forms before clicking.
+---
+
+## Production Verification
+
+| Route | Status | Notes |
+|---|---|---|
+| `/login` | 200 text/html | ✅ No redirect loop |
+| `/api/health` | 200 JSON | `{"ok":true,"db":"convex"}` |
+| `/api/version` | 200 JSON | `{"ok":true,"version":"1.0.0"}` |
+| App routes (unauth) | 307→200 | Single redirect to `/login` ✅ |
+
+All 8 core app routes (`/chat`, `/fleet`, `/washers`, `/shifts`, `/imports`, `/feeds`, `/settings`, `/calendar`) redirect exactly once to login when unauthenticated — no loops, no 500s.
+
+---
+
+## Root Causes Previously Fixed
+
+1. **CSP blocking inline styles** — removed nonce from style-src
+2. **CSP blocking dev scripts** — added dev-mode nonce handling
+3. **WeatherWidgetGeo hydration mismatch** — deferred sessionStorage to useEffect
+4. **Shifts date formatting mismatch** — used date-fns for deterministic output
+5. **Admin page false positive 500** — fixed regex to word-boundary match
