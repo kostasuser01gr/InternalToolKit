@@ -252,13 +252,23 @@ test("command palette opens and navigates", async ({ page }, testInfo) => {
   // Wait for search results to appear before clicking
   const analyticsBtn = palette.getByRole("button", { name: /^Go to Analytics/ }).first();
   await analyticsBtn.waitFor({ state: "visible", timeout: 5000 });
-  await analyticsBtn.click();
-  await expect(page).toHaveURL(/\/analytics$/, { timeout: 15000 });
+  // Wait an extra moment for React event handlers to attach
+  await page.waitForTimeout(300);
+  await Promise.all([
+    page.waitForURL(/\/analytics$/, { timeout: 15000 }),
+    analyticsBtn.click(),
+  ]);
 
-  // Wait for navigation to settle before keyboard shortcut
-  await page.waitForLoadState("domcontentloaded");
+  // Wait for analytics page to fully load and hydrate before keyboard shortcut
+  await page.waitForLoadState("networkidle");
+  // Blur any focused input so keyboard shortcuts aren't blocked by typing guard
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
   await page.waitForTimeout(500);
   await page.keyboard.press("g");
+  // Small delay between keys to ensure sequence handler picks them up
+  await page.waitForTimeout(200);
   await page.keyboard.press("d");
   await expect(page).toHaveURL(/\/(dashboard|overview)$/, { timeout: 15000 });
 });
