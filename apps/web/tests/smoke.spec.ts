@@ -249,9 +249,15 @@ test("command palette opens and navigates", async ({ page }, testInfo) => {
   await expect(palette).toBeVisible();
 
   await page.getByLabel("Search commands").fill("go to analytics");
-  await palette.getByRole("button", { name: /^Go to Analytics/ }).first().click();
+  // Wait for search results to appear before clicking
+  const analyticsBtn = palette.getByRole("button", { name: /^Go to Analytics/ }).first();
+  await analyticsBtn.waitFor({ state: "visible", timeout: 5000 });
+  await analyticsBtn.click();
   await expect(page).toHaveURL(/\/analytics$/, { timeout: 15000 });
 
+  // Wait for navigation to settle before keyboard shortcut
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForTimeout(500);
   await page.keyboard.press("g");
   await page.keyboard.press("d");
   await expect(page).toHaveURL(/\/(dashboard|overview)$/, { timeout: 15000 });
