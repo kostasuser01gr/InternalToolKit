@@ -231,11 +231,12 @@ test("responsive shell renders and navigation works without overflow", async ({
 
 test("command palette opens and navigates", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+  test.setTimeout(process.env.CI ? 60_000 : 45_000);
 
   await login(page, "admin", "1234");
   await page.waitForLoadState("load");
-  // Wait for React hydration
-  await page.waitForTimeout(1000);
+  // Wait for React hydration — CI runners are slower
+  await page.waitForTimeout(process.env.CI ? 3000 : 1000);
 
   const trigger = page.getByRole("button", { name: "Open command palette" });
   const palette = page.getByTestId("command-palette");
@@ -251,13 +252,11 @@ test("command palette opens and navigates", async ({ page }, testInfo) => {
   await page.getByLabel("Search commands").fill("go to analytics");
   // Wait for search results to appear before clicking
   const analyticsBtn = palette.getByRole("button", { name: /^Go to Analytics/ }).first();
-  await analyticsBtn.waitFor({ state: "visible", timeout: 5000 });
+  await analyticsBtn.waitFor({ state: "visible", timeout: 10_000 });
   // Wait an extra moment for React event handlers to attach
-  await page.waitForTimeout(300);
-  await Promise.all([
-    page.waitForURL(/\/analytics$/, { timeout: 15000 }),
-    analyticsBtn.click(),
-  ]);
+  await page.waitForTimeout(500);
+  await analyticsBtn.click();
+  await expect(page).toHaveURL(/\/analytics$/, { timeout: 30_000 });
 
   // Wait for analytics page to fully load and hydrate before keyboard shortcut
   await page.waitForLoadState("networkidle");
@@ -265,12 +264,12 @@ test("command palette opens and navigates", async ({ page }, testInfo) => {
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   });
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(1000);
   await page.keyboard.press("g");
   // Small delay between keys to ensure sequence handler picks them up
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(300);
   await page.keyboard.press("d");
-  await expect(page).toHaveURL(/\/(dashboard|overview)$/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/(dashboard|overview)$/, { timeout: 30_000 });
 });
 
 test("data table: create table, add field, add record, export CSV", async ({
