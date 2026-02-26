@@ -179,7 +179,11 @@ export async function fetchFeedRaw(
     headers["If-None-Match"] = lastEtag;
   }
 
-  const res = await fetch(url, { headers, next: { revalidate: 600 } });
+  const res = await fetch(url, { 
+    headers, 
+    next: { revalidate: 600 },
+    signal: AbortSignal.timeout(10000), // 10s timeout
+  });
 
   if (res.status === 304) {
     return { xml: "", etag: lastEtag ?? null, notModified: true };

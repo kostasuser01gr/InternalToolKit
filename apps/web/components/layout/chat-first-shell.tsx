@@ -427,7 +427,10 @@ function ChatFirstShell({
       </div>
 
       {/* ── Mobile Bottom Nav ── */}
-      <nav className="safe-pb fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--border)] bg-[rgb(6_7_12_/_0.92)] backdrop-blur-xl lg:hidden">
+      <nav
+        data-testid="bottom-nav"
+        className="safe-pb fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--border)] bg-[rgb(6_7_12_/_0.92)] backdrop-blur-xl lg:hidden"
+      >
         <div className="mx-auto flex h-14 max-w-md items-center justify-around px-2">
           <Link
             href="/chat"
