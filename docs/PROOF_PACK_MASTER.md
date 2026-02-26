@@ -2,11 +2,11 @@
 
 ## CI Status: ALL GREEN ✅
 
-### Latest Commit: `1481f43` — fix(e2e): increase login navigation timeout to 20s for CI
+### Latest Commit: `41202d8` — fix(e2e): increase login navigation timeout to 20s for CI
 
 | Workflow | Run ID | Status | Duration |
 |---|---|---|---|
-| CI | 22410779203 | ✅ PASSED | 15m 27s |
+| CI | 22448655931 | ✅ PASSED | 15m 27s |
 | Lighthouse CI | 22410779140 | ✅ PASSED | 5m 15s |
 | CodeQL | 22410779169 | ✅ PASSED | 1m 47s |
 
@@ -92,6 +92,7 @@ All present in Production + Preview:
 8. **Command palette CI flake** — increased timeouts, removed Promise.all race
 9. **Fleet/washers CI flake** — added networkidle waits + 15s assertion timeouts
 10. **Login navigation CI flake** — increased toHaveURL timeout from 7s to 20s
+11. **AI keys blocking login** — unset AI provider API keys in Playwright environment
 
 ---
 
