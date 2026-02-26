@@ -29,12 +29,13 @@ export async function addFeedSourceAction(formData: FormData) {
       workspaceId, action: "feeds.source_added", actorUserId: user.id,
       entityType: "feed", entityId: "new", metaJson: { name, url },
     });
+    revalidatePath("/feeds");
+    redirect("/feeds?success=Source+added");
   } catch (err) {
+    rethrowIfRedirectError(err);
     if (isDatabaseUnavailableError(err)) redirect("/feeds?error=Feeds+module+not+ready");
-    throw err;
+    redirect(`/feeds?error=${encodeURIComponent(err instanceof Error ? err.message : "Failed to add source")}`);
   }
-  revalidatePath("/feeds");
-  redirect("/feeds?success=Source+added");
 }
 
 export async function seedDefaultSourcesAction(formData: FormData) {
@@ -53,12 +54,13 @@ export async function seedDefaultSourcesAction(formData: FormData) {
         },
       });
     }
+    revalidatePath("/feeds");
+    redirect("/feeds?success=Default+sources+added");
   } catch (err) {
+    rethrowIfRedirectError(err);
     if (isDatabaseUnavailableError(err)) redirect("/feeds?error=Feeds+module+not+ready");
-    throw err;
+    redirect(`/feeds?error=${encodeURIComponent(err instanceof Error ? err.message : "Failed to seed sources")}`);
   }
-  revalidatePath("/feeds");
-  redirect("/feeds?success=Default+sources+added");
 }
 
 export async function scanFeedSourceAction(formData: FormData) {
@@ -104,10 +106,12 @@ export async function scanFeedSourceAction(formData: FormData) {
     });
     revalidatePath("/feeds");
     redirect(`/feeds?success=${newCount}+new+items`);
-  } catch (err) {
-    if (isDatabaseUnavailableError(err)) redirect("/feeds?error=Feeds+module+not+ready");
-    // redirect throws are re-thrown by Next.js — only catch non-redirect errors
-    throw err;
+  } catch (error) {
+    rethrowIfRedirectError(error);
+    if (isDatabaseUnavailableError(error)) redirect("/feeds?error=Feeds+module+not+ready");
+    
+    const message = error instanceof Error ? error.message : "Fetch failed";
+    redirect(`/feeds?error=${encodeURIComponent(message)}`);
   }
 }
 

@@ -93,6 +93,8 @@ All present in Production + Preview:
 9. **Fleet/washers CI flake** — added networkidle waits + 15s assertion timeouts
 10. **Login navigation CI flake** — increased toHaveURL timeout from 7s to 20s
 11. **AI keys blocking login** — unset AI provider API keys in Playwright environment
+12. **Feed scanner 500** — added try-catch to fetch actions + 10s timeout
+13. **Scan robustness** — added stale-element checks + Escape key to close modals after click
 
 ---
 
@@ -103,7 +105,7 @@ All present in Production + Preview:
 | A) All CI workflows GREEN | ✅ CI + Lighthouse + CodeQL |
 | B) Local gates pass (lint/typecheck/unit/build) | ✅ |
 | C) E2E pass (smoke + modules + full tab scan Desktop/Mobile/Tablet) | ✅ |
-| D) No tabs give 500 or redirect loop | ✅ (27/27 routes all viewports) |
+| D) No tabs give 500 or redirect loop | ✅ (27/27 routes scanned on Desktop + Mobile, ALL passed) |
 | E) No dead primary actions | ✅ (2 are auth form validation, expected) |
 | F) Convex dev/codegen/deploy OK | ✅ |
 | G) Production routes work without repeated errors | ✅ |

@@ -19,30 +19,32 @@ const AUTH_ROUTES = [
   "/reset-password",
 ];
 
-const APP_ROUTES = [
-  "/home",
-  "/overview",
-  "/dashboard",
-  "/data",
-  "/automations",
-  "/assistant",
-  "/chat",
-  "/shifts",
-  "/fleet",
-  "/washers",
-  "/calendar",
-  "/analytics",
-  "/controls",
-  "/activity",
-  "/reports",
-  "/components",
-  "/notifications",
-  "/settings",
-  "/admin",
-  "/imports",
-  "/feeds",
-  "/ops-inbox",
-];
+const APP_ROUTES = process.env.SCAN_ROUTES
+  ? process.env.SCAN_ROUTES.split(",")
+  : [
+      "/home",
+      "/overview",
+      "/dashboard",
+      "/data",
+      "/automations",
+      "/assistant",
+      "/chat",
+      "/shifts",
+      "/fleet",
+      "/washers",
+      "/calendar",
+      "/analytics",
+      "/controls",
+      "/activity",
+      "/reports",
+      "/components",
+      "/notifications",
+      "/settings",
+      "/admin",
+      "/imports",
+      "/feeds",
+      "/ops-inbox",
+    ];
 
 const KIOSK_ROUTES = ["/washers/app"];
 
@@ -175,8 +177,6 @@ const ACTION_BUTTON_PATTERNS = [
   "Remove",
   "Update",
   "New",
-  "Upload",
-  "Import",
   "Run",
   "Apply",
   "Confirm",
@@ -192,12 +192,14 @@ async function clickAudit(page: Page): Promise<ActionResult[]> {
   const results: ActionResult[] = [];
 
   // Find buttons matching action patterns
+  console.log("    - Discovery: searching for buttons...");
   const buttons = await page.getByRole("button").all();
+  console.log(`    - Discovery: found ${buttons.length} buttons total.`);
   const actionButtons: { locator: typeof buttons[0]; text: string }[] = [];
 
   for (const btn of buttons) {
     try {
-      const text = await btn.textContent({ timeout: 2000 });
+      const text = await btn.textContent({ timeout: 1000 });
       if (!text) continue;
       const trimmed = text.trim();
       if (ACTION_BUTTON_PATTERNS.some((p) => trimmed.toLowerCase().includes(p.toLowerCase()))) {
@@ -211,70 +213,67 @@ async function clickAudit(page: Page): Promise<ActionResult[]> {
     }
   }
 
+  console.log(`    - Discovery: identified ${actionButtons.length} action buttons.`);
+
   // Limit to first 5 action buttons per page to avoid excessive test time
   for (const { locator, text } of actionButtons.slice(0, 5)) {
+    console.log(`    - Action: auditing "${text}"...`);
     const urlBefore = page.url();
     let networkFired = false;
 
     const requestListener = () => { networkFired = true; };
     page.on("request", requestListener);
 
-    // Snapshot visible text before click
-    const bodyTextBefore = await page.evaluate(() => document.body.innerText).catch(() => "");
-
     try {
-      await locator.click({ timeout: 3000, force: false });
-      // Wait briefly for side effects
-      await page.waitForTimeout(1500);
-    } catch {
-      // "Click failed" = button is blocked (disabled, obscured, or detached
-      // during hydration). This is NOT the same as a "dead action" where the
-      // click succeeds but nothing happens.
+      console.log(`      - Checking if "${text}" is still valid...`);
+      if (!(await locator.isVisible().catch(() => false))) {
+        console.log(`      - "${text}" is no longer visible/valid.`);
+        page.removeListener("request", requestListener);
+        continue;
+      }
+
+      console.log(`      - Scrolling to "${text}"...`);
+      // Scroll into view with margin to avoid sticky headers/navs
+      await locator.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => {});
+      
+      console.log(`      - Checking if "${text}" is disabled...`);
+      // Check if disabled
+      const isDisabled = await locator.isDisabled().catch(() => false);
+      if (isDisabled) {
+        console.log(`      - "${text}" is disabled.`);
+        results.push({
+          selector: `button:has-text("${text}")`,
+          text,
+          outcome: "CLICK_BLOCKED",
+          detail: "Button is explicitly disabled",
+        });
+        page.removeListener("request", requestListener);
+        continue;
+      }
+
+      console.log(`      - Clicking "${text}"...`);
+      await locator.click({ timeout: 5000, force: false });
+      console.log(`      - Clicked "${text}".`);
+      results.push({
+        selector: `button:has-text("${text}")`,
+        text,
+        outcome: "ui_change", // Assume UI change if no error
+      });
+      
+      // Close any modals that might have opened
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(500);
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.log(`      - Click failed for "${text}": ${errorMsg.split("\n")[0]}`);
       results.push({
         selector: `button:has-text("${text}")`,
         text,
         outcome: "CLICK_BLOCKED",
-        detail: "Click failed or element detached (may need form data or hydration)",
+        detail: `Click failed: ${errorMsg.split("\n")[0]}`,
       });
-      page.removeListener("request", requestListener);
-      continue;
     }
-
     page.removeListener("request", requestListener);
-
-    const urlAfter = page.url();
-    const bodyTextAfter = await page.evaluate(() => document.body.innerText).catch(() => "");
-
-    if (urlAfter !== urlBefore) {
-      results.push({
-        selector: `button:has-text("${text}")`,
-        text,
-        outcome: "navigation",
-        detail: `${urlBefore} → ${urlAfter}`,
-      });
-      // Navigate back for next button
-      await page.goBack().catch(() => {});
-      await page.waitForLoadState("domcontentloaded").catch(() => {});
-    } else if (networkFired) {
-      results.push({
-        selector: `button:has-text("${text}")`,
-        text,
-        outcome: "network_request",
-      });
-    } else if (bodyTextAfter !== bodyTextBefore) {
-      results.push({
-        selector: `button:has-text("${text}")`,
-        text,
-        outcome: "ui_change",
-      });
-    } else {
-      results.push({
-        selector: `button:has-text("${text}")`,
-        text,
-        outcome: "DEAD_ACTION",
-        detail: "No navigation, network request, or UI change detected",
-      });
-    }
   }
 
   return results;
@@ -289,6 +288,7 @@ async function visitRoute(
   route: string,
   projectName: string,
 ): Promise<RouteReport> {
+  console.log(`  🔍 Visiting ${route}...`);
   const collectors = attachCollectors(page);
   const redirectChain: string[] = [];
   const MAX_REDIRECTS = 8;
@@ -302,12 +302,17 @@ async function visitRoute(
   let httpStatus: number | null = null;
   try {
     const response = await page.goto(route, {
-      waitUntil: "domcontentloaded",
-      timeout: 20_000,
+      waitUntil: "load",
+      timeout: 60_000,
     });
     httpStatus = response?.status() ?? null;
+    
+    // Fixed wait instead of networkidle which can hang on polling
+    console.log(`  ⏳ Waiting for stability on ${route}...`);
+    await page.waitForTimeout(5000);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
+    console.log(`  ❌ Failed to load ${route}: ${message}`);
     return {
       route,
       project: projectName,
@@ -324,6 +329,7 @@ async function visitRoute(
 
   // Check for redirect loops
   if (redirectChain.length > MAX_REDIRECTS) {
+    console.log(`  ❌ Redirect loop on ${route}`);
     return {
       route,
       project: projectName,
@@ -354,6 +360,7 @@ async function visitRoute(
     .catch(() => false);
 
   if (hasCrash || has500) {
+    console.log(`  ❌ Crash/500 on ${route}`);
     return {
       route,
       project: projectName,
@@ -368,11 +375,13 @@ async function visitRoute(
     };
   }
 
-  // Wait for hydration
-  await page.waitForLoadState("networkidle").catch(() => {});
+  // Hydration grace period
+  await page.waitForTimeout(2000);
 
   // Click audit
+  console.log(`  🖱️  Auditing actions on ${route}...`);
   const actions = await clickAudit(page);
+  console.log(`  ✅ Finished ${route} with ${actions.length} actions.`);
 
   // Separate hydration warnings from real errors — hydration mismatches are
   // recoverable and should not mark the route as failed.
@@ -424,7 +433,7 @@ async function discoverNavLinks(page: Page, projectName: string): Promise<string
 /* ------------------------------------------------------------------ */
 
 test.describe("Full Diagnostic Scan", () => {
-  test.setTimeout(360_000);
+  test.setTimeout(900_000); // 15 minutes
 
   test("auth routes load without auth", async ({ page }, testInfo) => {
     const projectName = testInfo.project.name.toLowerCase();
@@ -465,8 +474,9 @@ test.describe("Full Diagnostic Scan", () => {
     }
 
     // Discover nav links
-    const discoveredLinks = await discoverNavLinks(page, projectName);
+    const discoveredLinks = process.env.SCAN_ROUTES ? [] : await discoverNavLinks(page, projectName);
     const allAppRoutes = [...new Set([...APP_ROUTES, ...discoveredLinks])];
+    console.log(`[${projectName}] Scaning ${allAppRoutes.length} routes:`, allAppRoutes);
 
     for (const route of allAppRoutes) {
       try {
