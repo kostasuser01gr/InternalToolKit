@@ -62,6 +62,11 @@ export default defineConfig({
       NEXT_PUBLIC_FEATURE_COMPONENTS_SHOWROOM: "1",
       NEXT_PUBLIC_FEATURE_REPORTS_PDF: "1",
       NEXT_PUBLIC_FEATURE_WINDOW_CONTROLS_OVERLAY: "0",
+      OPENAI_API_KEY: "",
+      ANTHROPIC_API_KEY: "",
+      GOOGLE_API_KEY: "",
+      COHERE_API_KEY: "",
+      OPENROUTER_API_KEY: "",
     },
   },
 });
