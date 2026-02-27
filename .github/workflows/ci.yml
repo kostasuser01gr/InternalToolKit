@@ -107,6 +107,7 @@ jobs:
           name: full-scan-report
           path: |
             apps/web/test-results/full-scan-report.json
+            apps/web/test-results/a11y-*/error-context.md
             apps/web/test-results/a11y-*.png
           retention-days: 7
           if-no-files-found: ignore

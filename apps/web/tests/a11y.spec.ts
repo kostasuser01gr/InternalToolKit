@@ -1,5 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import fs from "node:fs";
+import pathModule from "node:path";
 
 // Only scan real HTML pages users visit — never JSON API routes.
 const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
@@ -48,7 +50,7 @@ async function loginForA11y(page: Page) {
 for (const path of AUTH_PAGES) {
   test(`accessibility: ${path} has no critical violations`, async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.goto(path);
     await page.waitForLoadState("domcontentloaded");
 
@@ -68,6 +70,17 @@ for (const path of AUTH_PAGES) {
         )
         .join("\n");
       console.log(`Accessibility violations on ${path}:\n${summary}`);
+
+      const reportDir = testInfo.outputPath();
+      if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
+      
+      fs.writeFileSync(
+        pathModule.join(reportDir, "error-context.md"),
+        `# A11y Violations on ${path}\n\n${summary}\n\n## Full Details\n\`\`\`json\n${JSON.stringify(serious, null, 2)}\n\`\`\``
+      );
+      await page.screenshot({
+        path: pathModule.join(reportDir, "screenshot.png"),
+      });
     }
 
     expect(
@@ -115,9 +128,15 @@ for (const path of APP_PAGES) {
         .join("\n");
       console.log(`Accessibility violations on ${path}:\n${summary}`);
 
-      // Take screenshot for evidence
+      const reportDir = testInfo.outputPath();
+      if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
+      
+      fs.writeFileSync(
+        pathModule.join(reportDir, "error-context.md"),
+        `# A11y Violations on ${path}\n\n${summary}\n\n## Full Details\n\`\`\`json\n${JSON.stringify(serious, null, 2)}\n\`\`\``
+      );
       await page.screenshot({
-        path: `test-results/a11y-${path.replace(/\//g, "_")}.png`,
+        path: pathModule.join(reportDir, "screenshot.png"),
       });
     }
 
