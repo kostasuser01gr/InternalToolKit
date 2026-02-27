@@ -1,0 +1,24 @@
+{
+  "ci": {
+    "collect": {
+      "numberOfRuns": 1,
+      "startServerCommand": "pnpm --filter @internal-toolkit/web start --port 4174",
+      "url": ["http://localhost:4174/login", "http://localhost:4174/"],
+      "settings": {
+        "chromeFlags": "--no-sandbox --headless=new"
+      }
+    },
+    "upload": {
+      "target": "temporary-public-storage"
+    },
+    "assert": {
+      "preset": "lighthouse:no-pwa",
+      "assertions": {
+        "dom-size": "off",
+        "no-document-write": "off",
+        "uses-responsive-images": "off",
+        "csp-xss": "off"
+      }
+    }
+  }
+}

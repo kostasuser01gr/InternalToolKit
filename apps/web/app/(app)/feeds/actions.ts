@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { getAppContext } from "@/lib/app-context";
 import { appendAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
+import { rethrowIfRedirectError } from "@/lib/redirect-error";
 import {
   fetchFeedRaw,
   parseRssFeed,
