@@ -218,10 +218,8 @@ async function clickAudit(page: Page): Promise<ActionResult[]> {
   // Limit to first 5 action buttons per page to avoid excessive test time
   for (const { locator, text } of actionButtons.slice(0, 5)) {
     console.log(`    - Action: auditing "${text}"...`);
-    const urlBefore = page.url();
-    let networkFired = false;
 
-    const requestListener = () => { networkFired = true; };
+    const requestListener = () => { };
     page.on("request", requestListener);
 
     try {

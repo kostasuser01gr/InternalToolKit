@@ -53,7 +53,7 @@ export function NotificationsList({ notifications }: { notifications: Notificati
               <p className="text-xs text-[var(--text-muted)]">
                 {notification.body}
               </p>
-              <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]" suppressHydrationWarning>
                 {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
               </p>
             </div>
