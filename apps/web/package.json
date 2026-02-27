@@ -19,6 +19,7 @@
     "test:full-scan": "pnpm db:reset && playwright test tests/diagnostics/full-scan.spec.ts",
     "test:a11y": "playwright test tests/a11y.spec.ts",
     "test:api": "playwright test tests/api-contracts.spec.ts",
+    "lhci": "lhci autorun --config=../../.lighthouserc.json",
     "test:ui": "playwright test --ui",
     "prisma:generate": "prisma generate",
     "db:generate": "prisma generate",
@@ -70,6 +71,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",
+    "@lhci/cli": "0.14.0",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.1.14",
     "@types/node": "^22.18.10",
