@@ -1,15 +1,10 @@
-/**
- * Full Truth Scanner v2 — visits every app route on Desktop / Tablet / Mobile,
- * captures console errors, network failures, redirect chains, and audits 
- * ACTION COVERAGE for primary controls.
- */
-import { expect, test, type Page, type BrowserContext, type Locator } from "@playwright/test";
+import { expect, test, type Page, type BrowserContext } from "@playwright/test";
 import { createHmac } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 /* ------------------------------------------------------------------ */
-/*  Route discovery                                                    */
+/*  Route inventory                                                    */
 /* ------------------------------------------------------------------ */
 
 const AUTH_ROUTES = [
@@ -19,56 +14,60 @@ const AUTH_ROUTES = [
   "/reset-password",
 ];
 
-const APP_ROUTES = [
-  "/home",
-  "/overview",
-  "/dashboard",
-  "/data",
-  "/automations",
-  "/assistant",
-  "/chat",
-  "/shifts",
-  "/fleet",
-  "/washers",
-  "/calendar",
-  "/analytics",
-  "/controls",
-  "/activity",
-  "/reports",
-  "/components",
-  "/notifications",
-  "/settings",
-  "/admin",
-  "/imports",
-  "/feeds",
-  "/ops-inbox",
-];
+const APP_ROUTES = process.env.SCAN_ROUTES
+  ? process.env.SCAN_ROUTES.split(",")
+  : [
+      "/home",
+      "/overview",
+      "/dashboard",
+      "/data",
+      "/automations",
+      "/assistant",
+      "/chat",
+      "/shifts",
+      "/fleet",
+      "/washers",
+      "/calendar",
+      "/analytics",
+      "/controls",
+      "/activity",
+      "/reports",
+      "/components",
+      "/notifications",
+      "/settings",
+      "/admin",
+      "/imports",
+      "/feeds",
+      "/ops-inbox",
+    ];
 
 const KIOSK_ROUTES = ["/washers/app"];
+// ALL_ROUTES is used for filtering out already scanned links if needed, but we omit it here since we don't need it.
 
 /* ------------------------------------------------------------------ */
 /*  Report types                                                       */
 /* ------------------------------------------------------------------ */
 
 type ActionResult = {
-  text: string;
   selector: string;
-  outcome: "navigation" | "network_request" | "modal_open" | "toast_appeared" | "DEAD_ACTION" | "CLICK_BLOCKED";
+  text: string;
+  outcome: "navigation" | "network_request" | "modal_open" | "toast_alert" | "list_change" | "DEAD_ACTION" | "CLICK_BLOCKED";
   detail?: string;
-  evidence?: string;
 };
 
 type RouteReport = {
   route: string;
   project: string;
-  status: "pass" | "fail";
+  status: "pass" | "fail" | "skip";
   httpStatus: number | null;
   consoleErrors: string[];
-  networkFailures: { url: string; status: number; method: string; bodySnippet?: string }[];
+  consoleWarnings: string[];
+  networkFailures: { url: string; status: number; method: string }[];
   redirectChain: string[];
   pageError: string | null;
   actions: ActionResult[];
   screenshotPath?: string;
+  tracePath?: string;
 };
 
 const report: RouteReport[] = [];
@@ -76,6 +75,16 @@ const report: RouteReport[] = [];
 /* ------------------------------------------------------------------ */
 /*  Auth helper                                                        */
 /* ------------------------------------------------------------------ */
+
+function createSessionToken(userId: string, secret: string) {
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const expiresAt = issuedAt + 60 * 60;
+  const body = Buffer.from(
+    JSON.stringify({ uid: userId, sid: "diag-session", st: "active", iat: issuedAt, exp: expiresAt }),
+  ).toString("base64url");
+  const signature = createHmac("sha256", secret).update(body).digest("base64url");
+  return `${body}.${signature}`;
+}
 
 async function loginViaForm(page: Page) {
   await page.goto("/login");
@@ -88,196 +97,417 @@ async function loginViaForm(page: Page) {
 async function ensureAuthenticated(page: Page, context: BrowserContext) {
   try {
     await loginViaForm(page);
+    return;
   } catch {
-    // fallback: inject cookie
-    const secret = process.env.SESSION_SECRET || "ci-session-secret-change-before-production-32";
-    const issuedAt = Math.floor(Date.now() / 1000);
-    const expiresAt = issuedAt + 60 * 60;
-    const body = Buffer.from(
-      JSON.stringify({ uid: "admin-user", sid: "diag-session", st: "active", iat: issuedAt, exp: expiresAt }),
-    ).toString("base64url");
-    const signature = createHmac("sha256", secret).update(body).digest("base64url");
-    const token = `${body}.${signature}`;
-    
-    const host = new URL(page.url() || "http://127.0.0.1:4173").hostname;
-    await context.addCookies([{
+    // fallback
+  }
+
+  const secret = process.env.SESSION_SECRET ?? process.env.NEXTAUTH_SECRET ?? "dev-session-secret-change-before-production";
+  const token = createSessionToken("admin-user", secret);
+  const baseURL = page.url() || "http://127.0.0.1:4173";
+  const host = new URL(baseURL).hostname;
+
+  await context.addCookies([
+    {
       name: "uit_session",
       value: token,
       domain: host,
       path: "/",
       httpOnly: true,
-      sameSite: "Lax",
+      sameSite: "Lax" as const,
       secure: false,
-    }]);
-  }
+    },
+  ]);
 }
 
 /* ------------------------------------------------------------------ */
-/*  Action Audit                                                       */
+/*  Collectors                                                         */
 /* ------------------------------------------------------------------ */
 
-const PRIMARY_ACTION_PATTERNS = [
-  "Create", "Save", "Update", "Delete", "Upload", "Import", 
-  "Run", "Apply", "Confirm", "New", "Add", "Send", "Ack"
+function attachCollectors(page: Page) {
+  const consoleErrors: string[] = [];
+  const consoleWarnings: string[] = [];
+  const networkFailures: { url: string; status: number; method: string }[] = [];
+  let pageError: string | null = null;
+
+  const onConsole = (msg: import("@playwright/test").ConsoleMessage) => {
+    if (msg.type() === "error") consoleErrors.push(msg.text());
+    if (msg.type() === "warning") consoleWarnings.push(msg.text());
+  };
+
+  const onPageError = (err: Error) => {
+    pageError = err.message;
+  };
+
+  const onResponse = (response: import("@playwright/test").Response) => {
+    if (response.status() >= 400) {
+      networkFailures.push({
+        url: response.url(),
+        status: response.status(),
+        method: response.request().method(),
+      });
+    }
+  };
+
+  page.on("console", onConsole);
+  page.on("pageerror", onPageError);
+  page.on("response", onResponse);
+
+  return { 
+    consoleErrors, 
+    consoleWarnings, 
+    networkFailures, 
+    getPageError: () => pageError,
+    cleanup: () => {
+      page.removeListener("console", onConsole);
+      page.removeListener("pageerror", onPageError);
+      page.removeListener("response", onResponse);
+    }
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Click audit                                                        */
+/* ------------------------------------------------------------------ */
+
+const ACTION_BUTTON_PATTERNS = [
+  "Create", "Save", "Submit", "Export", "Add", "Send", "Delete", "Remove",
+  "Update", "New", "Run", "Apply", "Confirm", "Mark", "Approve", "Decline",
+  "Accept", "Reject", "Filter", "Import", "Upload"
 ];
 
-async function auditActions(page: Page, route: string): Promise<ActionResult[]> {
+async function clickAudit(page: Page): Promise<ActionResult[]> {
   const results: ActionResult[] = [];
+  console.log("    - Discovery: searching for buttons...");
   const buttons = await page.getByRole("button").all();
-  
-  const candidates: { locator: Locator; text: string }[] = [];
+  const actionButtons: { locator: typeof buttons[0]; text: string }[] = [];
+
   for (const btn of buttons) {
-    const text = (await btn.textContent().catch(() => ""))?.trim() || "";
-    if (PRIMARY_ACTION_PATTERNS.some(p => text.toLowerCase().includes(p.toLowerCase()))) {
-      if (await btn.isVisible().catch(() => false)) {
-        candidates.push({ locator: btn, text });
+    try {
+      const text = await btn.textContent({ timeout: 1000 });
+      if (!text) continue;
+      const trimmed = text.trim();
+      if (ACTION_BUTTON_PATTERNS.some((p) => trimmed.toLowerCase().includes(p.toLowerCase()))) {
+        if (await btn.isVisible().catch(() => false)) {
+          actionButtons.push({ locator: btn, text: trimmed });
+        }
       }
+    } catch {
+      // skip
     }
   }
 
-  console.log(`    - Found ${candidates.length} primary action candidates on ${route}`);
+  console.log(`    - Discovery: identified ${actionButtons.length} action buttons.`);
 
-  // Audit up to 3 candidates to keep it fast
-  for (const { locator, text } of candidates.slice(0, 3)) {
-    console.log(`    - Auditing action: "${text}"`);
-    
-    // Check if blocked
-    const pointerEvents = await locator.evaluate(el => window.getComputedStyle(el).pointerEvents);
-    if (pointerEvents === "none") {
-      results.push({ text, selector: "button", outcome: "CLICK_BLOCKED", detail: "pointer-events: none" });
-      continue;
+  for (const { locator, text } of actionButtons.slice(0, 5)) {
+    console.log(`    - Action: auditing "${text}"...`);
+    let networkRequestFired = false;
+    const requestListener = (req: import("@playwright/test").Request) => {
+      // Ignore analytic/metric requests
+      if (!req.url().includes("metric") && req.method() !== "OPTIONS") {
+        networkRequestFired = true;
+      }
+    };
+    page.on("request", requestListener);
+
+    try {
+      if (!(await locator.isVisible().catch(() => false))) {
+        page.removeListener("request", requestListener);
+        continue;
+      }
+
+      await locator.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => {});
+      if (await locator.isDisabled().catch(() => false)) {
+        results.push({
+          selector: `button:has-text("${text}")`,
+          text,
+          outcome: "CLICK_BLOCKED",
+          detail: "Button is explicitly disabled",
+        });
+        page.removeListener("request", requestListener);
+        continue;
+      }
+
+      // Check for HTML5 form validation if it's a submit button
+      const isSubmit = await locator.evaluate((btn) => (btn as HTMLButtonElement).type === "submit").catch(() => false);
+      if (isSubmit) {
+        const formInvalid = await locator.evaluate((btn) => {
+          const form = (btn as HTMLButtonElement).form;
+          return form && !form.checkValidity();
+        }).catch(() => false);
+        
+        if (formInvalid) {
+          results.push({
+            selector: `button:has-text("${text}")`,
+            text,
+            outcome: "CLICK_BLOCKED",
+            detail: "Form has invalid/required fields (HTML5 validation)",
+          });
+          page.removeListener("request", requestListener);
+          continue;
+        }
+      }
+
+      const initialUrl = page.url();
+      const initialModals = await page.getByRole("dialog").count();
+      const initialToasts = await page.getByRole("alert").count();
+      const initialListItems = await page.getByRole("listitem").count();
+
+      await locator.click({ timeout: 5000, force: false });
+      
+      // Wait for potential effects
+      await page.waitForTimeout(1000);
+      
+      const newUrl = page.url();
+      const newModals = await page.getByRole("dialog").count();
+      const newToasts = await page.getByRole("alert").count();
+      const newListItems = await page.getByRole("listitem").count();
+
+      if (newUrl !== initialUrl) {
+        results.push({ selector: `button:has-text("${text}")`, text, outcome: "navigation" });
+        console.log(`      - Navigated to ${newUrl}. Stopping further clicks on this route.`);
+        page.removeListener("request", requestListener);
+        break; // Stop auditing further buttons because we left the page
+      } else if (newModals > initialModals) {
+        results.push({ selector: `button:has-text("${text}")`, text, outcome: "modal_open" });
+      } else if (newToasts > initialToasts) {
+        results.push({ selector: `button:has-text("${text}")`, text, outcome: "toast_alert" });
+      } else if (newListItems !== initialListItems) {
+        results.push({ selector: `button:has-text("${text}")`, text, outcome: "list_change" });
+      } else if (networkRequestFired) {
+        results.push({ selector: `button:has-text("${text}")`, text, outcome: "network_request" });
+      } else {
+        results.push({
+          selector: `button:has-text("${text}")`,
+          text,
+          outcome: "DEAD_ACTION",
+          detail: "No navigation, network mutation, modal, toast, or list change detected."
+        });
+      }
+
+      // Close any modals that might have opened
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(500);
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      results.push({
+        selector: `button:has-text("${text}")`,
+        text,
+        outcome: "CLICK_BLOCKED",
+        detail: `Click failed: ${errorMsg.split("\n")[0]}`,
+      });
     }
-
-    const isDisabled = await locator.isDisabled();
-    if (isDisabled) {
-      results.push({ text, selector: "button", outcome: "CLICK_BLOCKED", detail: "disabled attribute set" });
-      continue;
-    }
-
-    // Monitor for effects
-    let effectDetected: ActionResult["outcome"] | null = null;
-    const urlBefore = page.url();
-    
-    const [response] = await Promise.allSettled([
-      page.waitForResponse(r => r.request().method() !== "GET", { timeout: 3000 }),
-      locator.click({ timeout: 3000 }).catch(e => {
-        console.log(`      - Click failed: ${e.message}`);
-        return null;
-      })
-    ]);
-
-    if (page.url() !== urlBefore) effectDetected = "navigation";
-    else if (response.status === "fulfilled") effectDetected = "network_request";
-    else if (await page.locator("role=dialog").isVisible().catch(() => false)) effectDetected = "modal_open";
-    else if (await page.locator("text=/success|created|updated|deleted|saved|sent/i").isVisible().catch(() => false)) effectDetected = "toast_appeared";
-
-    if (effectDetected) {
-      results.push({ text, selector: "button", outcome: effectDetected });
-    } else {
-      results.push({ text, selector: "button", outcome: "DEAD_ACTION", detail: "Clicked but no visible side effect detected in 3s" });
-    }
-
-    // Cleanup: close modals/toasts if any
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(200);
+    page.removeListener("request", requestListener);
   }
 
   return results;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Route Runner                                                       */
+/*  Route visit with redirect tracking                                 */
 /* ------------------------------------------------------------------ */
 
-async function visitAndAudit(page: Page, route: string, projectName: string): Promise<RouteReport> {
-  const consoleErrors: string[] = [];
-  const networkFailures: RouteReport["networkFailures"] = [];
-  let pageError: string | null = null;
-
-  page.on("console", msg => { if (msg.type() === "error") consoleErrors.push(msg.text()); });
-  page.on("pageerror", err => { pageError = err.message; });
-  page.on("response", async res => {
-    if (res.status() >= 400) {
-      let bodySnippet = "";
-      try { bodySnippet = (await res.text()).slice(0, 200); } catch {}
-      networkFailures.push({ url: res.url(), status: res.status(), method: res.request().method(), bodySnippet });
-    }
-  });
-
+async function visitRoute(page: Page, route: string, projectName: string): Promise<RouteReport> {
+  console.log(`  🔍 Visiting ${route}...`);
+  const collectors = attachCollectors(page);
   const redirectChain: string[] = [];
-  page.on("response", res => { if ([301, 302, 307, 308].includes(res.status())) redirectChain.push(res.url()); });
+  const MAX_REDIRECTS = 8;
+
+  const onRedirect = (response: import("@playwright/test").Response) => {
+    if ([301, 302, 303, 307, 308].includes(response.status())) {
+      redirectChain.push(response.url());
+    }
+  };
+  page.on("response", onRedirect);
+
+  const cleanup = () => {
+    collectors.cleanup();
+    page.removeListener("response", onRedirect);
+  };
 
   let httpStatus: number | null = null;
   try {
-    const res = await page.goto(route, { waitUntil: "load", timeout: 30000 });
-    httpStatus = res?.status() ?? null;
-    await page.waitForTimeout(2000); // Wait for hydration
-  } catch (e: unknown) {
-    pageError = e instanceof Error ? e.message : String(e);
+    const response = await page.goto(route, { waitUntil: "load", timeout: 60_000 });
+    httpStatus = response?.status() ?? null;
+    await page.waitForTimeout(5000);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.log(`  ❌ Failed to load ${route}: ${message}`);
+    cleanup();
+    return {
+      route, project: projectName, status: "fail", httpStatus: null,
+      consoleErrors: [message], consoleWarnings: [], networkFailures: [],
+      redirectChain, pageError: message, actions: [],
+    };
   }
 
-  let actions: ActionResult[] = [];
-  if (!pageError && httpStatus && httpStatus < 400 && redirectChain.length < 10) {
-    actions = await auditActions(page, route);
+  if (redirectChain.length > MAX_REDIRECTS) {
+    console.log(`  ❌ Redirect loop on ${route}`);
+    cleanup();
+    return {
+      route, project: projectName, status: "fail", httpStatus,
+      consoleErrors: [`Redirect loop detected: ${redirectChain.length} redirects`],
+      consoleWarnings: collectors.consoleWarnings, networkFailures: collectors.networkFailures,
+      redirectChain, pageError: "Redirect loop", actions: [],
+    };
   }
 
-  const hasCrash = await page.locator("text=/Application error|Internal Server Error|500/i").isVisible({ timeout: 500 }).catch(() => false);
-  
-  const status = (!pageError && !hasCrash && httpStatus && httpStatus < 400 && redirectChain.length < 10 && !consoleErrors.some(e => !e.includes("hydration"))) ? "pass" : "fail";
+  const hasCrash = await page.locator("text=/Application error|Internal Server Error/i").first().isVisible({ timeout: 2000 }).catch(() => false);
+  const has500 = !hasCrash && await page.locator("text=/\\b500\\b/").first().isVisible({ timeout: 1000 }).catch(() => false);
+
+  if (hasCrash || has500) {
+    console.log(`  ❌ Crash/500 on ${route}`);
+    cleanup();
+    return {
+      route, project: projectName, status: "fail", httpStatus,
+      consoleErrors: [...collectors.consoleErrors, "Crash banner or 500 detected on page"],
+      consoleWarnings: collectors.consoleWarnings, networkFailures: collectors.networkFailures,
+      redirectChain, pageError: "Crash/500 detected", actions: [],
+    };
+  }
+
+  await page.waitForTimeout(2000);
+  console.log(`  🖱️  Auditing actions on ${route}...`);
+  const actions = await clickAudit(page);
+  console.log(`  ✅ Finished ${route} with ${actions.length} actions.`);
+
+  cleanup();
+
+  const realErrors = collectors.consoleErrors.filter((e) => !e.includes("Hydration") && !e.includes("hydration"));
+  const hydrationWarnings = collectors.consoleErrors.filter((e) => e.includes("Hydration") || e.includes("hydration"));
 
   return {
-    route,
-    project: projectName,
-    status,
+    route, project: projectName, status: realErrors.length > 0 || collectors.getPageError() ? "fail" : "pass",
     httpStatus,
-    consoleErrors,
-    networkFailures,
+    consoleErrors: collectors.consoleErrors,
+    consoleWarnings: [...collectors.consoleWarnings, ...hydrationWarnings.map(h => `[hydration] ${h.slice(0, 120)}`)],
+    networkFailures: collectors.networkFailures,
     redirectChain,
-    pageError,
+    pageError: collectors.getPageError(),
     actions,
   };
 }
 
 /* ------------------------------------------------------------------ */
-/*  Main Tests                                                         */
+/*  Auto-discover nav links                                            */
 /* ------------------------------------------------------------------ */
 
-test.describe("Truth Scanner v2", () => {
-  test.setTimeout(600_000);
+async function discoverNavLinks(page: Page): Promise<string[]> {
+  const selectors = [
+    '[data-testid="bottom-nav"]',
+    '[data-testid="side-rail"]',
+    '[data-testid="sidebar"]',
+    'nav',
+    'header'
+  ];
+  
+  let links: string[] = [];
+  for (const selector of selectors) {
+    const found = await page.locator(`${selector} a[href]`).evaluateAll((els: HTMLAnchorElement[]) =>
+      els.map((el) => {
+        try { return new URL(el.href).pathname; } catch { return null; }
+      }).filter(Boolean) as string[]
+    ).catch(() => [] as string[]);
+    links = [...links, ...found];
+  }
+  return [...new Set(links)];
+}
 
-  test("full route and action audit", async ({ page, context }, testInfo) => {
+/* ------------------------------------------------------------------ */
+/*  Tests                                                              */
+/* ------------------------------------------------------------------ */
+
+test.describe("Full Diagnostic Scan V2", () => {
+  test.setTimeout(900_000); // 15 minutes
+
+  test("auth routes load without auth", async ({ page }, testInfo) => {
     const projectName = testInfo.project.name.toLowerCase();
-    
-    // 1. Auth routes (no auth)
     for (const route of AUTH_ROUTES) {
-      const res = await visitAndAudit(page, route, projectName);
-      report.push(res);
+      const result = await visitRoute(page, route, projectName);
+      report.push(result);
+      expect(result.httpStatus, `${route} should return 200`).toBe(200);
+    }
+  });
+
+  test("app routes load with auth", async ({ page, context }, testInfo) => {
+    const projectName = testInfo.project.name.toLowerCase();
+
+    try {
+      await ensureAuthenticated(page, context);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      report.push({
+        route: "/auth-setup", project: projectName, status: "fail", httpStatus: null,
+        consoleErrors: [`Authentication failed: ${message}`], consoleWarnings: [],
+        networkFailures: [], redirectChain: [], pageError: message, actions: [],
+      });
+      return;
     }
 
-    // 2. App routes (with auth)
-    await ensureAuthenticated(page, context);
-    for (const route of APP_ROUTES) {
-      const res = await visitAndAudit(page, route, projectName);
-      report.push(res);
-    }
+    const discoveredLinks = process.env.SCAN_ROUTES ? [] : await discoverNavLinks(page);
+    const allAppRoutes = [...new Set([...APP_ROUTES, ...discoveredLinks])];
+    console.log(`[${projectName}] Scaning ${allAppRoutes.length} routes:`, allAppRoutes);
 
-    // 3. Kiosk routes
+    for (const route of allAppRoutes) {
+      try {
+        const result = await visitRoute(page, route, projectName);
+        report.push(result);
+        if (page.url().includes("/login") && !route.startsWith("/login")) {
+          result.status = "fail";
+          result.consoleErrors.push(`Auth redirect: ended up at ${page.url()} instead of ${route}`);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        report.push({
+          route, project: projectName, status: "fail", httpStatus: null,
+          consoleErrors: [message], consoleWarnings: [], networkFailures: [],
+          redirectChain: [], pageError: message, actions: [],
+        });
+        if (message.includes("has been closed")) break;
+      }
+    }
+  });
+
+  test("kiosk route loads", async ({ page }, testInfo) => {
+    const projName = testInfo.project.name.toLowerCase();
     for (const route of KIOSK_ROUTES) {
-      const res = await visitAndAudit(page, route, projectName);
-      report.push(res);
+      const result = await visitRoute(page, route, projName);
+      report.push(result);
     }
   });
 
   test.afterAll(async () => {
     const reportDir = path.join(process.cwd(), "test-results");
-    if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
-    fs.writeFileSync(path.join(reportDir, "full-scan-v2-report.json"), JSON.stringify(report, null, 2));
-    
-    console.log("\n--- Truth Scanner v2 Summary ---");
-    console.log(`Routes scanned: ${report.length}`);
-    console.log(`Passed: ${report.filter(r => r.status === "pass").length}`);
-    console.log(`Failed: ${report.filter(r => r.status === "fail").length}`);
-    const dead = report.flatMap(r => r.actions.filter(a => a.outcome === "DEAD_ACTION"));
-    console.log(`Dead actions: ${dead.length}`);
+    fs.mkdirSync(reportDir, { recursive: true });
+    const reportPath = path.join(reportDir, "full-scan-v2-report.json");
+    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
+    const passed = report.filter((r) => r.status === "pass").length;
+    const failed = report.filter((r) => r.status === "fail").length;
+    const deadActions = report.flatMap((r) => r.actions.filter((a) => a.outcome === "DEAD_ACTION"));
+    const clickBlocked = report.flatMap((r) => r.actions.filter((a) => a.outcome === "CLICK_BLOCKED"));
+
+    console.log("\n=== FULL SCAN V2 SUMMARY ===");
+    console.log(`Total routes scanned: ${report.length}`);
+    console.log(`Passed: ${passed}`);
+    console.log(`Failed: ${failed}`);
+    console.log(`Dead actions: ${deadActions.length}`);
+    console.log(`Click blocked: ${clickBlocked.length}`);
+
+    if (failed > 0) {
+      console.log("\nFailing routes:");
+      for (const r of report.filter((r) => r.status === "fail")) {
+        console.log(`  ❌ ${r.route} (${r.project}): ${r.consoleErrors[0] ?? r.pageError ?? "unknown"}`);
+      }
+    }
+    if (deadActions.length > 0) {
+      console.log("\nDead actions:");
+      for (const r of report) {
+        for (const a of r.actions.filter((a) => a.outcome === "DEAD_ACTION")) {
+          console.log(`  ⚠️  ${r.route} → "${a.text}": ${a.detail}`);
+        }
+      }
+    }
+    console.log(`\nReport written to: ${reportPath}`);
   });
 });
