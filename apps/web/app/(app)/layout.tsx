@@ -41,8 +41,14 @@ export default async function MainAppLayout({
   try {
     membership = await getDefaultWorkspaceForUser(session.user.id);
   } catch {
-    // Convex/DB unreachable — redirect to login instead of crashing layout
-    redirect("/login?error=schema");
+    // First attempt failed (transient DB/Convex issue) — retry once before redirecting
+    try {
+      await new Promise<void>((resolve) => setTimeout(resolve, 500));
+      membership = await getDefaultWorkspaceForUser(session.user.id);
+    } catch {
+      // Both attempts failed — redirect to login
+      redirect("/login?error=schema");
+    }
   }
 
   if (!membership || !membership.workspace) {
