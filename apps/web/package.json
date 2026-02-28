@@ -35,7 +35,8 @@
     "prisma:seed": "prisma db seed",
     "db:reset": "node scripts/reset-db.mjs",
     "env:check": "tsx scripts/validate-env.ts",
-    "env:setup": "tsx scripts/setup-local-env.ts"
+    "env:setup": "tsx scripts/setup-local-env.ts",
+    "setup:env": "pnpm env:setup"
   },
   "dependencies": {
     "@internal-toolkit/shared": "workspace:*",

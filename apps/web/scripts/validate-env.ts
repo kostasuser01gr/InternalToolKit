@@ -33,7 +33,8 @@ for (const key of RECOMMENDED) {
 if (missing.length > 0) {
   console.error("❌ Missing REQUIRED env vars:");
   for (const k of missing) console.error(`   - ${k}`);
-  console.error("\nAdd them to .env.local (local) or Vercel env vars (prod).");
+  console.error("\nRun 'pnpm --filter @internal-toolkit/web setup:env' for local setup.");
+  console.error("Add them to apps/web/.env.local (local) or Vercel env vars (prod).");
 }
 
 if (missingRecommended.length > 0) {

@@ -3,9 +3,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { getAuthRuntimeEnvError } from "@/lib/env";
 
 const ORIGINAL_ENV = { ...process.env };
-const VALID_SECRET = "12345678901234567890123456789012";
+const VALID_SECRET = "env-test-secret-".padEnd(32, "x");
 const VALID_DATABASE_URL =
   "postgresql://postgres:password@db.example.com:6543/postgres?sslmode=require";
+const LOCAL_SETUP_COMMAND = "pnpm --filter @internal-toolkit/web setup:env";
 
 function applyEnv(overrides: Record<string, string | undefined>) {
   process.env = { ...ORIGINAL_ENV };
@@ -35,7 +36,7 @@ describe("getAuthRuntimeEnvError", () => {
       NEXTAUTH_SECRET: undefined,
     });
 
-    expect(getAuthRuntimeEnvError()).toBe("Set DATABASE_URL.");
+    expect(getAuthRuntimeEnvError()).toBe("Missing env: DATABASE_URL.");
   });
 
   it("returns missing SESSION_SECRET error in hosted production", () => {
@@ -48,7 +49,26 @@ describe("getAuthRuntimeEnvError", () => {
       NEXTAUTH_SECRET: undefined,
     });
 
-    expect(getAuthRuntimeEnvError()).toBe("Set SESSION_SECRET.");
+    expect(getAuthRuntimeEnvError()).toBe("Missing env: SESSION_SECRET.");
+  });
+
+  it("returns setup guidance when DATABASE_URL is missing in development", () => {
+    applyEnv({
+      NODE_ENV: "development",
+      VERCEL: undefined,
+      VERCEL_ENV: undefined,
+      CI: undefined,
+      GITHUB_ACTIONS: undefined,
+      NEXT_PHASE: undefined,
+      DATABASE_URL: undefined,
+      SESSION_SECRET: undefined,
+      NEXTAUTH_SECRET: undefined,
+    });
+
+    const error = getAuthRuntimeEnvError();
+    expect(error).toContain("Missing env: DATABASE_URL.");
+    expect(error).toContain(LOCAL_SETUP_COMMAND);
+    expect(error).toContain("apps/web/.env.local");
   });
 
   it("rejects sqlite file URLs in hosted production", () => {
