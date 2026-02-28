@@ -60,7 +60,7 @@ test("invalid session cookie does not loop between login and overview", async ({
   page,
   context,
 }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+  
 
   const baseURL = testInfo.project.use.baseURL;
   if (!baseURL) {
@@ -90,7 +90,7 @@ test("valid signed cookie for unknown user does not loop on login", async ({
   page,
   context,
 }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+  
 
   const baseURL = testInfo.project.use.baseURL;
   if (!baseURL) {
@@ -122,8 +122,8 @@ test("valid signed cookie for unknown user does not loop on login", async ({
   await expect(page.getByTestId("login-page")).toBeVisible();
 });
 
-test("signup creates an account and can sign in", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("signup creates an account and can sign in", async ({ page }) => {
+  
   test.setTimeout(120_000);
 
   const nonce = Date.now();
@@ -229,8 +229,8 @@ test("responsive shell renders and navigation works without overflow", async ({
   expect(hasOverflow).toBeFalsy();
 });
 
-test("command palette opens and navigates", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("command palette opens and navigates", async ({ page }) => {
+  
   test.setTimeout(process.env.CI ? 90_000 : 45_000);
 
   await login(page, "admin", "1234");
@@ -275,8 +275,8 @@ test("command palette opens and navigates", async ({ page }, testInfo) => {
 
 test("data table: create table, add field, add record, export CSV", async ({
   page,
-}, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+}) => {
+  
 
   await login(page, "admin", "1234");
   await page.goto("/data");
@@ -318,8 +318,8 @@ test("data table: create table, add field, add record, export CSV", async ({
 
 test("admin gate: viewer blocked, admin allowed", async ({
   page,
-}, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+}) => {
+  
 
   await login(page, "viewer", "2222");
   await page.goto("/admin");
@@ -336,8 +336,8 @@ test("admin gate: viewer blocked, admin allowed", async ({
   await expect(page.getByTestId("admin-page")).toBeVisible();
 });
 
-test("chat basic flow: create thread and send message", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("chat basic flow: create thread and send message", async ({ page }) => {
+  
 
   await login(page, "admin", "1234");
   await page.goto("/chat");
@@ -356,8 +356,8 @@ test("chat basic flow: create thread and send message", async ({ page }, testInf
 
 test("shift planner flow: create shift and show in board", async ({
   page,
-}, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+}) => {
+  
 
   await login(page, "admin", "1234");
   await page.goto("/shifts");
@@ -376,8 +376,8 @@ test("shift planner flow: create shift and show in board", async ({
   await expect(page.getByTestId("shifts-board")).toContainText(title);
 });
 
-test("fleet flow: create and update vehicle", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("fleet flow: create and update vehicle", async ({ page }) => {
+  
   test.setTimeout(process.env.CI ? 60_000 : 45_000);
 
   await login(page, "admin", "1234");

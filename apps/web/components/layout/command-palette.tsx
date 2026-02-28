@@ -342,7 +342,7 @@ function CommandPalette() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="focus-ring hidden items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 px-3 py-2 text-xs text-[var(--text-muted)] lg:inline-flex"
+        className="focus-ring inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 px-3 py-2 text-xs text-[var(--text-muted)]"
         aria-label="Open command palette"
       >
         <Command className="size-3.5" aria-hidden="true" />
