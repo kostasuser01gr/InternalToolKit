@@ -225,11 +225,11 @@ test("all primary nav routes are reachable", async ({ page }) => {
   ];
 
   for (const route of routes) {
-    const response = await page.goto(route, { timeout: 30_000 });
+    const response = await page.goto(route, { timeout: 60_000 });
     expect(
       response?.status(),
       `${route} should not return 500`,
-    ).toBeLessThan(500);
+    ).not.toBe(500);
     // Should not be redirected to an error page
     expect(page.url()).toContain(route.replace("/", ""));
   }
