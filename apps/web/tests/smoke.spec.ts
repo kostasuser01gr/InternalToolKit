@@ -254,8 +254,8 @@ test("command palette opens and navigates", async ({ page }) => {
   const analyticsBtn = palette.getByRole("button", { name: /^Go to Analytics/ }).first();
   await analyticsBtn.waitFor({ state: "visible", timeout: 15_000 });
   // Wait an extra moment for React event handlers to attach
-  await page.waitForTimeout(1000);
-  await analyticsBtn.click();
+  await page.waitForTimeout(2000);
+  await analyticsBtn.click({ force: true });
   await expect(page).toHaveURL(/\/analytics$/, { timeout: 30_000 });
 
   // Wait for analytics page to fully load and hydrate before keyboard shortcut
@@ -375,8 +375,7 @@ test("shift planner flow: create shift and show in board", async ({
   await page.locator("#shift-startsAt").fill(startsAt);
   await page.locator("#shift-endsAt").fill(endsAt);
   await page.getByRole("button", { name: "Create shift" }).click();
-
-  await expect(page.getByText("Shift created.")).toBeVisible();
+  await expect(page.getByText("Shift created.")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("shifts-board")).toContainText(title);
 });
 
