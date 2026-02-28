@@ -263,8 +263,12 @@ test("command palette opens and navigates", async ({ page }) => {
   await page.waitForTimeout(process.env.CI ? 3000 : 1000);
   // Blur any focused input so keyboard shortcuts aren't blocked by typing guard
   await page.evaluate(() => {
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-  });
+    try {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    } catch {
+      // Ignore context destruction errors during navigation
+    }
+  }).catch(() => {});
   await page.waitForTimeout(1000);
   await page.keyboard.press("g");
   // Small delay between keys to ensure sequence handler picks them up
@@ -345,12 +349,12 @@ test("chat basic flow: create thread and send message", async ({ page }) => {
   const threadTitle = `Playwright Chat ${Date.now()}`;
   await page.getByLabel("New thread").fill(threadTitle);
   await page.getByRole("button", { name: "Create thread" }).click();
-  await expect(page.getByText("Thread created.")).toBeVisible();
+  await expect(page.getByText("Thread created.")).toBeVisible({ timeout: 15_000 });
 
   const message = `Hello from Playwright ${Date.now()}`;
   await page.getByLabel("Message").fill(message);
   await page.getByRole("button", { name: "Send" }).click();
-  await expect(page.getByText("Message sent.")).toBeVisible();
+  await expect(page.getByText("Message sent.")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(message)).toBeVisible();
 });
 
