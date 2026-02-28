@@ -283,13 +283,16 @@ Key fixes applied:
 # 1. Install dependencies
 pnpm install
 
-# 2. Create local env
-cp apps/web/.env.example apps/web/.env.local
+# 2. Create local env file (never overwrites existing values)
+pnpm --filter @internal-toolkit/web setup:env
 
-# 3. Apply DB migrations
+# 3. Verify required env names
+pnpm --filter @internal-toolkit/web env:check
+
+# 4. Apply DB migrations
 pnpm --filter @internal-toolkit/web db:migrate:deploy
 
-# 4. Start development server
+# 5. Start development server
 pnpm dev
 ```
 
@@ -402,6 +405,24 @@ All workflows green on latest commit `1481f43`:
 | `NEXT_PUBLIC_FEATURE_COMMAND_PALETTE` | optional | `1` to enable |
 | `NEXT_PUBLIC_FEATURE_COMPONENTS_SHOWROOM` | optional | `1` to enable |
 | `NEXT_PUBLIC_FEATURE_REPORTS_PDF` | optional | `1` to enable |
+
+### Safe Env Setup (Local + Vercel)
+
+- Local setup command: `pnpm --filter @internal-toolkit/web setup:env`
+- Local validation command: `pnpm --filter @internal-toolkit/web env:check`
+- The setup script only appends missing keys to `apps/web/.env.local`; it does not overwrite existing values.
+- `DATABASE_URL`: Supabase pooled URI (Project Settings -> Database -> Connection string, port `6543`)
+- `DIRECT_URL`: Supabase direct URI (Project Settings -> Database -> Connection string, port `5432`)
+- `SESSION_SECRET`: generate locally with `openssl rand -hex 32`
+- `NEXT_PUBLIC_CONVEX_URL` and `CONVEX_DEPLOYMENT`: from Convex dashboard when Convex is enabled
+- Vercel (names only, values entered interactively):
+  - `vercel env ls`
+  - `vercel env add DATABASE_URL production`
+  - `vercel env add DATABASE_URL preview`
+  - `vercel env add DIRECT_URL production`
+  - `vercel env add DIRECT_URL preview`
+  - `vercel env add SESSION_SECRET production`
+  - `vercel env add SESSION_SECRET preview`
 
 ### Runtime Validation
 

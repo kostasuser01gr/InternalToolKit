@@ -3,6 +3,7 @@ import { z } from "zod";
 const DEFAULT_API_URL = "http://127.0.0.1:8787";
 const DEFAULT_DATABASE_URL =
   "postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public";
+const LOCAL_ENV_SETUP_COMMAND = "pnpm --filter @internal-toolkit/web setup:env";
 const MIN_SESSION_SECRET_LENGTH = 32;
 const POSTGRES_PROTOCOL_RE = /^postgres(?:ql)?:\/\//i;
 const DB_ENV_ASSIGNMENT_RE = /^(?:export\s+)?(DATABASE_URL|DIRECT_URL)\s*=/i;
@@ -359,15 +360,28 @@ export function getAuthRuntimeEnvError() {
   const freeOnlyMode = process.env.FREE_ONLY_MODE?.trim() || "1";
   const aiAllowPaid = process.env.AI_ALLOW_PAID?.trim() || "0";
   const isDevelopment = process.env.NODE_ENV === "development";
+  const isTest = process.env.NODE_ENV === "test";
+  const isProductionRuntime = process.env.NODE_ENV === "production";
   const hostedProduction = isHostedProductionRuntime();
   const allowSqliteDev = process.env.ALLOW_SQLITE_DEV === "1";
 
   if (!databaseUrl) {
-    return hostedProduction ? "Set DATABASE_URL." : null;
+    if (isProductionRuntime) {
+      return "Missing env: DATABASE_URL.";
+    }
+
+    if (isDevelopment || isTest) {
+      return [
+        "Missing env: DATABASE_URL.",
+        `Run "${LOCAL_ENV_SETUP_COMMAND}" and set DATABASE_URL in apps/web/.env.local.`,
+      ].join(" ");
+    }
+
+    return null;
   }
 
   if (!sessionSecret) {
-    return hostedProduction ? "Set SESSION_SECRET." : null;
+    return isProductionRuntime ? "Missing env: SESSION_SECRET." : null;
   }
 
   if (hostedProduction && sessionSecret.length < MIN_SESSION_SECRET_LENGTH) {

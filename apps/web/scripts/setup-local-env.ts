@@ -1,115 +1,191 @@
 /**
- * setup-local-env.ts — interactive prompt to create .env.local with required secrets.
- * Does NOT echo secret values to the console.
- * Usage: pnpm env:setup
+ * setup-local-env.ts - creates apps/web/.env.local if missing and appends
+ * required keys without overwriting any existing values.
+ *
+ * Usage:
+ *   pnpm --filter @internal-toolkit/web setup:env
+ *   pnpm --filter @internal-toolkit/web env:setup
  */
 
-import { createInterface } from "node:readline";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { createInterface } from "node:readline";
+import { fileURLToPath } from "node:url";
 
-const ENV_PATH = resolve(process.cwd(), ".env.local");
+type EnvDefinition = {
+  key: string;
+  hint: string;
+  required: boolean;
+};
 
-const VARS = [
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const ENV_PATH = resolve(scriptDir, "..", ".env.local");
+
+const REQUIRED_ENV_VARS: EnvDefinition[] = [
   {
     key: "DATABASE_URL",
-    hint: "Supabase pooler URI (port 6543, pgBouncer)",
+    hint: "Supabase pooler URI (Project Settings > Database > Connection string, port 6543)",
     required: true,
   },
   {
     key: "DIRECT_URL",
-    hint: "Supabase direct URI (port 5432)",
+    hint: "Supabase direct URI (Project Settings > Database > Connection string, port 5432)",
     required: true,
   },
   {
     key: "SESSION_SECRET",
-    hint: "Random >=32 chars (openssl rand -hex 32)",
+    hint: "Generate with: openssl rand -hex 32",
     required: true,
   },
+];
+
+const OPTIONAL_ENV_VARS: EnvDefinition[] = [
   {
-    key: "CRON_SECRET",
-    hint: "Protects /api/cron/* endpoints",
+    key: "NEXT_PUBLIC_CONVEX_URL",
+    hint: "Convex dashboard deployment URL (if Convex is enabled)",
     required: false,
   },
   {
-    key: "KIOSK_TOKEN",
-    hint: "Kiosk write-access token",
+    key: "CONVEX_DEPLOYMENT",
+    hint: "Convex deployment identifier (if Convex is enabled)",
     required: false,
   },
-] as const;
+];
 
-async function main() {
-  console.log("🔧 InternalToolKit — Local Env Setup");
-  console.log("=====================================");
-  console.log(`Target file: ${ENV_PATH}`);
-  console.log("⚠️  Values will NOT be echoed to the console.\n");
+function parseExistingEnvKeys(fileContents: string) {
+  const keys = new Set<string>();
 
-  // Load existing .env.local if present
-  const existing: Record<string, string> = {};
-  if (existsSync(ENV_PATH)) {
-    const lines = readFileSync(ENV_PATH, "utf-8").split("\n");
-    for (const line of lines) {
-      const match = line.match(/^([A-Z_]+)=(.*)$/);
-      if (match?.[1]) existing[match[1]] = match[2] ?? "";
+  for (const line of fileContents.split("\n")) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=/);
+    if (match?.[1]) {
+      keys.add(match[1]);
     }
+  }
+
+  return keys;
+}
+
+function quoteEnvValue(value: string) {
+  if (!value) {
+    return '""';
+  }
+
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed;
+  }
+
+  return `"${trimmed.replace(/"/g, '\\"')}"`;
+}
+
+async function promptForMissingRequired(definitions: EnvDefinition[]) {
+  const values = new Map<string, string>();
+
+  if (definitions.length === 0) {
+    return values;
+  }
+
+  if (!(process.stdin.isTTY && process.stdout.isTTY)) {
+    return values;
   }
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const ask = (q: string): Promise<string> =>
-    new Promise((res) => rl.question(q, (a) => res(a.trim())));
+  const ask = (question: string) =>
+    new Promise<string>((resolveAnswer) => {
+      rl.question(question, (answer) => resolveAnswer(answer.trim()));
+    });
 
-  const entries: [string, string][] = [];
-
-  for (const v of VARS) {
-    const tag = v.required ? "[REQUIRED]" : "[optional]";
-    const current = existing[v.key];
-
-    if (current) {
-      const skip = await ask(
-        `${tag} ${v.key} already set. Overwrite? (y/N): `,
-      );
-      if (skip.toLowerCase() !== "y") {
-        entries.push([v.key, current]);
-        continue;
-      }
-    }
-
-    const val = await ask(`${tag} ${v.key} (${v.hint}): `);
-
-    if (!val && v.required) {
-      console.warn(`   ⚠️  ${v.key} left empty — you must fill it in manually.`);
-    }
-
-    entries.push([v.key, val ? `"${val}"` : '""']);
+  for (const definition of definitions) {
+    const prompt =
+      `[required] ${definition.key}\n` +
+      `  ${definition.hint}\n` +
+      "  value (leave empty to fill manually): ";
+    const answer = await ask(prompt);
+    values.set(definition.key, answer);
   }
 
   rl.close();
+  return values;
+}
 
-  // Preserve non-secret lines from existing file
-  const preserveKeys = new Set(entries.map(([k]) => k));
-  const preserved: string[] = [];
-  if (existsSync(ENV_PATH)) {
-    for (const line of readFileSync(ENV_PATH, "utf-8").split("\n")) {
-      const match = line.match(/^([A-Z_]+)=/);
-      if (match?.[1] && preserveKeys.has(match[1])) continue;
-      preserved.push(line);
+async function main() {
+  const existingFile = existsSync(ENV_PATH);
+  const existingContents = existingFile ? readFileSync(ENV_PATH, "utf-8") : "";
+  const existingKeys = parseExistingEnvKeys(existingContents);
+
+  const missingRequired = REQUIRED_ENV_VARS.filter(
+    ({ key }) => !existingKeys.has(key),
+  );
+  const missingOptional = OPTIONAL_ENV_VARS.filter(
+    ({ key }) => !existingKeys.has(key),
+  );
+
+  if (missingRequired.length === 0) {
+    console.log(`No required changes needed. Existing values were not modified: ${ENV_PATH}`);
+    if (missingOptional.length > 0) {
+      console.log(
+        `Optional keys not set: ${missingOptional.map(({ key }) => key).join(", ")}`,
+      );
+    }
+    return;
+  }
+
+  if (!(process.stdin.isTTY && process.stdout.isTTY)) {
+    console.log("Non-interactive shell detected.");
+    console.log("Add required keys manually to apps/web/.env.local:");
+    for (const definition of missingRequired) {
+      console.log(`- ${definition.key}: ${definition.hint}`);
     }
   }
 
+  const promptedValues = await promptForMissingRequired(missingRequired);
+  const appendedLines: string[] = [];
+  const unresolvedRequired: string[] = [];
+
+  appendedLines.push("# Added by setup-local-env.ts");
+
+  for (const definition of missingRequired) {
+    const value = promptedValues.get(definition.key) ?? "";
+    if (!value) {
+      unresolvedRequired.push(definition.key);
+    }
+
+    appendedLines.push(`# ${definition.hint}`);
+    appendedLines.push(`${definition.key}=${quoteEnvValue(value)}`);
+    appendedLines.push("");
+  }
+
+  for (const definition of missingOptional) {
+    appendedLines.push(`# Optional: ${definition.hint}`);
+    appendedLines.push(`${definition.key}=""`);
+    appendedLines.push("");
+  }
+
+  const hasExistingContent = existingContents.trim().length > 0;
   const output = [
-    "# Auto-generated by setup-local-env.ts — DO NOT COMMIT",
-    ...entries.map(([k, v]) => `${k}=${v}`),
-    "",
-    ...preserved.filter((l) => l.trim()),
-    "",
+    ...(hasExistingContent ? [existingContents.trimEnd(), ""] : []),
+    ...appendedLines,
   ].join("\n");
 
-  writeFileSync(ENV_PATH, output, "utf-8");
-  console.log(`\n✅ Saved ${ENV_PATH}`);
-  console.log("Run 'pnpm env:check' to verify.");
+  writeFileSync(ENV_PATH, `${output.trimEnd()}\n`, "utf-8");
+
+  console.log(`Updated ${ENV_PATH}`);
+  console.log("Existing values were preserved (no overwrite).");
+
+  if (unresolvedRequired.length > 0) {
+    console.log("Missing required values still need manual entry:");
+    for (const key of unresolvedRequired) {
+      console.log(`- ${key}`);
+    }
+  }
+
+  console.log("Next step: pnpm --filter @internal-toolkit/web env:check");
 }
 
-main().catch((e) => {
-  console.error(e);
+main().catch((error) => {
+  console.error(error);
   process.exit(1);
 });
