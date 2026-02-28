@@ -11,6 +11,7 @@ import {
   acceptImportAction,
   declineImportAction,
   rollbackImportAction,
+  uploadImportAction,
 } from "./actions";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -41,7 +42,7 @@ function ImportUploadCard({ workspaceId }: { workspaceId: string }) {
         Upload XLSX, CSV, or JSON files to import bookings, vehicles, or other data.
         AI will analyze the file and propose a mapping.
       </p>
-      <form action="/api/imports/upload" method="POST" encType="multipart/form-data" className="space-y-4">
+      <form action={uploadImportAction} className="space-y-4">
         <input type="hidden" name="workspaceId" value={workspaceId} />
         <div className="rounded-lg border-2 border-dashed border-[var(--border)] p-8 text-center transition-colors hover:border-[var(--accent)]">
           <FileSpreadsheet className="mx-auto mb-3 h-10 w-10 text-[var(--text-muted)]" />
@@ -70,12 +71,12 @@ function ImportUploadCard({ workspaceId }: { workspaceId: string }) {
             <option value="other">Other</option>
           </select>
         </div>
-        <button
-          type="submit"
+        <FormSubmitButton
           className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          pendingText="Uploading..."
         >
           Upload &amp; Analyze
-        </button>
+        </FormSubmitButton>
       </form>
       <p className="mt-3 text-xs text-[var(--text-muted)]">
         Files are analyzed with AI to propose column mappings. You review and accept/decline before any changes are applied.

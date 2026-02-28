@@ -55,14 +55,14 @@ export async function GET() {
       // Simple query to verify Convex connectivity
       const { api } = await import("@/lib/convex-api");
       await convex.query(api.users.getByEmail, { email: "__health_check__" });
-      return Response.json({ ok: true, db: "convex" });
+      return Response.json({ ok: true, status: "ok", db: "convex", timestamp: new Date().toISOString() });
     }
 
     // Prisma fallback
     const { db } = await import("@/lib/db");
     await db.$queryRaw`SELECT 1`;
 
-    return Response.json({ ok: true, db: "prisma" });
+    return Response.json({ ok: true, status: "ok", db: "prisma", timestamp: new Date().toISOString() });
   } catch (error) {
     const errorCode = toErrorCode(error);
     const status = errorCode === "DB_UNREACHABLE" ? 503 : 500;

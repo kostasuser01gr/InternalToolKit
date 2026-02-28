@@ -26,6 +26,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (file.size === 0) {
+      return Response.json(
+        { error: "Uploaded file is empty" },
+        withObservabilityHeaders({ status: 400 }, requestId),
+      );
+    }
+
     const { user } = await requireAdminAccess(workspaceId);
 
     const buffer = Buffer.from(await file.arrayBuffer());

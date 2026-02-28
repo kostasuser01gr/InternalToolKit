@@ -1,8 +1,9 @@
 "use server";
 
-import { ImportBatchStatus } from "@prisma/client";
+import { ImportBatchStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createHash } from "crypto";
 import { z } from "zod";
 
 import { appendAuditLog } from "@/lib/audit";
@@ -10,6 +11,9 @@ import { db } from "@/lib/db";
 import { withDbAction } from "@/lib/prisma-errors";
 import { rethrowIfRedirectError } from "@/lib/redirect-error";
 import { AuthError, requireAdminAccess } from "@/lib/rbac";
+import { parseFileBuffer, applyMappings } from "@/lib/imports/file-parser";
+import { computeDiff } from "@/lib/imports/diff-engine";
+import { findTemplate } from "@/lib/imports/templates";
 import {
   createImportBatchSchema,
   updateMappingSchema,
@@ -32,6 +36,104 @@ function getErrorMessage(error: unknown) {
   if (error instanceof z.ZodError) return error.issues[0]?.message ?? "Invalid input.";
   if (error instanceof Error) return error.message;
   return "Unexpected error.";
+}
+
+export async function uploadImportAction(formData: FormData) {
+  return withDbAction(async () => {
+    const workspaceId = formData.get("workspaceId") as string;
+    const importType = (formData.get("importType") as string) || "other";
+    const file = formData.get("file") as File | null;
+
+    if (!workspaceId || !file || file.size === 0) {
+      redirect(buildUrl("/imports", { error: "Please select a non-empty file to upload." }));
+    }
+
+    try {
+      const { user } = await requireAdminAccess(workspaceId);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const fileHash = createHash("sha256").update(buffer).digest("hex").slice(0, 32);
+
+      // Idempotency check
+      const existing = await db.importBatch.findUnique({
+        where: { workspaceId_fileHash: { workspaceId, fileHash } },
+      });
+
+      if (existing && !["DECLINED", "ROLLED_BACK", "FAILED"].includes(existing.status)) {
+        redirect(buildUrl("/imports", {
+          error: `File already imported (batch ${existing.id}, status ${existing.status})`,
+          batchId: existing.id
+        }));
+      }
+
+      // Parse file content
+      const template = findTemplate(importType);
+      const parsed = parseFileBuffer(buffer, file.type, file.name, template?.sheetName);
+
+      // Apply mappings if template exists
+      let mappedRows = parsed.rows;
+      if (template && parsed.rows.length > 0) {
+        mappedRows = applyMappings(parsed.rows, template.mappings);
+      }
+
+      // Compute diff against existing records (for fleet imports)
+      let diffSummary = null;
+      if (importType === "fleet" && mappedRows.length > 0) {
+        const vehicles = await db.vehicle.findMany({
+          where: { workspaceId },
+          select: { id: true, plateNumber: true, model: true, mileageKm: true, fuelPercent: true, notes: true },
+        });
+        const existingMap = new Map(
+          vehicles.map((v) => [v.plateNumber, { id: v.id, plateNumber: v.plateNumber, model: v.model, mileage: v.mileageKm, fuelLevel: v.fuelPercent, notes: v.notes }]),
+        );
+        diffSummary = computeDiff(mappedRows, existingMap, "plateNumber");
+      }
+
+      const batch = await db.importBatch.create({
+        data: {
+          workspaceId,
+          createdBy: user.id,
+          importType,
+          fileName: file.name,
+          fileHash,
+          fileSizeBytes: buffer.length,
+          status: diffSummary ? "PREVIEW" : "ANALYZING",
+          mappingJson: template ? (template.mappings as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+          previewJson: {
+            rawBase64: buffer.toString("base64").slice(0, 500_000),
+            contentType: file.type,
+            headers: parsed.headers,
+            rowCount: parsed.rows.length,
+            parseErrors: parsed.errors,
+            sheetName: parsed.sheetName,
+          },
+          diffSummary: diffSummary ? ({
+            totalRows: diffSummary.totalRows,
+            creates: diffSummary.creates,
+            updates: diffSummary.updates,
+            archives: diffSummary.archives,
+            skips: diffSummary.skips,
+            errors: diffSummary.errors,
+            records: diffSummary.records,
+          } as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+        },
+      });
+
+      await appendAuditLog({
+        workspaceId,
+        actorUserId: user.id,
+        action: "import.upload",
+        entityType: "import_batch",
+        entityId: batch.id,
+        metaJson: { importType, fileName: file.name },
+      });
+
+      revalidatePath("/imports");
+      redirect(buildUrl("/imports", { success: `Upload successful. Batch ${batch.id} is ready for review.`, batchId: batch.id }));
+    } catch (error) {
+      rethrowIfRedirectError(error);
+      redirect(buildUrl("/imports", { error: getErrorMessage(error) }));
+    }
+  }, "/imports");
 }
 
 export async function createImportBatchAction(formData: FormData) {
