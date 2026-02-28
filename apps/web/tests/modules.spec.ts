@@ -10,8 +10,8 @@ async function login(page: Page, loginName: string, pin: string) {
 
 // ---------- Washers module ----------
 
-test("washers page loads and shows KPIs", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("washers page loads and shows KPIs", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/washers");
   await page.waitForLoadState("networkidle");
@@ -19,8 +19,8 @@ test("washers page loads and shows KPIs", async ({ page }, testInfo) => {
   await expect(page.getByTestId("washers-kpis")).toBeVisible({ timeout: 10_000 });
 });
 
-test("washers: create wash task", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("washers: create wash task", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/washers");
 
@@ -44,8 +44,8 @@ test("washers: create wash task", async ({ page }, testInfo) => {
 
 test("washers: share panel and daily register visible", async ({
   page,
-}, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+}) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/washers");
   await expect(page.getByTestId("share-washer-app")).toBeVisible();
@@ -54,8 +54,8 @@ test("washers: share panel and daily register visible", async ({
 
 // ---------- Imports module ----------
 
-test("imports page loads", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("imports page loads", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/imports");
   // The page may render before the data-testid is available, so check heading
@@ -63,8 +63,8 @@ test("imports page loads", async ({ page }, testInfo) => {
   await expect(page.getByText("Upload data files")).toBeVisible();
 });
 
-test("imports: upload form is functional", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("imports: upload form is functional", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/imports");
 
@@ -84,8 +84,8 @@ test("imports: upload form is functional", async ({ page }, testInfo) => {
 
 // ---------- Feeds module ----------
 
-test("feeds page loads and shows source form", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("feeds page loads and shows source form", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/feeds");
   await expect(page.getByTestId("feeds-page")).toBeVisible();
@@ -93,8 +93,8 @@ test("feeds page loads and shows source form", async ({ page }, testInfo) => {
   await expect(page.getByLabel("RSS URL")).toBeVisible();
 });
 
-test("feeds: add default sources", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("feeds: add default sources", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/feeds");
 
@@ -110,8 +110,8 @@ test("feeds: add default sources", async ({ page }, testInfo) => {
   }
 });
 
-test("feeds: add custom source", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("feeds: add custom source", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/feeds");
 
@@ -129,8 +129,8 @@ test("feeds: add custom source", async ({ page }, testInfo) => {
 
 // ---------- Settings module ----------
 
-test("settings page loads sections", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("settings page loads sections", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/settings");
   await expect(page.getByTestId("settings-page")).toBeVisible();
@@ -138,8 +138,8 @@ test("settings page loads sections", async ({ page }, testInfo) => {
   await expect(page.getByText("Theme preference")).toBeVisible();
 });
 
-test("settings: save profile without crash", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("settings: save profile without crash", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/settings");
 
@@ -155,8 +155,8 @@ test("settings: save profile without crash", async ({ page }, testInfo) => {
 
 // ---------- Calendar module ----------
 
-test("calendar page loads", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("calendar page loads", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/calendar");
   await expect(
@@ -166,8 +166,8 @@ test("calendar page loads", async ({ page }, testInfo) => {
   await expect(page.locator("#calendar-to")).toBeVisible();
 });
 
-test("calendar: apply date range", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("calendar: apply date range", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/calendar");
 
@@ -187,8 +187,8 @@ test("calendar: apply date range", async ({ page }, testInfo) => {
 
 // ---------- Notifications + Ops Inbox ----------
 
-test("notifications page loads", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("notifications page loads", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/notifications");
   // Page should load without crashing
@@ -196,8 +196,8 @@ test("notifications page loads", async ({ page }, testInfo) => {
   expect(response?.status()).toBeLessThan(500);
 });
 
-test("ops inbox page loads", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("ops inbox page loads", async ({ page }) => {
+  
   await login(page, "admin", "1234");
   await page.goto("/ops-inbox");
   const response = await page.goto("/ops-inbox");
@@ -206,8 +206,8 @@ test("ops inbox page loads", async ({ page }, testInfo) => {
 
 // ---------- Cross-module navigation ----------
 
-test("all primary nav routes are reachable", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name.toLowerCase() !== "desktop");
+test("all primary nav routes are reachable", async ({ page }) => {
+  
   test.setTimeout(120_000);
   await login(page, "admin", "1234");
 
@@ -225,7 +225,7 @@ test("all primary nav routes are reachable", async ({ page }, testInfo) => {
   ];
 
   for (const route of routes) {
-    const response = await page.goto(route);
+    const response = await page.goto(route, { timeout: 30_000 });
     expect(
       response?.status(),
       `${route} should not return 500`,

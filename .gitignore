@@ -46,3 +46,4 @@ apps/web/supabase/.temp/
 
 .env.local
 **/.lighthouseci
+.env*.local
