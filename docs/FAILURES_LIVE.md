@@ -1,23 +1,31 @@
-# FAILURES LIVE TRIAGE
+# FAILURES LIVE TRIAGE - STATUS: ALL RESOLVED ✅
 
 ## 1. CI / quality
-- **Status**: FAILED (Run ID: 22519332383)
-- **Failing Step**: `Install dependencies`
-- **Error**: `ERR_PNPM_OUTDATED_LOCKFILE`
-- **Root Cause**: `pnpm-lock.yaml` is not up to date with `<ROOT>/package.json`. Specifically, `next@16.1.6` was added to the root `package.json` but not updated in the lockfile.
+
+- **Status**: ✅ GREEN (Run ID: 22526407329 — 2026-02-28)
+- **Fix**: Stabilized Mobile E2E command palette click + ERR_ABORTED retries + layout DB retry.
 
 ## 2. Deploy Worker / deploy
-- **Status**: FAILED (Run ID: 22519332392)
-- **Failing Step**: `Install dependencies`
-- **Error**: `ERR_PNPM_OUTDATED_LOCKFILE`
-- **Root Cause**: Same as above. Outdated lockfile due to `next@16.1.6` addition.
+
+- **Status**: ✅ GREEN (Run ID: 22519470572)
+- **Fix**: Synchronized lockfile resolved installation failure.
 
 ## 3. Lighthouse CI / Performance audit
-- **Status**: FAILED (Run ID: 22519332399)
-- **Failing Step**: `Install dependencies`
-- **Error**: `ERR_PNPM_OUTDATED_LOCKFILE`
-- **Root Cause**: Same as above. Outdated lockfile due to `next@16.1.6` addition.
 
-## 4. Vercel Deployments
-- **Status**: FAILED (based on initial report)
-- **Root Cause**: Likely related to the same dependency synchronization issues or build failures stemming from the outdated lockfile.
+- **Status**: ✅ GREEN (Run ID: 22526407324)
+
+## 4. CodeQL
+
+- **Status**: ✅ GREEN (Run ID: 22526407327)
+
+## 5. Vercel Deployments
+
+- **Status**: ✅ Ready
+- **Verification**: `internal-tool-kit-ops.vercel.app/login` serves HTML.
+- **Pending**: Production environment variables (`DATABASE_URL`, `SESSION_SECRET`) need to be set on Vercel to resolve `/api/health` 500 error.
+
+## Last Resolved (2026-02-28, commit 993fd12)
+
+- `command palette opens and navigates` [Mobile] — `dispatchEvent` fallback + focus-clear before keyboard shortcut
+- `all primary nav routes are reachable` [Mobile flaky] — ERR_ABORTED retry in test + layout DB retry
+- `responsive shell renders and navigation works without overflow` [Mobile flaky] — ERR_ABORTED retry
