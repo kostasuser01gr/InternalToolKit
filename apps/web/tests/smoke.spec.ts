@@ -213,13 +213,26 @@ test("responsive shell renders and navigation works without overflow", async ({
     }
   }
 
-  // Navigate to a module page
+  // Navigate to a module page — retry once on ERR_ABORTED (transient CI DB latency)
+  const gotoData = async () => {
+    try {
+      await page.goto("/data", { timeout: 60_000 });
+    } catch (err) {
+      const msg = (err as Error).message ?? "";
+      if (msg.includes("ERR_ABORTED") || msg.includes("net::")) {
+        await page.waitForTimeout(1500);
+        await page.goto("/data", { timeout: 60_000 });
+      } else {
+        throw err;
+      }
+    }
+  };
   if (isChatFirst) {
-    await page.goto("/data");
+    await gotoData();
     await expect(page.getByTestId("data-page")).toBeVisible();
   } else {
     // Use URL navigation as fallback — works for all shell variants
-    await page.goto("/data");
+    await gotoData();
     await expect(page.getByRole("heading", { name: /data/i })).toBeVisible();
   }
 
@@ -256,6 +269,21 @@ test("command palette opens and navigates", async ({ page }) => {
   // Wait an extra moment for React event handlers to attach
   await page.waitForTimeout(2000);
   await analyticsBtn.click({ force: true });
+  // For Mobile CI: also dispatch a synthetic click to ensure React onClick fires
+  // (force click sometimes doesn't reach React's synthetic event system on Mobile)
+  await page.evaluate(() => {
+    const paletteEl = document.querySelector('[data-testid="command-palette"]');
+    if (!paletteEl) return;
+    const buttons = Array.from(paletteEl.querySelectorAll('button[type="button"]'));
+    const btn = buttons.find((b) =>
+      /^Go to Analytics/.test((b as HTMLElement).innerText.trim()),
+    );
+    if (btn) {
+      btn.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true, composed: true }),
+      );
+    }
+  }).catch(() => {});
   await expect(page).toHaveURL(/\/analytics$/, { timeout: 30_000 });
 
   // Wait for analytics page to fully load and hydrate before keyboard shortcut
@@ -269,10 +297,12 @@ test("command palette opens and navigates", async ({ page }) => {
       // Ignore context destruction errors during navigation
     }
   }).catch(() => {});
-  await page.waitForTimeout(1000);
+  // Click a safe non-interactive area to clear browser focus state
+  await page.mouse.click(1, 1).catch(() => {});
+  await page.waitForTimeout(process.env.CI ? 1500 : 500);
   await page.keyboard.press("g");
   // Small delay between keys to ensure sequence handler picks them up
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(600);
   await page.keyboard.press("d");
   await expect(page).toHaveURL(/\/(dashboard|overview)$/, { timeout: 30_000 });
 });

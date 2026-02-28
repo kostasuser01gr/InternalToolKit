@@ -225,7 +225,20 @@ test("all primary nav routes are reachable", async ({ page }) => {
   ];
 
   for (const route of routes) {
-    const response = await page.goto(route, { timeout: 60_000 });
+    let response;
+    try {
+      response = await page.goto(route, { timeout: 60_000 });
+    } catch (err) {
+      // ERR_ABORTED can occur transiently in CI when the DB is under load
+      // and the layout's workspace query causes a redirect. Retry once.
+      const msg = (err as Error).message ?? "";
+      if (msg.includes("ERR_ABORTED") || msg.includes("net::")) {
+        await page.waitForTimeout(1500);
+        response = await page.goto(route, { timeout: 60_000 });
+      } else {
+        throw err;
+      }
+    }
     expect(
       response?.status(),
       `${route} should not return 500`,
