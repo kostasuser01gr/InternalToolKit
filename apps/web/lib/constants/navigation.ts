@@ -15,6 +15,9 @@ import {
   Shapes,
   SlidersHorizontal,
   Settings,
+  ShoppingCart,
+  Wallet,
+  Wrench,
   Workflow,
 } from "lucide-react";
 
@@ -33,7 +36,10 @@ export const sidebarNavItems: NavItem[] = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/shifts", label: "Shifts", icon: CalendarDays },
   { href: "/fleet", label: "Fleet", icon: CarFront },
+  { href: "/work-orders", label: "Work Orders", icon: Wrench },
   { href: "/washers", label: "Washers", icon: Droplets },
+  { href: "/procurement", label: "Procurement", icon: ShoppingCart },
+  { href: "/costs", label: "Costs", icon: Wallet },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/analytics", label: "Analytics", icon: ChartNoAxesCombined },
   { href: "/controls", label: "Controls", icon: SlidersHorizontal },

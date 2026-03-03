@@ -20,3 +20,10 @@ export const updateIncidentSchema = z.object({
   claimRef: z.string().trim().max(100).optional(),
   description: z.string().trim().max(2000).optional(),
 });
+
+export const escalateIncidentSchema = z.object({
+  workspaceId: z.string().min(1),
+  incidentId: z.string().min(1),
+  escalationPolicyId: z.string().min(1).optional(),
+  reason: z.string().trim().min(3).max(400).optional(),
+});

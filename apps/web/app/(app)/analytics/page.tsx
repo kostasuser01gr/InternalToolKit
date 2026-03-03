@@ -8,14 +8,28 @@ import { getAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 import { isDatabaseUnavailableError } from "@/lib/prisma-errors";
 
+/** Resolve a promise within `ms` milliseconds, returning `fallback` on timeout. */
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 export default async function AnalyticsPage() {
   const { workspace } = await getAppContext();
 
   function safeCount(p: Promise<number>) {
-    return p.catch((err: unknown) => {
-      if (!isDatabaseUnavailableError(err)) throw err;
-      return 0;
-    });
+    // Timeout individual DB counts at 8 s to prevent the page from hanging
+    // indefinitely under connection-pool pressure in late-stage CI runs.
+    return withTimeout(
+      p.catch((err: unknown) => {
+        if (!isDatabaseUnavailableError(err)) throw err;
+        return 0;
+      }),
+      8_000,
+      0,
+    );
   }
 
   const [tableCount, records, automationCount] = await Promise.all([

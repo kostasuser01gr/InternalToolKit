@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(export GH_REPO=\"kostasuser01gr/InternalToolKit\")",
+      "Bash(gh auth status)",
+      "Bash(gh repo view --repo \"$GH_REPO\" --json nameWithOwner,url)",
+      "Bash(gh repo view \"$GH_REPO\" --json nameWithOwner,url)",
+      "Bash(gh run list \"$GH_REPO\" --limit 15)",
+      "Bash(gh run list --limit 15)",
+      "Bash(gh run view 22522248417 --log-failed)",
+      "Bash(ls /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/)",
+      "Bash(cat /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/dashboard/page.tsx)",
+      "Bash(cat /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/layout.tsx)",
+      "Bash(cat /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/overview/page.tsx)",
+      "Bash(cat /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/controls/page.tsx)",
+      "Bash(pnpm -w lint)",
+      "Bash(pnpm -w test)",
+      "Bash(git stash)",
+      "Bash(git stash pop)",
+      "Bash(pnpm --filter @internal-toolkit/web test:unit)",
+      "Bash(head -5 /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/shifts/bulk-shift-bar.tsx)",
+      "Bash(head -5 /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/notifications/notifications-list.tsx)",
+      "Bash(head -30 /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/shifts/bulk-shift-bar.tsx)",
+      "Bash(head -40 /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/notifications/notifications-list.tsx)",
+      "Bash(head -20 /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/shifts/bulk-actions.ts)",
+      "Bash(pnpm typecheck)",
+      "Bash(DATABASE_URL=\"postgresql://localhost:5432/test\" pnpm typecheck)",
+      "Bash(DATABASE_URL=\"postgresql://localhost:5432/test\" npx tsc --noEmit)",
+      "Bash(gh run list --limit 15 --json databaseId,status,conclusion,name,headSha,createdAt)",
+      "Bash(git push origin main)",
+      "Bash(gh run list --limit 5)",
+      "Bash(gh run watch 22526407329 --exit-status)",
+      "Bash(gh run view 22526407329 --json status,conclusion,jobs)",
+      "Bash(python3 -c \":*)",
+      "Bash(gh run list --limit 5 --json databaseId,status,conclusion,name,createdAt)",
+      "Bash(gh run list --workflow \"CI\" --limit 5)",
+      "Bash(gh run view 22526903904 --log-failed)",
+      "Bash(cat /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/analytics/page.tsx)",
+      "Bash(cat /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/data/page.tsx)",
+      "Bash(ls /Users/user/projects/InternalToolKit-ops/apps/web/app/\\\\\\(app\\\\\\)/analytics/)",
+      "Bash(DATABASE_URL=\"postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit\" pnpm typecheck)"
+    ],
+    "additionalDirectories": [
+      "/Users/user/.claude/projects/-Users-user-projects-InternalToolKit-ops"
+    ]
+  }
+}
