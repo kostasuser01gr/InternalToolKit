@@ -284,7 +284,8 @@ test("command palette opens and navigates", async ({ page }) => {
       );
     }
   }).catch(() => {});
-  await expect(page).toHaveURL(/\/analytics$/, { timeout: 30_000 });
+  // Use a non-anchored pattern: analytics page may append workspaceId query param
+  await expect(page).toHaveURL(/\/analytics(\?|$)/, { timeout: 30_000 });
 
   // Wait for analytics page to fully load and hydrate before keyboard shortcut
   await page.waitForLoadState("networkidle");
@@ -304,7 +305,7 @@ test("command palette opens and navigates", async ({ page }) => {
   // Small delay between keys to ensure sequence handler picks them up
   await page.waitForTimeout(600);
   await page.keyboard.press("d");
-  await expect(page).toHaveURL(/\/(dashboard|overview)$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/(dashboard|overview)(\?|$)/, { timeout: 30_000 });
 });
 
 test("data table: create table, add field, add record, export CSV", async ({
@@ -320,15 +321,28 @@ test("data table: create table, add field, add record, export CSV", async ({
 
   await page.getByLabel("Create table").fill(tableName);
   await page.getByRole("button", { name: "Create table" }).click();
-  await expect(page.getByText("Table created.")).toBeVisible({ timeout: 15000 });
+  // Wait for server action redirect: URL gains ?success= and tableId params.
+  // This is more reliable than transient toast text under CI DB load.
+  await page.waitForURL((url) => url.searchParams.has("tableId"), { timeout: 30000 });
+  // Success banner is a role=status element — verify it's visible with success text.
+  await expect(page.getByRole("status")).toBeVisible({ timeout: 10000 });
 
   await page.getByPlaceholder("Field name").fill(fieldName);
   await page.getByRole("button", { name: "Add field" }).click();
-  await expect(page.getByText("Field created.")).toBeVisible({ timeout: 15000 });
+  // URL reloads with success=Field+created.; wait for that navigation to settle.
+  await page.waitForURL(
+    (url) => url.searchParams.get("success") === "Field created.",
+    { timeout: 30000 },
+  );
+  await expect(page.getByRole("status")).toBeVisible({ timeout: 10000 });
 
   await page.getByLabel(fieldName).fill("hello world");
   await page.getByRole("button", { name: "Save record" }).click();
-  await expect(page.getByText("Record created.")).toBeVisible({ timeout: 15000 });
+  await page.waitForURL(
+    (url) => url.searchParams.get("success") === "Record created.",
+    { timeout: 30000 },
+  );
+  await expect(page.getByRole("status")).toBeVisible({ timeout: 10000 });
   await expect(page.getByText("hello world")).toBeVisible();
 
   const currentUrl = new URL(page.url());
