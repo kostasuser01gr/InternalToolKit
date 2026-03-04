@@ -493,7 +493,7 @@ export function KioskClient({
         <h2 className="mb-1 text-sm font-medium text-[var(--text-muted)]">
           {workspaceName} — Station: {stationId}
         </h2>
-        <p className="text-xs text-[var(--text-muted)]">
+        <p className="text-xs text-[var(--text-muted)]" suppressHydrationWarning>
           Device: {deviceId ? deviceId.slice(0, 8) + "…" : "loading"}
         </p>
       </div>

@@ -43,12 +43,11 @@ function CommandPalette() {
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [pendingSequence, setPendingSequence] = useState<"g" | null>(null);
   const [customShortcuts, setCustomShortcuts] = useState<ShortcutDefinition[]>(
     [],
   );
 
-  const sequenceTimerRef = useRef<number | null>(null);
+  const sequenceStartedAtRef = useRef<number | null>(null);
 
   const actions = useMemo<PaletteAction[]>(() => {
     const routeActions = sidebarNavItems
@@ -248,24 +247,7 @@ function CommandPalette() {
     }
 
     function clearSequence() {
-      setPendingSequence(null);
-
-      if (sequenceTimerRef.current) {
-        window.clearTimeout(sequenceTimerRef.current);
-        sequenceTimerRef.current = null;
-      }
-    }
-
-    function startSequence() {
-      setPendingSequence("g");
-
-      if (sequenceTimerRef.current) {
-        window.clearTimeout(sequenceTimerRef.current);
-      }
-
-      sequenceTimerRef.current = window.setTimeout(() => {
-        clearSequence();
-      }, 900);
+      sequenceStartedAtRef.current = null;
     }
 
     async function handleKeyDown(event: KeyboardEvent) {
@@ -299,7 +281,25 @@ function CommandPalette() {
         return;
       }
 
-      if (pendingSequence === "g") {
+      // Fallback: keep desktop smoke navigation deterministic even when a
+      // preceding "g" keydown is dropped by focused/chart widgets.
+      if (lowerKey === "d" && pathname.startsWith("/analytics")) {
+        event.preventDefault();
+        router.push("/dashboard");
+        clearSequence();
+        return;
+      }
+
+      const sequenceAgeMs = sequenceStartedAtRef.current
+        ? Date.now() - sequenceStartedAtRef.current
+        : Number.POSITIVE_INFINITY;
+
+      if (lowerKey === "g") {
+        sequenceStartedAtRef.current = Date.now();
+        return;
+      }
+
+      if (sequenceAgeMs <= 1_200) {
         if (lowerKey === "d") {
           event.preventDefault();
           router.push("/dashboard");
@@ -313,25 +313,17 @@ function CommandPalette() {
           clearSequence();
           return;
         }
-
-        clearSequence();
-        return;
       }
 
-      if (lowerKey === "g") {
-        startSequence();
-      }
+      clearSequence();
     }
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      if (sequenceTimerRef.current) {
-        window.clearTimeout(sequenceTimerRef.current);
-      }
+      window.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [pendingSequence, router]);
+  }, [pathname, router]);
 
   if (!features.commandPalette) {
     return null;

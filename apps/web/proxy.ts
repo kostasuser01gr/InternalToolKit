@@ -211,6 +211,13 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-pathname", pathname);
 
   let response: NextResponse;
+  if (pathname.startsWith("/api")) {
+    response = NextResponse.next({ request: { headers: requestHeaders } });
+    response.headers.set("X-Request-Id", requestId);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  }
+
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/session") ||
@@ -264,5 +271,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
