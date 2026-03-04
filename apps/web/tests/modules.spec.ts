@@ -12,6 +12,7 @@ async function gotoWithRetry(page: Page, route: string, timeout = 120_000) {
       lastError = error;
       const message = error instanceof Error ? error.message : String(error);
       const canRetry =
+        message.includes("Timeout") ||
         message.includes("ERR_ABORTED") ||
         message.includes("net::") ||
         message.includes("frame was detached");

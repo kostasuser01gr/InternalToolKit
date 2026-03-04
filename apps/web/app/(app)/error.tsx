@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { GlassCard } from "@/components/kit/glass-card";
 import { PrimaryButton } from "@/components/kit/primary-button";
+import { extractCorrelationIds } from "@/lib/error-correlation";
 
 export default function AppError({
   error,
@@ -14,16 +15,21 @@ export default function AppError({
   reset: () => void;
 }) {
   const localErrorId = useId();
+  const correlation = extractCorrelationIds(error);
+  const displayErrorId = correlation.errorId ?? localErrorId;
+  const displayRequestId = correlation.requestId;
 
   useEffect(() => {
-    console.error("[AppError]", { errorId: error.digest ?? localErrorId, message: error.message });
-  }, [error, localErrorId]);
+    console.error("[AppError]", {
+      errorId: displayErrorId,
+      requestId: displayRequestId,
+      message: error.message,
+    });
+  }, [error, displayErrorId, displayRequestId]);
 
   const isAuthError = error.message?.includes("Authentication") || error.message?.includes("session");
   const isDbError = error.message?.includes("database") || error.message?.includes("connect");
   const isSchemaError = error.message?.includes("does not exist") || error.message?.includes("P2021") || error.message?.includes("P2022");
-
-  const displayId = error.digest ?? localErrorId;
 
   return (
     <GlassCard className="mx-auto max-w-xl space-y-4">
@@ -40,7 +46,15 @@ export default function AppError({
               : "The dashboard could not complete that action. Retry or return to a stable route."}
       </p>
       <p className="text-xs text-[var(--text-muted)] opacity-80">
-        Error&nbsp;ID:&nbsp;<code className="select-all font-mono">{displayId}</code>
+        Error&nbsp;ID:&nbsp;<code className="select-all font-mono">{displayErrorId}</code>
+      </p>
+      {displayRequestId ? (
+        <p className="text-xs text-[var(--text-muted)] opacity-80">
+          Request&nbsp;ID:&nbsp;<code className="select-all font-mono">{displayRequestId}</code>
+        </p>
+      ) : null}
+      <p className="text-xs text-[var(--text-muted)] opacity-80">
+        Share both IDs with support for log correlation.
       </p>
       <div className="flex flex-wrap gap-2">
         <PrimaryButton onClick={reset}>Retry</PrimaryButton>

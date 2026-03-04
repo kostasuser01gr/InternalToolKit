@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
+
+import { extractCorrelationIds } from "@/lib/error-correlation";
 
 export default function GlobalError({
   error,
@@ -9,9 +11,19 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const localErrorId = useId();
+  const correlation = extractCorrelationIds(error);
+  const displayErrorId = correlation.errorId ?? localErrorId;
+  const displayRequestId = correlation.requestId;
+
   useEffect(() => {
-    console.error(error);
-  }, [error]);
+    console.error("[GlobalError]", {
+      errorId: displayErrorId,
+      requestId: displayRequestId,
+      message: error.message,
+    });
+  }, [error, displayErrorId, displayRequestId]);
+
   return (
     <html lang="en">
       <body
@@ -33,6 +45,14 @@ export default function GlobalError({
           <p style={{ color: "#94a3b8", marginTop: "0.5rem" }}>
             An unexpected error occurred. Try reloading the page.
           </p>
+          <p style={{ color: "#94a3b8", fontSize: "0.8rem", marginTop: "0.75rem" }}>
+            Error ID: <code>{displayErrorId}</code>
+          </p>
+          {displayRequestId ? (
+            <p style={{ color: "#94a3b8", fontSize: "0.8rem", marginTop: "0.25rem" }}>
+              Request ID: <code>{displayRequestId}</code>
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={reset}
