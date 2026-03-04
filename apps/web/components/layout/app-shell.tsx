@@ -5,7 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { BottomNav } from "@/components/layout/bottom-nav";
-import { ChatFirstShell } from "@/components/layout/chat-first-shell";
+import {
+  ChatFirstShell,
+  type ShellChannel,
+  type ShellConversation,
+} from "@/components/layout/chat-first-shell";
 import { OfflineBanner } from "@/components/layout/offline-banner";
 import { SideRail } from "@/components/layout/side-rail";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -20,9 +24,20 @@ type AppShellProps = {
   userRole?: string | undefined;
   roleShortcuts?: Record<string, Array<{ id: string; label: string; command: string }>> | undefined;
   opsInboxCount?: number | undefined;
+  recentConversations?: ShellConversation[] | undefined;
+  workspaceChannels?: ShellChannel[] | undefined;
 };
 
-function AppShell({ children, workspaceName, userName, userRole, roleShortcuts, opsInboxCount }: AppShellProps) {
+function AppShell({
+  children,
+  workspaceName,
+  userName,
+  userRole,
+  roleShortcuts,
+  opsInboxCount,
+  recentConversations,
+  workspaceChannels,
+}: AppShellProps) {
   const pathname = usePathname();
 
   if (features.chatFirstUi) {
@@ -33,6 +48,8 @@ function AppShell({ children, workspaceName, userName, userRole, roleShortcuts, 
         userRole={userRole}
         roleShortcuts={roleShortcuts}
         opsInboxCount={opsInboxCount}
+        recentConversations={recentConversations}
+        workspaceChannels={workspaceChannels}
       >
         {children}
       </ChatFirstShell>

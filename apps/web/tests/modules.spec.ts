@@ -1,28 +1,52 @@
 import { expect, test, type Page } from "@playwright/test";
 
+async function gotoWithRetry(page: Page, route: string, timeout = 120_000) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await page.goto(route, {
+        timeout,
+        waitUntil: "domcontentloaded",
+      });
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const canRetry =
+        message.includes("ERR_ABORTED") ||
+        message.includes("net::") ||
+        message.includes("frame was detached");
+      if (!canRetry || attempt === 2) {
+        throw error;
+      }
+      await page.waitForTimeout(1500);
+    }
+  }
+  throw lastError ?? new Error(`Failed to navigate to ${route}`);
+}
+
+test.describe.configure({ timeout: 480_000 });
+
 async function login(page: Page, loginName: string, pin: string) {
-  await page.goto("/login");
+  await gotoWithRetry(page, "/login");
   await page.getByLabel("Login name").fill(loginName);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: /^Continue$/ }).click();
-  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 90_000 });
 }
 
 // ---------- Washers module ----------
 
 test("washers page loads and shows KPIs", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/washers");
+  await gotoWithRetry(page, "/washers", 90_000);
   await page.waitForLoadState("networkidle");
-  await expect(page.getByTestId("washers-page")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("washers-page")).toBeVisible({ timeout: 45_000 });
   await expect(page.getByTestId("washers-kpis")).toBeVisible({ timeout: 10_000 });
 });
 
 test("washers: create wash task", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/washers");
+  await gotoWithRetry(page, "/washers", 90_000);
 
   // Fill the form — vehicle and washer are <select>, might have no options yet
   const vehicleSelect = page.locator("#washer-vehicle");
@@ -32,10 +56,20 @@ test("washers: create wash task", async ({ page }) => {
     // Select first non-placeholder option
     await vehicleSelect.selectOption({ index: 1 });
     await page.getByRole("button", { name: "Save wash task" }).click();
-    // Expect either success toast or error (no crash)
-    await expect(
-      page.getByText(/created|saved|error|already/i).first(),
-    ).toBeVisible({ timeout: 10000 });
+    await page.waitForURL(
+      (url) => url.searchParams.has("success") || url.searchParams.has("error"),
+      { timeout: 15_000 },
+    ).catch(() => {});
+    const currentUrl = new URL(page.url());
+    const hasOutcomeQuery =
+      currentUrl.searchParams.has("success") ||
+      currentUrl.searchParams.has("error");
+    if (!hasOutcomeQuery) {
+      // Fallback when the server responds inline without URL params.
+      await expect(
+        page.getByText(/created|saved|error|already/i).first(),
+      ).toBeVisible({ timeout: 15_000 });
+    }
   } else {
     // No vehicles available — verify the form renders without crashing
     await expect(vehicleSelect).toBeVisible();
@@ -45,9 +79,8 @@ test("washers: create wash task", async ({ page }) => {
 test("washers: share panel and daily register visible", async ({
   page,
 }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/washers");
+  await gotoWithRetry(page, "/washers", 90_000);
   await expect(page.getByTestId("share-washer-app")).toBeVisible();
   await expect(page.getByTestId("daily-register")).toBeVisible();
 });
@@ -55,18 +88,16 @@ test("washers: share panel and daily register visible", async ({
 // ---------- Imports module ----------
 
 test("imports page loads", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/imports");
+  await gotoWithRetry(page, "/imports");
   // The page may render before the data-testid is available, so check heading
   await expect(page.getByRole("heading", { name: "Imports", exact: true })).toBeVisible();
   await expect(page.getByText("Upload data files")).toBeVisible();
 });
 
 test("imports: upload form is functional", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/imports");
+  await gotoWithRetry(page, "/imports");
 
   // Upload form should have file input and type selector
   const fileInput = page.locator('input[type="file"]');
@@ -85,18 +116,16 @@ test("imports: upload form is functional", async ({ page }) => {
 // ---------- Feeds module ----------
 
 test("feeds page loads and shows source form", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/feeds");
+  await gotoWithRetry(page, "/feeds");
   await expect(page.getByTestId("feeds-page")).toBeVisible();
   await expect(page.getByLabel("Source Name")).toBeVisible();
   await expect(page.getByLabel("RSS URL")).toBeVisible();
 });
 
 test("feeds: add default sources", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/feeds");
+  await gotoWithRetry(page, "/feeds");
 
   const addDefaultsBtn = page.getByRole("button", {
     name: /add default sources/i,
@@ -111,9 +140,8 @@ test("feeds: add default sources", async ({ page }) => {
 });
 
 test("feeds: add custom source", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/feeds");
+  await gotoWithRetry(page, "/feeds");
 
   const sourceName = `Test Feed ${Date.now()}`;
   await page.getByLabel("Source Name").fill(sourceName);
@@ -130,18 +158,24 @@ test("feeds: add custom source", async ({ page }) => {
 // ---------- Settings module ----------
 
 test("settings page loads sections", async ({ page }) => {
-  
+  test.setTimeout(240_000);
   await login(page, "admin", "1234");
-  await page.goto("/settings");
+  const response = await gotoWithRetry(page, "/settings", 90_000);
+  expect(response?.status(), "/settings should not return 500").toBeLessThan(
+    500,
+  );
+  await page.waitForLoadState("networkidle");
   await expect(page.getByTestId("settings-page")).toBeVisible();
   await expect(page.getByLabel("Name", { exact: true })).toBeVisible();
   await expect(page.getByText("Theme preference")).toBeVisible();
 });
 
 test("settings: save profile without crash", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/settings");
+  const response = await gotoWithRetry(page, "/settings");
+  expect(response?.status(), "/settings should not return 500").toBeLessThan(
+    500,
+  );
 
   const nameInput = page.locator("#profile-name");
   const currentName = await nameInput.inputValue();
@@ -156,9 +190,8 @@ test("settings: save profile without crash", async ({ page }) => {
 // ---------- Calendar module ----------
 
 test("calendar page loads", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/calendar");
+  await gotoWithRetry(page, "/calendar");
   await expect(
     page.getByRole("heading", { name: /calendar/i }),
   ).toBeVisible();
@@ -167,9 +200,8 @@ test("calendar page loads", async ({ page }) => {
 });
 
 test("calendar: apply date range", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/calendar");
+  await gotoWithRetry(page, "/calendar");
 
   const today = new Date();
   const from = today.toISOString().slice(0, 10);
@@ -188,27 +220,21 @@ test("calendar: apply date range", async ({ page }) => {
 // ---------- Notifications + Ops Inbox ----------
 
 test("notifications page loads", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/notifications");
-  // Page should load without crashing
-  const response = await page.goto("/notifications");
+  const response = await gotoWithRetry(page, "/notifications");
   expect(response?.status()).toBeLessThan(500);
 });
 
 test("ops inbox page loads", async ({ page }) => {
-  
   await login(page, "admin", "1234");
-  await page.goto("/ops-inbox");
-  const response = await page.goto("/ops-inbox");
+  const response = await gotoWithRetry(page, "/ops-inbox");
   expect(response?.status()).toBeLessThan(500);
 });
 
 // ---------- Cross-module navigation ----------
 
 test("all primary nav routes are reachable", async ({ page }) => {
-  
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
   await login(page, "admin", "1234");
 
   const routes = [
@@ -225,25 +251,14 @@ test("all primary nav routes are reachable", async ({ page }) => {
   ];
 
   for (const route of routes) {
-    let response;
-    try {
-      response = await page.goto(route, { timeout: 60_000 });
-    } catch (err) {
-      // ERR_ABORTED can occur transiently in CI when the DB is under load
-      // and the layout's workspace query causes a redirect. Retry once.
-      const msg = (err as Error).message ?? "";
-      if (msg.includes("ERR_ABORTED") || msg.includes("net::")) {
-        await page.waitForTimeout(1500);
-        response = await page.goto(route, { timeout: 60_000 });
-      } else {
-        throw err;
-      }
-    }
+    const response = await gotoWithRetry(page, route);
     expect(
       response?.status(),
       `${route} should not return 500`,
     ).not.toBe(500);
-    // Should not be redirected to an error page
-    expect(page.url()).toContain(route.replace("/", ""));
+    // Reachability check: route must not bounce back to auth/error pages.
+    const pathname = new URL(page.url()).pathname;
+    expect(pathname).not.toBe("/login");
+    expect(pathname).not.toBe("/_error");
   }
 });

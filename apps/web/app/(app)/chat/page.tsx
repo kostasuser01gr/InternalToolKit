@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ChatRole } from "@prisma/client";
+import { Mic, Paperclip, Search, SendHorizontal, Sparkles } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { GlassCard } from "@/components/kit/glass-card";
 import { SubmitButton } from "@/components/kit/submit-button";
@@ -39,6 +41,8 @@ type ChatPageProps = {
     success?: string;
     quickCommand?: string;
     modelId?: string;
+    query?: string;
+    newConversation?: string;
   }>;
 };
 
@@ -250,6 +254,27 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
   const channels = channelsResult.data;
   const selectedChannelId = params.channelId;
 
+  if (params.newConversation === "1") {
+    const createdThread = await db.chatThread.create({
+      data: {
+        workspaceId: workspace.id,
+        channelId: selectedChannelId ?? null,
+        title: `Conversation ${new Date().toLocaleString()}`,
+        createdBy: user.id,
+      },
+      select: { id: true },
+    });
+
+    redirect(
+      chatQuery({
+        workspaceId: workspace.id,
+        threadId: createdThread.id,
+        channelId: selectedChannelId,
+        modelId,
+      }),
+    );
+  }
+
   const [threads, templatesResult, actionButtonsResult, artifactsResult] = await Promise.all([
     db.chatThread.findMany({
       where: {
@@ -326,11 +351,35 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
   const activePinnedMessages =
     activeThread?.messages.filter((message) => message.isPinned) ?? [];
 
+  const messageQuery = params.query?.trim().toLowerCase() ?? "";
+  const visibleMessages = messageQuery
+    ? (activeThread?.messages ?? []).filter((message) =>
+        message.content.toLowerCase().includes(messageQuery),
+      )
+    : activeThread?.messages ?? [];
+
   return (
-    <div className="space-y-6" data-testid="chat-page">
+    <div className="space-y-4 pb-18 lg:space-y-5" data-testid="chat-page">
       <PageHeader
-        title={features.unifiedChat ? "Unified Chat Workspace" : "Team Chat"}
-        subtitle="Cloud-first assistant workspace with slash commands, artifacts, pinned context, and auditable tool actions."
+        title={features.unifiedChat ? "Operations Copilot Chat" : "Team Chat"}
+        subtitle="Chat-first workspace for ops threads, channels, and AI-assisted actions. Keep conversations contextual to fleet, shifts, and washer workflows."
+        action={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge variant="active">{modelId}</Badge>
+            <Link
+              href={chatQuery({
+                workspaceId: workspace.id,
+                channelId: selectedChannelId,
+                modelId,
+                newConversation: "1",
+              })}
+              className="focus-ring inline-flex items-center gap-1 rounded-lg border border-[#9a6fff66] bg-[#9a6fff24] px-3 py-1.5 text-xs font-semibold text-[var(--text)]"
+            >
+              <Sparkles className="size-3.5" />
+              New conversation
+            </Link>
+          </div>
+        }
       />
 
       <StatusBanner error={params.error} success={params.success} />
@@ -341,12 +390,11 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[300px,1fr,340px]">
+      <div className="grid gap-4 lg:grid-cols-[290px,1fr] xl:grid-cols-[320px,1fr,310px]">
         <GlassCard className="space-y-4">
-          {/* ─── Channels (Viber-like) ─────────────────────── */}
-          {features.viberChat && channels.length > 0 && (
+          {features.viberChat && channels.length > 0 ? (
             <div className="space-y-2">
-              <h2 className="kpi-font text-lg font-semibold">Channels</h2>
+              <h2 className="kpi-font text-lg font-semibold">Workspace Channels</h2>
               <div className="space-y-1 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/4 p-2">
                 <Link
                   href={chatQuery({ workspaceId: workspace.id, modelId })}
@@ -357,7 +405,7 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                       : "text-[var(--text-muted)] hover:bg-white/7",
                   )}
                 >
-                  📬 All Threads
+                  # all-conversations
                 </Link>
                 {channels.map((ch) => (
                   <Link
@@ -368,25 +416,19 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                       modelId,
                     })}
                     className={cn(
-                      "focus-ring block rounded-[var(--radius-sm)] px-3 py-1.5 text-sm",
+                      "focus-ring flex items-center justify-between gap-2 rounded-[var(--radius-sm)] px-3 py-1.5 text-sm",
                       selectedChannelId === ch.id
                         ? "bg-[#9a6fff22] text-[var(--text)]"
                         : "text-[var(--text-muted)] hover:bg-white/7",
                     )}
                   >
-                    <span className="truncate">
-                      {ch.type === "DM" ? "💬" : "#"} {ch.name}
-                    </span>
-                    <span className="ml-1 text-xs text-[var(--text-muted)]">
-                      {ch._count.threads}
-                    </span>
+                    <span className="truncate"># {ch.name}</span>
+                    <span className="text-xs text-[var(--text-muted)]">{ch._count.threads}</span>
                   </Link>
                 ))}
               </div>
             </div>
-          )}
-
-          <h2 className="kpi-font text-xl font-semibold">Threads</h2>
+          ) : null}
 
           <form
             action={createThreadAction}
@@ -400,84 +442,87 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
               placeholder="Ops command center"
               required
             />
-            <SubmitButton className="w-full">
-              Create thread
-            </SubmitButton>
+            <SubmitButton className="w-full">Create thread</SubmitButton>
           </form>
 
-          <ScrollArea className="h-[360px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/4 p-2">
-            <div className="space-y-2 pr-2">
-              {threads.map((thread) => (
-                <Link
-                  key={thread.id}
-                  href={chatQuery({
-                    workspaceId: workspace.id,
-                    threadId: thread.id,
-                    modelId,
-                  })}
-                  className={cn(
-                    "focus-ring block rounded-[var(--radius-sm)] border border-transparent px-3 py-2 text-sm",
-                    activeThread?.id === thread.id
-                      ? "border-[#9a6fff66] bg-[#9a6fff22] text-[var(--text)]"
-                      : "text-[var(--text-muted)] hover:border-[var(--border)] hover:bg-white/7",
-                  )}
-                >
-                  <p className="truncate">{thread.title}</p>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {thread._count.messages} messages
-                  </p>
-                </Link>
-              ))}
-              {threads.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">No threads yet.</p>
-              ) : null}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="kpi-font text-lg font-semibold">Recent Threads</h2>
+              <span className="text-xs text-[var(--text-muted)]">{threads.length}</span>
             </div>
-          </ScrollArea>
-
-          <div className="space-y-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-              Prompt Templates
-            </p>
-            {templates.map((template) => (
-              <form key={template.id} action={sendMessageAction}>
-                <input type="hidden" name="workspaceId" value={workspace.id} />
-                <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
-                <input type="hidden" name="modelId" value={modelId} />
-                <input type="hidden" name="content" value={template.prompt} />
-                <SubmitButton
-                  className="mb-2 w-full"
-                  disabled={!activeThread}
-                >
-                  {template.title}
-                </SubmitButton>
-              </form>
-            ))}
-            {templates.length === 0 ? (
-              <p className="text-xs text-[var(--text-muted)]">
-                Save templates from Settings to use them here.
-              </p>
-            ) : null}
+            <ScrollArea className="h-[320px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/4 p-2">
+              <div className="space-y-2 pr-2">
+                {threads.map((thread) => (
+                  <Link
+                    key={thread.id}
+                    href={chatQuery({
+                      workspaceId: workspace.id,
+                      threadId: thread.id,
+                      channelId: selectedChannelId,
+                      modelId,
+                    })}
+                    className={cn(
+                      "focus-ring block rounded-[var(--radius-sm)] border border-transparent px-3 py-2 text-sm",
+                      activeThread?.id === thread.id
+                        ? "border-[#9a6fff66] bg-[#9a6fff22] text-[var(--text)]"
+                        : "text-[var(--text-muted)] hover:border-[var(--border)] hover:bg-white/7",
+                    )}
+                  >
+                    <p className="truncate">{thread.title}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{thread._count.messages} messages</p>
+                  </Link>
+                ))}
+                {threads.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)]">No threads yet.</p>
+                ) : null}
+              </div>
+            </ScrollArea>
           </div>
         </GlassCard>
 
-        <GlassCard className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="kpi-font text-xl font-semibold">
-              {activeThread?.title ?? "Select a thread"}
-            </h2>
-            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-              <Badge variant="active">{modelId}</Badge>
+        <GlassCard className="relative min-h-[72vh] space-y-3 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-3">
+            <div>
+              <h2 className="kpi-font text-xl font-semibold">
+                {activeThread?.title ?? "Select a thread"}
+              </h2>
+              <p className="text-xs text-[var(--text-muted)]">
+                Chat-first incident and operations workspace.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
               <Badge variant="default">tools-enabled</Badge>
+              <Badge variant="active">{visibleMessages.length} visible</Badge>
             </div>
           </div>
 
-          <ScrollArea className="h-[520px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/4 p-3">
-            <div className="space-y-3 pr-2">
-              {activeThread?.messages.map((message) => (
+          <form action="/chat" className="relative">
+            <input type="hidden" name="workspaceId" value={workspace.id} />
+            {activeThread?.id ? <input type="hidden" name="threadId" value={activeThread.id} /> : null}
+            {selectedChannelId ? <input type="hidden" name="channelId" value={selectedChannelId} /> : null}
+            <input type="hidden" name="modelId" value={modelId} />
+            <Label htmlFor="search-chat" className="sr-only">
+              Search within chat
+            </Label>
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-muted)]" />
+            <Input
+              id="search-chat"
+              name="query"
+              defaultValue={params.query ?? ""}
+              placeholder="Search within chat history..."
+              className="pl-9"
+            />
+          </form>
+
+          <ScrollArea className="h-[calc(72vh-260px)] min-h-[320px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-black/10 p-4">
+            <div className="space-y-4 pr-2">
+              {visibleMessages.map((message) => (
                 <article
                   key={message.id}
                   className={cn(
-                    "rounded-[var(--radius-sm)] border px-3 py-2 text-sm",
+                    "max-w-[92%] rounded-2xl border px-3 py-2 text-sm shadow-[0_12px_22px_rgba(0,0,0,0.18)]",
+                    message.role === ChatRole.USER ? "ml-auto rounded-br-sm border-[#7fa8ff45] bg-[#4f73bf29]" : "",
+                    message.role !== ChatRole.USER ? "rounded-bl-sm" : "",
                     getMessageTone(message.role),
                   )}
                 >
@@ -487,153 +532,126 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                     </p>
                     <div className="flex items-center gap-1">
                       {message.isPinned ? <Badge variant="active">Pinned</Badge> : null}
-                      {message.commandName ? (
-                        <Badge variant="default">{message.commandName}</Badge>
-                      ) : null}
-                      {message.modelId ? (
-                        <Badge variant="default">{message.modelId}</Badge>
-                      ) : null}
+                      {message.commandName ? <Badge variant="default">{message.commandName}</Badge> : null}
                     </div>
                   </div>
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {message.role === ChatRole.ASSISTANT ? (
                       <>
                         <form action={regenerateMessageAction}>
                           <input type="hidden" name="workspaceId" value={workspace.id} />
-                          <input type="hidden" name="threadId" value={activeThread.id} />
+                          <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
                           <input type="hidden" name="messageId" value={message.id} />
                           <input type="hidden" name="modelId" value={modelId} />
                           <SubmitButton>Regenerate</SubmitButton>
                         </form>
-
                         <form action={exportMessageAction}>
                           <input type="hidden" name="workspaceId" value={workspace.id} />
-                          <input type="hidden" name="threadId" value={activeThread.id} />
+                          <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
                           <input type="hidden" name="messageId" value={message.id} />
                           <SubmitButton>Export</SubmitButton>
-                        </form>
-
-                        <form action={convertMessageAction}>
-                          <input type="hidden" name="workspaceId" value={workspace.id} />
-                          <input type="hidden" name="threadId" value={activeThread.id} />
-                          <input type="hidden" name="messageId" value={message.id} />
-                          <input type="hidden" name="target" value="automation" />
-                          <SubmitButton>To Automation</SubmitButton>
-                        </form>
-
-                        <form action={convertMessageAction}>
-                          <input type="hidden" name="workspaceId" value={workspace.id} />
-                          <input type="hidden" name="threadId" value={activeThread.id} />
-                          <input type="hidden" name="messageId" value={message.id} />
-                          <input type="hidden" name="target" value="report" />
-                          <SubmitButton>To Report</SubmitButton>
                         </form>
                       </>
                     ) : null}
 
                     <form action={pinMessageAction}>
                       <input type="hidden" name="workspaceId" value={workspace.id} />
-                      <input type="hidden" name="threadId" value={activeThread.id} />
+                      <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
                       <input type="hidden" name="messageId" value={message.id} />
-                      <SubmitButton>
-                        {message.isPinned ? "Unpin" : "Pin"}
-                      </SubmitButton>
+                      <SubmitButton>{message.isPinned ? "Unpin" : "Pin"}</SubmitButton>
                     </form>
 
                     <form action={forkThreadAction}>
                       <input type="hidden" name="workspaceId" value={workspace.id} />
-                      <input type="hidden" name="threadId" value={activeThread.id} />
+                      <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
                       <input type="hidden" name="messageId" value={message.id} />
                       <SubmitButton>Fork Here</SubmitButton>
+                    </form>
+
+                    <form action={convertMessageAction}>
+                      <input type="hidden" name="workspaceId" value={workspace.id} />
+                      <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
+                      <input type="hidden" name="messageId" value={message.id} />
+                      <input type="hidden" name="target" value="automation" />
+                      <SubmitButton>To Automation</SubmitButton>
                     </form>
                   </div>
                 </article>
               ))}
-
-              {!activeThread || activeThread.messages.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">No messages yet.</p>
+              {!activeThread || visibleMessages.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">
+                  {messageQuery ? "No messages matched your search." : "No messages yet."}
+                </p>
               ) : null}
             </div>
           </ScrollArea>
 
           {activeThread ? (
-            <form action={sendMessageAction} className="space-y-2">
+            <form action={sendMessageAction} className="sticky bottom-0 space-y-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[rgb(8_10_19_/_0.92)] p-3">
               <input type="hidden" name="workspaceId" value={workspace.id} />
               <input type="hidden" name="threadId" value={activeThread.id} />
               <input type="hidden" name="modelId" value={modelId} />
-              <Label htmlFor="chat-message">Message or slash command</Label>
+              <Label htmlFor="chat-message">Message</Label>
               <Textarea
                 id="chat-message"
                 name="content"
-                rows={4}
+                rows={3}
                 defaultValue={params.quickCommand ?? ""}
                 placeholder="Type a message or /summarize-table incidents"
                 required
               />
-              <div className="flex flex-wrap gap-2">
-                <SubmitButton>Send</SubmitButton>
-                <p className="text-xs text-[var(--text-muted)]">
-                  Slash commands: /summarize-table, /draft-automation, /kpi-layout,
-                  /create-shift, /log-fleet-event
-                </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="focus-ring inline-flex size-9 items-center justify-center rounded-lg border border-[var(--border)] bg-white/5 text-[var(--text-muted)]"
+                    aria-label="Attach file"
+                  >
+                    <Paperclip className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className="focus-ring inline-flex size-9 items-center justify-center rounded-lg border border-[var(--border)] bg-white/5 text-[var(--text-muted)]"
+                    aria-label="Voice input"
+                  >
+                    <Mic className="size-4" />
+                  </button>
+                  <p className="text-xs text-[var(--text-muted)]">Streaming ready · typing indicator active</p>
+                </div>
+                <SubmitButton className="inline-flex items-center gap-1.5">
+                  <SendHorizontal className="size-4" />
+                  Send
+                </SubmitButton>
               </div>
             </form>
           ) : null}
         </GlassCard>
 
-        <GlassCard className="space-y-4">
-          <h2 className="kpi-font text-xl font-semibold">Tools & Artifacts</h2>
-
+        <GlassCard className="hidden space-y-4 xl:block">
+          <h2 className="kpi-font text-xl font-semibold">Context</h2>
           <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-              Quick Tool Invocations
-            </p>
-            <div className="grid gap-2">
-              <form action={sendMessageAction}>
-                <input type="hidden" name="workspaceId" value={workspace.id} />
-                <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
-                <input type="hidden" name="modelId" value={modelId} />
-                <input type="hidden" name="content" value="/summarize-table" />
-                <SubmitButton className="w-full" disabled={!activeThread}>
-                  Summarize Table
-                </SubmitButton>
-              </form>
-
-              <form action={sendMessageAction}>
-                <input type="hidden" name="workspaceId" value={workspace.id} />
-                <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
-                <input type="hidden" name="modelId" value={modelId} />
-                <input
-                  type="hidden"
-                  name="content"
-                  value="/draft-automation Alert admins when stale records exceed threshold"
-                />
-                <SubmitButton className="w-full" disabled={!activeThread}>
-                  Draft Automation
-                </SubmitButton>
-              </form>
-
-              <form action={sendMessageAction}>
-                <input type="hidden" name="workspaceId" value={workspace.id} />
-                <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
-                <input type="hidden" name="modelId" value={modelId} />
-                <input
-                  type="hidden"
-                  name="content"
-                  value="/kpi-layout Executive view for throughput, quality, and risk"
-                />
-                <SubmitButton className="w-full" disabled={!activeThread}>
-                  KPI Layout
-                </SubmitButton>
-              </form>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Prompt Templates</p>
+            <div className="space-y-2">
+              {templates.map((template) => (
+                <form key={template.id} action={sendMessageAction}>
+                  <input type="hidden" name="workspaceId" value={workspace.id} />
+                  <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
+                  <input type="hidden" name="modelId" value={modelId} />
+                  <input type="hidden" name="content" value={template.prompt} />
+                  <SubmitButton className="w-full" disabled={!activeThread}>
+                    {template.title}
+                  </SubmitButton>
+                </form>
+              ))}
+              {templates.length === 0 ? (
+                <p className="text-xs text-[var(--text-muted)]">Save templates from Settings to use them here.</p>
+              ) : null}
             </div>
           </div>
 
           <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-              Custom Quick Buttons
-            </p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Quick Buttons</p>
             <div className="space-y-2">
               {actionButtons.map((button) => (
                 <form key={button.id} action={sendMessageAction}>
@@ -641,26 +659,19 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                   <input type="hidden" name="threadId" value={activeThread?.id ?? ""} />
                   <input type="hidden" name="modelId" value={modelId} />
                   <input type="hidden" name="content" value={button.action} />
-                  <SubmitButton
-                    className="w-full"
-                    disabled={!activeThread}
-                  >
+                  <SubmitButton className="w-full" disabled={!activeThread}>
                     {button.label}
                   </SubmitButton>
                 </form>
               ))}
               {actionButtons.length === 0 ? (
-                <p className="text-xs text-[var(--text-muted)]">
-                  Configure quick buttons in Settings.
-                </p>
+                <p className="text-xs text-[var(--text-muted)]">Configure quick buttons in Settings.</p>
               ) : null}
             </div>
           </div>
 
           <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-              Pinned in Active Thread
-            </p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Pinned in Active Thread</p>
             <div className="space-y-2">
               {activePinnedMessages.map((message) => (
                 <article
@@ -668,42 +679,30 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
                   className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-black/10 p-2 text-xs"
                 >
                   <p className="font-medium text-[var(--text)]">{message.role}</p>
-                  <p className="whitespace-pre-wrap text-[var(--text-muted)]">
-                    {message.content}
-                  </p>
+                  <p className="whitespace-pre-wrap text-[var(--text-muted)]">{message.content}</p>
                 </article>
               ))}
               {activePinnedMessages.length === 0 ? (
-                <p className="text-xs text-[var(--text-muted)]">
-                  No pinned messages in this thread.
-                </p>
+                <p className="text-xs text-[var(--text-muted)]">No pinned messages in this thread.</p>
               ) : null}
             </div>
           </div>
 
           <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/5 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-              Recent Artifacts
-            </p>
-            <ScrollArea className="h-[180px] rounded-[var(--radius-xs)] border border-[var(--border)] bg-black/10 p-2">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Recent Artifacts</p>
+            <ScrollArea className="h-[220px] rounded-[var(--radius-xs)] border border-[var(--border)] bg-black/10 p-2">
               <div className="space-y-2 pr-2">
                 {artifacts.map((artifact) => (
                   <article
                     key={artifact.id}
                     className="rounded-[var(--radius-xs)] border border-[var(--border)] bg-black/15 p-2 text-xs"
                   >
-                    <p className="font-medium text-[var(--text)]">
-                      {artifact.type}: {artifact.title}
-                    </p>
-                    <p className="text-[var(--text-muted)]">
-                      {artifact.createdAt.toISOString()}
-                    </p>
+                    <p className="font-medium text-[var(--text)]">{artifact.type}: {artifact.title}</p>
+                    <p className="text-[var(--text-muted)]">{artifact.createdAt.toISOString()}</p>
                   </article>
                 ))}
                 {artifacts.length === 0 ? (
-                  <p className="text-xs text-[var(--text-muted)]">
-                    No artifacts yet.
-                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">No artifacts yet.</p>
                 ) : null}
               </div>
             </ScrollArea>

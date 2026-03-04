@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  Bot,
   CalendarDays,
   ChartNoAxesCombined,
   ChevronDown,
@@ -19,15 +20,20 @@ import {
   Plus,
   Search,
   Settings,
+  Shapes,
+  Shield,
   SlidersHorizontal,
   Sparkles,
   Upload,
+  Wallet,
+  ShoppingCart,
+  Wrench,
   Workflow,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CommandPalette } from "@/components/layout/command-palette";
 import { CreateSheet } from "@/components/layout/create-sheet";
@@ -44,13 +50,24 @@ import {
 import { logoutSession } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 
-// Polyfill requestIdleCallback for environments that don't support it
+// Polyfill requestIdleCallback for environments that don't support it.
 const requestIdleCallback = typeof window !== "undefined" && window.requestIdleCallback
   ? window.requestIdleCallback
   : (cb: () => void) => setTimeout(cb, 1) as unknown as number;
 const cancelIdleCallback = typeof window !== "undefined" && window.cancelIdleCallback
   ? window.cancelIdleCallback
   : (id: number) => clearTimeout(id);
+
+export type ShellConversation = {
+  id: string;
+  title: string;
+  isPinned?: boolean;
+};
+
+export type ShellChannel = {
+  id?: string;
+  name: string;
+};
 
 type ChatFirstShellProps = {
   children: React.ReactNode;
@@ -59,31 +76,204 @@ type ChatFirstShellProps = {
   userRole?: string | undefined;
   roleShortcuts?: Record<string, Array<{ id: string; label: string; command: string }>> | undefined;
   opsInboxCount?: number | undefined;
+  recentConversations?: ShellConversation[] | undefined;
+  workspaceChannels?: ShellChannel[] | undefined;
 };
 
 const moduleShortcuts = [
+  { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/assistant", label: "Assistant", icon: Bot },
   { href: "/home", label: "Home", icon: Home },
-  { href: "/ops-inbox", label: "Ops Inbox", icon: Inbox },
   { href: "/overview", label: "Overview", icon: ChartNoAxesCombined },
-  { href: "/data", label: "Data", icon: Database },
+  { href: "/dashboard", label: "Dashboard", icon: ChartNoAxesCombined },
   { href: "/automations", label: "Automations", icon: Workflow },
   { href: "/shifts", label: "Shifts", icon: CalendarDays },
   { href: "/fleet", label: "Fleet", icon: CarFront },
   { href: "/washers", label: "Washers", icon: Droplets },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/analytics", label: "Analytics", icon: ChartNoAxesCombined },
-  { href: "/controls", label: "Controls", icon: SlidersHorizontal },
-  { href: "/activity", label: "Activity", icon: Activity },
-  { href: "/reports", label: "Reports", icon: FileText },
-  { href: "/imports", label: "Imports", icon: Upload },
   { href: "/feeds", label: "Feeds", icon: Newspaper },
+  { href: "/imports", label: "Imports", icon: Upload },
+  { href: "/data", label: "Data", icon: Database },
+  { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/activity", label: "Activity", icon: Activity },
+  { href: "/notifications", label: "Notifications", icon: Inbox },
+  { href: "/ops-inbox", label: "Ops Inbox", icon: Inbox },
+  { href: "/controls", label: "Controls", icon: SlidersHorizontal },
+  { href: "/components", label: "Components", icon: Shapes },
+  { href: "/work-orders", label: "Work Orders", icon: Wrench },
+  { href: "/procurement", label: "Procurement", icon: ShoppingCart },
+  { href: "/costs", label: "Costs", icon: Wallet },
+  { href: "/admin", label: "Admin", icon: Shield },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-const pinnedConversations = [
-  { id: "ops", title: "Ops Command Center" },
-  { id: "daily", title: "Daily Standup" },
-] as const;
+const defaultPinnedConversations: ShellConversation[] = [
+  { id: "ops-command-center", title: "Ops Command Center", isPinned: true },
+  { id: "daily-standup", title: "Daily Standup", isPinned: true },
+];
+
+const defaultChannels: ShellChannel[] = [
+  { name: "ops-general" },
+  { name: "washers-only" },
+  { name: "fleet-watch" },
+];
+
+function buildChatUrl(input: { threadId?: string; channelId?: string; quickCommand?: string; newConversation?: boolean }) {
+  const params = new URLSearchParams();
+  if (input.threadId) params.set("threadId", input.threadId);
+  if (input.channelId) params.set("channelId", input.channelId);
+  if (input.quickCommand) params.set("quickCommand", input.quickCommand);
+  if (input.newConversation) params.set("newConversation", "1");
+  const query = params.toString();
+  return query ? `/chat?${query}` : "/chat";
+}
+
+function SidebarContent({
+  pathname,
+  onNavigate,
+  opsInboxCount,
+  workspaceName,
+  conversations,
+  channels,
+}: {
+  pathname: string;
+  onNavigate: () => void;
+  opsInboxCount?: number | undefined;
+  workspaceName: string;
+  conversations: ShellConversation[];
+  channels: ShellChannel[];
+}) {
+  const pinned = conversations.filter((item) => item.isPinned).slice(0, 6);
+  const recent = conversations.filter((item) => !item.isPinned).slice(0, 10);
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="p-3">
+        <Link
+          href={buildChatUrl({ newConversation: true })}
+          onClick={onNavigate}
+          className="focus-ring flex items-center justify-center gap-2 rounded-xl border border-[#9a6fff66] bg-[linear-gradient(120deg,rgba(154,111,255,0.28),rgba(115,194,255,0.16))] px-3 py-2.5 text-sm font-semibold text-[var(--text)] shadow-[0_12px_32px_rgba(73,46,140,0.35)]"
+        >
+          <Plus className="size-4" />
+          New conversation
+        </Link>
+      </div>
+
+      <div className="space-y-3 px-3 pb-3">
+        <section className="rounded-2xl border border-[var(--border)] bg-white/4 p-2.5">
+          <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+            <Pin className="size-3" />
+            Pinned
+          </p>
+          <div className="space-y-0.5">
+            {(pinned.length > 0 ? pinned : defaultPinnedConversations).map((conv) => (
+              <Link
+                key={conv.id}
+                href={buildChatUrl({ threadId: conv.id })}
+                onClick={onNavigate}
+                className={cn(
+                  "focus-ring block truncate rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-muted)] hover:bg-white/8 hover:text-[var(--text)]",
+                  pathname.startsWith("/chat") && pathname.includes(`threadId=${conv.id}`)
+                    ? "bg-[#9a6fff20] text-[var(--text)]"
+                    : "",
+                )}
+              >
+                {conv.title}
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-[var(--border)] bg-white/4 p-2.5">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+            Recent
+          </p>
+          <div className="space-y-0.5">
+            {recent.slice(0, 8).map((conv) => (
+              <Link
+                key={conv.id}
+                href={buildChatUrl({ threadId: conv.id })}
+                onClick={onNavigate}
+                className="focus-ring block truncate rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-muted)] hover:bg-white/8 hover:text-[var(--text)]"
+              >
+                {conv.title}
+              </Link>
+            ))}
+            {recent.length === 0 ? (
+              <p className="px-2.5 py-1.5 text-xs text-[var(--text-muted)]">No recent threads yet.</p>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-[var(--border)] bg-white/4 p-2.5">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+            Channels
+          </p>
+          <div className="space-y-0.5">
+            {(channels.length > 0 ? channels : defaultChannels).map((channel, index) => {
+              const href = channel.id ? buildChatUrl({ channelId: channel.id }) : "/chat";
+              const channelName = channel.name.startsWith("#") ? channel.name : `# ${channel.name}`;
+              const active = pathname.startsWith("/chat") && channel.id ? pathname.includes(`channelId=${channel.id}`) : false;
+              return (
+                <Link
+                  key={`${channel.id ?? channel.name}-${index}`}
+                  href={href}
+                  onClick={onNavigate}
+                  className={cn(
+                    "focus-ring block truncate rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-muted)] hover:bg-white/8 hover:text-[var(--text)]",
+                    active ? "bg-[#9a6fff20] text-[var(--text)]" : "",
+                  )}
+                >
+                  {channelName}
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+          Modules
+        </p>
+        <nav className="space-y-0.5" aria-label="Module navigation">
+          {moduleShortcuts.map(({ href, icon: Icon, label }) => {
+            const active = pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "focus-ring flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px]",
+                  active
+                    ? "bg-[#9a6fff24] text-[var(--text)] shadow-[0_0_20px_rgba(154,111,255,0.16)]"
+                    : "text-[var(--text-muted)] hover:bg-white/6 hover:text-[var(--text)]",
+                )}
+              >
+                <Icon className="size-4 shrink-0" aria-hidden="true" />
+                {label}
+                {href === "/ops-inbox" && opsInboxCount ? (
+                  <span className="ml-auto inline-flex size-5 items-center justify-center rounded-full bg-rose-500/20 text-[10px] font-bold tabular-nums text-rose-300">
+                    {opsInboxCount > 99 ? "99+" : opsInboxCount}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+
+      <div className="border-t border-[var(--border)] px-3 py-2.5">
+        <p className="truncate text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
+          {workspaceName}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function ChatFirstShell({
   children,
@@ -92,17 +282,41 @@ function ChatFirstShell({
   userRole,
   roleShortcuts,
   opsInboxCount,
+  recentConversations,
+  workspaceChannels,
 }: ChatFirstShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [tabletSidebarOpen, setTabletSidebarOpen] = useState(false);
+
+  const conversations = useMemo(
+    () => (recentConversations && recentConversations.length > 0 ? recentConversations : defaultPinnedConversations),
+    [recentConversations],
+  );
+  const channels = useMemo(
+    () => (workspaceChannels && workspaceChannels.length > 0 ? workspaceChannels : defaultChannels),
+    [workspaceChannels],
+  );
 
   const toggleDrawer = useCallback(() => setDrawerOpen((v) => !v), []);
 
-  // Prefetch core routes on idle for instant navigation
+  // Prefetch core routes on idle for instant navigation.
   useEffect(() => {
-    const coreRoutes = ["/home", "/ops-inbox", "/chat", "/washers", "/fleet", "/shifts", "/feeds", "/settings"];
+    const coreRoutes = [
+      "/chat",
+      "/home",
+      "/overview",
+      "/dashboard",
+      "/ops-inbox",
+      "/shifts",
+      "/fleet",
+      "/washers",
+      "/imports",
+      "/feeds",
+      "/settings",
+    ];
     const id = requestIdleCallback(() => {
       for (const route of coreRoutes) {
         if (route !== pathname) router.prefetch(route);
@@ -111,55 +325,73 @@ function ChatFirstShell({
     return () => cancelIdleCallback(id);
   }, [pathname, router]);
 
+  const openCommandHint = useCallback(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+  }, []);
+
+  const isChatSurface = pathname.startsWith("/chat") || pathname.startsWith("/assistant");
+
   return (
     <div
-      className="app-viewport-min relative flex flex-col"
+      className="app-viewport-min relative flex flex-col bg-[radial-gradient(circle_at_12%_12%,rgba(104,64,184,0.16),transparent_38%),radial-gradient(circle_at_86%_0%,rgba(53,99,193,0.2),transparent_32%),#070913]"
       data-shell-root="true"
       data-chat-first="true"
     >
-      {/* ── Top Bar ── */}
-      <header className="safe-pl safe-pr sticky top-0 z-40 border-b border-[var(--border)] bg-[rgb(6_7_12_/_0.82)] backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-[1800px] items-center gap-3 px-3 lg:px-5">
-          {/* Mobile hamburger */}
+      <header className="safe-pl safe-pr sticky top-0 z-40 border-b border-[var(--border)] bg-[rgb(6_8_16_/_0.82)] backdrop-blur-2xl">
+        <div className="mx-auto flex h-15 max-w-[1900px] items-center gap-2 px-2.5 md:gap-3 md:px-4 lg:px-6">
           <button
             type="button"
-            className="focus-ring inline-flex size-9 items-center justify-center rounded-lg border border-[var(--border)] bg-white/5 text-[var(--text-muted)] lg:hidden"
+            className="focus-ring inline-flex size-9 items-center justify-center rounded-lg border border-[var(--border)] bg-white/5 text-[var(--text-muted)] md:hidden"
             aria-label="Toggle menu"
             onClick={() => setMobileMenuOpen((v) => !v)}
           >
             <Sparkles className="size-4" />
           </button>
 
-          {/* Logo/Workspace */}
-          <Link href="/chat" className="flex items-center gap-2 min-w-0 shrink-0">
-            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#9a6fff] to-[#6366f1] text-xs font-bold text-white">
-              IT
+          <button
+            type="button"
+            className="focus-ring hidden size-9 items-center justify-center rounded-lg border border-[var(--border)] bg-white/5 text-[var(--text-muted)] md:inline-flex lg:hidden"
+            aria-label="Toggle sidebar"
+            onClick={() => setTabletSidebarOpen((v) => !v)}
+          >
+            <PanelRightOpen className="size-4" />
+          </button>
+
+          <Link href="/chat" className="flex min-w-0 shrink-0 items-center gap-2">
+            <span className="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#9a6fff] via-[#7b82ff] to-[#5ed0ff] text-[11px] font-bold text-white shadow-[0_0_28px_rgba(122,105,255,0.45)]">
+              IO
             </span>
-            <span className="hidden text-sm font-semibold text-[var(--text)] lg:inline truncate max-w-32">
+            <span className="hidden max-w-36 truncate text-sm font-semibold text-[var(--text)] lg:inline">
               {workspaceName}
             </span>
           </Link>
 
-          {/* Search */}
-          <div className="flex flex-1 items-center justify-center">
-            <div className="relative w-full max-w-lg">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
-                type="text"
-                placeholder="Search or ask anything…"
-                className="focus-ring h-9 w-full rounded-xl border border-[var(--border)] bg-white/5 pl-9 pr-4 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)]"
-              />
-            </div>
+          <form action="/chat" className="relative min-w-0 flex-1 xl:max-w-[760px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              type="text"
+              name="quickCommand"
+              placeholder="Search or ask anything..."
+              className="focus-ring h-10 w-full rounded-2xl border border-[var(--border)] bg-white/8 pl-9 pr-18 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)]"
+            />
+            <button
+              type="button"
+              onClick={openCommandHint}
+              className="focus-ring absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg border border-[var(--border)] bg-black/20 px-2 py-1 text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] uppercase"
+              aria-label="Keyboard shortcut hint"
+            >
+              Ctrl+K
+            </button>
+          </form>
+
+          <div className="hidden xl:block">
+            <QuickBar userRole={userRole} roleShortcuts={roleShortcuts} />
           </div>
 
-          {/* Quick Bar */}
-          <QuickBar userRole={userRole} roleShortcuts={roleShortcuts} />
-
-          {/* Actions */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="relative z-20 flex shrink-0 items-center gap-1.5">
             <CommandPalette />
-            <CreateSheet />
-
+            <CreateSheet triggerClassName="hidden sm:inline-flex" />
             <button
               type="button"
               onClick={toggleDrawer}
@@ -173,7 +405,7 @@ function ChatFirstShell({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white/6 pl-1 pr-2.5 py-1 text-sm"
+                  className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white/6 py-1 pl-1 pr-2.5 text-sm"
                   aria-label="Profile menu"
                 >
                   <span className="inline-flex size-7 items-center justify-center rounded-full bg-[#9a6fff2b] text-xs font-semibold text-[var(--text)]">
@@ -208,125 +440,103 @@ function ChatFirstShell({
         </div>
       </header>
 
-      {/* ── Main Layout: left rail + center + right drawer ── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left Rail — conversations + module shortcuts */}
-        <aside
-          className={cn(
-            "w-64 shrink-0 border-r border-[var(--border)] bg-[rgb(6_7_12_/_0.5)] flex flex-col transition-transform duration-200",
-            "max-lg:fixed max-lg:inset-y-14 max-lg:left-0 max-lg:z-30 max-lg:w-72 max-lg:shadow-2xl",
-            mobileMenuOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full",
-          )}
-        >
-          {/* New Chat */}
-          <div className="p-3">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <aside className="hidden w-16 shrink-0 border-r border-[var(--border)] bg-[rgb(8_10_19_/_0.78)] md:flex lg:hidden">
+          <div className="flex w-full flex-col items-center gap-2 px-2 py-3">
+            <button
+              type="button"
+              className="focus-ring inline-flex size-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white/7 text-[var(--text-muted)]"
+              aria-label="Expand sidebar"
+              onClick={() => setTabletSidebarOpen((v) => !v)}
+            >
+              <PanelRightOpen className="size-4" />
+            </button>
             <Link
-              href="/chat"
-              className="focus-ring flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white/5 px-3 py-2.5 text-sm text-[var(--text)] hover:bg-white/10"
+              href={buildChatUrl({ newConversation: true })}
+              className="focus-ring inline-flex size-10 items-center justify-center rounded-xl border border-[#9a6fff66] bg-[#9a6fff2a] text-[#c9b7ff]"
             >
               <Plus className="size-4" />
-              New conversation
             </Link>
-          </div>
-
-          {/* Pinned */}
-          <div className="px-3 pb-2">
-            <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-              <Pin className="size-3" />
-              Pinned
-            </p>
-            <div className="space-y-0.5">
-              {pinnedConversations.map((conv) => (
+            <div className="mt-1 h-px w-full bg-[var(--border)]" />
+            {moduleShortcuts.slice(0, 10).map(({ href, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(`${href}/`);
+              return (
                 <Link
-                  key={conv.id}
-                  href={`/chat?threadId=${conv.id}`}
-                  className="focus-ring block truncate rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-muted)] hover:bg-white/7 hover:text-[var(--text)]"
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "focus-ring inline-flex size-10 items-center justify-center rounded-xl text-[var(--text-muted)]",
+                    active ? "bg-[#9a6fff26] text-[var(--text)]" : "hover:bg-white/7 hover:text-[var(--text)]",
+                  )}
+                  aria-label={href}
                 >
-                  {conv.title}
+                  <Icon className="size-4" />
                 </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Module Shortcuts */}
-          <div className="flex-1 overflow-y-auto px-3 pb-3">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-              Modules
-            </p>
-            <nav className="space-y-0.5" aria-label="Module navigation">
-              {moduleShortcuts
-                .map(({ href, icon: Icon, label }) => {
-                  const active =
-                    pathname === href || pathname.startsWith(`${href}/`);
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "focus-ring flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px]",
-                        active
-                          ? "bg-[#9a6fff20] text-[var(--text)] shadow-[0_0_12px_rgba(154,111,255,0.1)]"
-                          : "text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text)]",
-                      )}
-                    >
-                      <Icon className="size-4 shrink-0" aria-hidden="true" />
-                      {label}
-                      {href === "/ops-inbox" && opsInboxCount ? (
-                        <span className="ml-auto inline-flex size-5 items-center justify-center rounded-full bg-rose-500/20 text-[10px] font-bold tabular-nums text-rose-300">
-                          {opsInboxCount > 99 ? "99+" : opsInboxCount}
-                        </span>
-                      ) : null}
-                    </Link>
-                  );
-                })}
-            </nav>
-          </div>
-
-          {/* Workspace badge */}
-          <div className="border-t border-[var(--border)] p-3">
-            <p className="text-[10px] text-[var(--text-muted)] truncate">
-              {workspaceName} · Internal Tools
-            </p>
+              );
+            })}
           </div>
         </aside>
 
-        {/* Mobile overlay */}
-        {mobileMenuOpen ? (
-          <div
-            className="fixed inset-0 z-20 bg-black/50 lg:hidden"
-            onClick={() => setMobileMenuOpen(false)}
+        <aside
+          className={cn(
+            "hidden w-[300px] shrink-0 border-r border-[var(--border)] bg-[rgb(8_10_19_/_0.72)] backdrop-blur-2xl",
+            "lg:block",
+            tabletSidebarOpen ? "md:block" : "md:hidden",
+          )}
+        >
+          <SidebarContent
+            pathname={pathname}
+            onNavigate={() => setTabletSidebarOpen(false)}
+            opsInboxCount={opsInboxCount}
+            workspaceName={workspaceName}
+            conversations={conversations}
+            channels={channels}
           />
+        </aside>
+
+        <aside
+          className={cn(
+            "fixed inset-y-15 left-0 z-40 w-[86vw] max-w-[320px] border-r border-[var(--border)] bg-[rgb(8_10_19_/_0.94)] backdrop-blur-2xl transition-transform duration-200 md:hidden",
+            mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+        >
+          <SidebarContent
+            pathname={pathname}
+            onNavigate={() => setMobileMenuOpen(false)}
+            opsInboxCount={opsInboxCount}
+            workspaceName={workspaceName}
+            conversations={conversations}
+            channels={channels}
+          />
+        </aside>
+
+        {mobileMenuOpen ? (
+          <div className="fixed inset-0 z-30 bg-black/55 md:hidden" onClick={() => setMobileMenuOpen(false)} />
         ) : null}
 
-        {/* Center Content */}
-        <main
-          id="main-content"
-          className="flex-1 min-w-0 overflow-y-auto"
-        >
-          <div className="mx-auto max-w-[900px] px-4 py-5 lg:px-8 lg:py-6">
+        <main id="main-content" className="min-w-0 flex-1 overflow-y-auto">
+          <div
+            className={cn(
+              "mx-auto w-full px-3 pb-24 pt-4 md:px-5 md:pb-8 lg:px-8 lg:pt-6",
+              isChatSurface ? "max-w-[1120px]" : "max-w-[1600px]",
+            )}
+          >
             {children}
           </div>
           <UndoToast />
         </main>
 
-        {/* Right Tool Drawer */}
         <aside
           className={cn(
-            "border-l border-[var(--border)] bg-[rgb(6_7_12_/_0.5)] transition-all duration-200 overflow-y-auto",
-            "max-lg:fixed max-lg:inset-y-14 max-lg:right-0 max-lg:z-30 max-lg:w-80 max-lg:shadow-2xl",
-            drawerOpen
-              ? "w-80 lg:w-80 max-lg:translate-x-0"
-              : "w-0 lg:w-0 max-lg:translate-x-full",
+            "border-l border-[var(--border)] bg-[rgb(8_10_19_/_0.72)] transition-[width,transform] duration-200 overflow-y-auto backdrop-blur-2xl",
+            "max-lg:fixed max-lg:inset-y-15 max-lg:right-0 max-lg:z-40 max-lg:w-[320px]",
+            drawerOpen ? "w-[320px] max-lg:translate-x-0" : "w-0 max-lg:translate-x-full",
           )}
         >
           {drawerOpen ? (
-            <div className="w-80 p-4 space-y-4">
+            <div className="space-y-4 p-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-[var(--text)]">
-                  Tool Drawer
-                </h2>
+                <h2 className="text-sm font-semibold text-[var(--text)]">Control Tower</h2>
                 <button
                   type="button"
                   onClick={toggleDrawer}
@@ -337,147 +547,76 @@ function ChatFirstShell({
                 </button>
               </div>
 
-              {/* Quick Actions */}
               <section className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-                  Quick Actions
-                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Quick Actions</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <Link
-                    href="/shifts"
-                    className="focus-ring flex flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-white/5 p-3 text-[11px] text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text)]"
-                  >
-                    <CalendarDays className="size-5" />
-                    New Shift
-                  </Link>
-                  <Link
-                    href="/fleet"
-                    className="focus-ring flex flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-white/5 p-3 text-[11px] text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text)]"
-                  >
-                    <CarFront className="size-5" />
-                    Fleet Event
-                  </Link>
-                  <Link
-                    href="/automations"
-                    className="focus-ring flex flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-white/5 p-3 text-[11px] text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text)]"
-                  >
-                    <Workflow className="size-5" />
-                    Automation
-                  </Link>
-                  <Link
-                    href="/reports"
-                    className="focus-ring flex flex-col items-center gap-1 rounded-xl border border-[var(--border)] bg-white/5 p-3 text-[11px] text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text)]"
-                  >
-                    <FileText className="size-5" />
-                    Report
-                  </Link>
+                  <Link href="/shifts" className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">New Shift</Link>
+                  <Link href="/fleet" className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">Fleet Event</Link>
+                  <Link href="/work-orders" className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">Work Order</Link>
+                  <Link href="/reports" className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">Report</Link>
                 </div>
               </section>
 
-              {/* Entity Quick View */}
               <section className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-                  System Status
-                </p>
-                <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3 text-xs text-[var(--text-muted)] space-y-1">
-                  <div className="flex justify-between">
-                    <span>Database</span>
-                    <span className="text-emerald-400">Connected</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>API</span>
-                    <span className="text-emerald-400">Healthy</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Version</span>
-                    <span className="text-[var(--text)]">{process.env.APP_VERSION ?? "1.0.0"}</span>
-                  </div>
-                </div>
-              </section>
-
-              {/* Recent Activity */}
-              <section className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-                  Module Links
-                </p>
-                <div className="space-y-1">
-                  {moduleShortcuts.slice(0, 6).map(({ href, icon: Icon, label }) => (
-                    <Link
-                      key={href}
-                      href={href}
-                      className="focus-ring flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text)]"
-                    >
-                      <Icon className="size-3.5" />
-                      {label}
-                    </Link>
-                  ))}
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Status</p>
+                <div className="space-y-1 rounded-xl border border-[var(--border)] bg-white/6 p-3 text-xs text-[var(--text-muted)]">
+                  <div className="flex justify-between"><span>Database</span><span className="text-emerald-400">Connected</span></div>
+                  <div className="flex justify-between"><span>API</span><span className="text-emerald-400">Healthy</span></div>
+                  <div className="flex justify-between"><span>Ops Inbox</span><span className="text-[var(--text)]">{opsInboxCount ?? 0}</span></div>
                 </div>
               </section>
             </div>
           ) : null}
         </aside>
 
-        {/* Drawer overlay on mobile */}
         {drawerOpen ? (
-          <div
-            className="fixed inset-0 z-20 bg-black/50 lg:hidden"
-            onClick={toggleDrawer}
-          />
+          <div className="fixed inset-0 z-30 bg-black/45 lg:hidden" onClick={toggleDrawer} />
         ) : null}
       </div>
 
-      {/* ── Mobile Bottom Nav ── */}
       <nav
         data-testid="bottom-nav"
-        className="safe-pb fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--border)] bg-[rgb(6_7_12_/_0.92)] backdrop-blur-xl lg:hidden"
+        className="safe-pb fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-[rgb(7_9_16_/_0.95)] backdrop-blur-xl md:hidden"
       >
         <div className="mx-auto flex h-14 max-w-md items-center justify-around px-2">
           <Link
             href="/chat"
             className={cn(
-              "flex flex-col items-center gap-0.5 px-3 py-1 text-[10px]",
-              pathname.startsWith("/chat")
-                ? "text-[#9a6fff]"
-                : "text-[var(--text-muted)]",
+              "flex flex-col items-center gap-0.5 px-2 py-1 text-[10px]",
+              pathname.startsWith("/chat") ? "text-[#9a6fff]" : "text-[var(--text-muted)]",
             )}
           >
             <MessageSquare className="size-5" />
             Chat
           </Link>
           <Link
-            href="/home"
+            href="/dashboard"
             className={cn(
-              "flex flex-col items-center gap-0.5 px-3 py-1 text-[10px]",
-              pathname === "/home"
-                ? "text-[#9a6fff]"
-                : "text-[var(--text-muted)]",
+              "flex flex-col items-center gap-0.5 px-2 py-1 text-[10px]",
+              pathname.startsWith("/dashboard") ? "text-[#9a6fff]" : "text-[var(--text-muted)]",
             )}
           >
-            <Home className="size-5" />
-            Home
+            <ChartNoAxesCombined className="size-5" />
+            Dash
           </Link>
           <Link
-            href="/shifts"
+            href="/fleet"
             className={cn(
-              "flex flex-col items-center gap-0.5 px-3 py-1 text-[10px]",
-              pathname.startsWith("/shifts")
-                ? "text-[#9a6fff]"
-                : "text-[var(--text-muted)]",
+              "flex flex-col items-center gap-0.5 px-2 py-1 text-[10px]",
+              pathname.startsWith("/fleet") ? "text-[#9a6fff]" : "text-[var(--text-muted)]",
             )}
           >
-            <CalendarDays className="size-5" />
-            Shifts
+            <CarFront className="size-5" />
+            Fleet
           </Link>
           <button
             type="button"
-            onClick={toggleDrawer}
-            className={cn(
-              "flex flex-col items-center gap-0.5 px-3 py-1 text-[10px]",
-              drawerOpen ? "text-[#9a6fff]" : "text-[var(--text-muted)]",
-            )}
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] text-[var(--text-muted)]"
+            aria-label="Open modules"
           >
-            <PanelRightOpen className="size-5" />
-            Tools
+            <Sparkles className="size-5" />
+            Menu
           </button>
         </div>
       </nav>
