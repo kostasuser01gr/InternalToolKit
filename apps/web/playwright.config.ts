@@ -4,14 +4,14 @@ export default defineConfig({
   testDir: "./tests",
   testMatch: "**/*.spec.ts",
   globalSetup: "./tests/global-setup.ts",
-  timeout: process.env.CI ? 90_000 : 45_000,
+  timeout: 120_000,
   workers: process.env.CI ? 2 : 1,
   expect: {
-    timeout: 7_000,
+    timeout: 10_000,
   },
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 1 : 0,
+  retries: 1,
   reporter: "list",
   use: {
     baseURL: "http://127.0.0.1:4173",
@@ -46,7 +46,7 @@ export default defineConfig({
     command: "pnpm exec next dev --webpack --hostname 127.0.0.1 --port 4173",
     url: "http://127.0.0.1:4173/login",
     timeout: 120_000,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     env: {
       DATABASE_URL:
         "postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public",

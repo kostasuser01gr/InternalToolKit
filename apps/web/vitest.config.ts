@@ -7,6 +7,11 @@ export default defineConfig({
     include: ["tests/unit/**/*.test.ts"],
     environment: "node",
     reporters: "default",
+    pool: "forks",
+    minWorkers: 1,
+    maxWorkers: 2,
+    testTimeout: 30000,
+    hookTimeout: 30000,
     coverage: {
       enabled: false,
     },
@@ -18,4 +23,3 @@ export default defineConfig({
     },
   },
 });
-

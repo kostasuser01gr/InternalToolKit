@@ -12,8 +12,8 @@ const envSchema = z.object({
   SESSION_SECRET: z.string().trim().optional(),
   NEXTAUTH_SECRET: z.string().trim().optional(),
   NEXT_PUBLIC_API_URL: z.string().trim().url().optional(),
-  DATABASE_URL: z.string().trim().min(1).optional(),
-  DIRECT_URL: z.string().trim().min(1).optional(),
+  DATABASE_URL: z.string().optional(),
+  DIRECT_URL: z.string().optional(),
   ALLOW_SQLITE_DEV: z.enum(["0", "1"]).optional(),
   APP_VERSION: z.string().trim().min(1).optional(),
   FREE_ONLY_MODE: z.enum(["0", "1"]).optional(),
@@ -297,7 +297,7 @@ function parseEnv(): ServerEnv {
     configError("AI_ALLOW_PAID must remain set to 0 in free-only mode.");
   }
 
-  if (!buildPhase && hasPaidTokenConfigured) {
+  if (hostedProduction && hasPaidTokenConfigured) {
     configError(
       "Paid provider API keys are not allowed in free-only mode. Remove OPENAI_API_KEY/ANTHROPIC_API_KEY/GOOGLE_API_KEY/COHERE_API_KEY.",
     );

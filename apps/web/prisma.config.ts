@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { config as loadEnv } from "dotenv";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 const DEFAULT_LOCAL_DATABASE_URL =
   "postgresql://postgres:postgres@127.0.0.1:5432/internal_toolkit?schema=public";
@@ -26,6 +26,7 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    // Use the resolved runtime value to support local fallback in CI/dev.
+    url: process.env.DATABASE_URL ?? DEFAULT_LOCAL_DATABASE_URL,
   },
 });

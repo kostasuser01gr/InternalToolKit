@@ -1,31 +1,37 @@
-# FAILURES LIVE TRIAGE - STATUS: ALL RESOLVED ✅
+# FAILURES LIVE TRIAGE
 
-## 1. CI / quality
+Generated: 2026-03-03
+Repo: `kostasuser01gr/InternalToolKit`
 
-- **Status**: ✅ GREEN (Run ID: 22526407329 — 2026-02-28)
-- **Fix**: Stabilized Mobile E2E command palette click + ERR_ABORTED retries + layout DB retry.
+## Current Workflow State
 
-## 2. Deploy Worker / deploy
+- `CI` run `22627720711`: `success`
+- `Lighthouse CI` run `22627720676`: `success`
+- `CodeQL` run `22627720679`: `success`
 
-- **Status**: ✅ GREEN (Run ID: 22519470572)
-- **Fix**: Synchronized lockfile resolved installation failure.
+## Newest Failed Run Evidence
 
-## 3. Lighthouse CI / Performance audit
+1. Run `22526903904`
+- Workflow: `CI`
+- Job: `quality`
+- Step: `E2E smoke tests`
+- Root error signatures:
+- `expect(page).toHaveURL(/\/analytics$/)` timed out while URL stayed `/overview`
+- `expect(page).toHaveURL(/\/(dashboard|overview)$/)` timed out while URL stayed `/analytics`
+- `expect(locator).toBeVisible()` failed for toast text `Table created.` and `Field created.`
+- `page.goto` timeout in `tests/modules.spec.ts` on route navigation
 
-- **Status**: ✅ GREEN (Run ID: 22526407324)
+2. Run `22522248417`
+- Workflow: `CI`
+- Job: `quality`
+- Step: `E2E smoke tests`
+- Root error signatures:
+- `expect(page).toHaveURL(/\/analytics$/)` timed out while URL stayed `/overview`
+- `expect(page).toHaveURL(/\/(dashboard|overview)$/)` timed out while URL stayed `/analytics`
+- `page.goto: net::ERR_ABORTED` for `/controls` and `/data`
 
-## 4. CodeQL
+## Triage Conclusion
 
-- **Status**: ✅ GREEN (Run ID: 22526407327)
-
-## 5. Vercel Deployments
-
-- **Status**: ✅ Ready
-- **Verification**: `internal-tool-kit-ops.vercel.app/login` serves HTML.
-- **Pending**: Production environment variables (`DATABASE_URL`, `SESSION_SECRET`) need to be set on Vercel to resolve `/api/health` 500 error.
-
-## Last Resolved (2026-02-28, commit 993fd12)
-
-- `command palette opens and navigates` [Mobile] — `dispatchEvent` fallback + focus-clear before keyboard shortcut
-- `all primary nav routes are reachable` [Mobile flaky] — ERR_ABORTED retry in test + layout DB retry
-- `responsive shell renders and navigation works without overflow` [Mobile flaky] — ERR_ABORTED retry
+- Confirmed by `gh run list`: latest runs are green.
+- Failed-run signatures are historical E2E flake categories (command palette navigation, intermittent route aborts, and transient UI assertions).
+- No currently failing workflow in latest push window.

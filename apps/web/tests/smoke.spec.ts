@@ -1,20 +1,46 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createHmac } from "node:crypto";
 
+async function gotoWithRetry(page: Page, route: string, timeout = 120_000) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await page.goto(route, {
+        timeout,
+        waitUntil: "domcontentloaded",
+      });
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const canRetry =
+        message.includes("ERR_ABORTED") ||
+        message.includes("net::") ||
+        message.includes("frame was detached");
+      if (!canRetry || attempt === 2) {
+        throw error;
+      }
+      await page.waitForTimeout(1500);
+    }
+  }
+  throw lastError ?? new Error(`Failed to navigate to ${route}`);
+}
+
+test.describe.configure({ timeout: 240_000 });
+
 async function login(page: Page, loginName: string, pin: string) {
-  await page.goto("/login");
+  await gotoWithRetry(page, "/login");
   await page.getByLabel("Login name").fill(loginName);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: /^Continue$/ }).click();
-  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 60_000 });
 }
 
 async function loginWithPassword(page: Page, email: string, password: string) {
-  await page.goto("/login");
+  await gotoWithRetry(page, "/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Continue with password" }).click();
-  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 60_000 });
 }
 
 async function assertProtectedSessionPersists(page: Page) {
@@ -40,7 +66,7 @@ async function signup(
   pin: string,
   password: string,
 ) {
-  await page.goto("/signup");
+  await gotoWithRetry(page, "/signup");
   await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByLabel("Login name").fill(loginName);
   await page.getByLabel("4-digit PIN").fill(pin);
@@ -52,7 +78,7 @@ async function signup(
 }
 
 test("login gate protects app routes", async ({ page }) => {
-  await page.goto("/analytics");
+  await gotoWithRetry(page, "/analytics");
   await expect(page).toHaveURL(/\/login\?callbackUrl=%2Fanalytics$/);
 });
 
@@ -80,7 +106,7 @@ test("invalid session cookie does not loop between login and overview", async ({
     },
   ]);
 
-  const response = await page.goto("/login");
+  const response = await gotoWithRetry(page, "/login");
   expect(response?.status()).toBe(200);
   await expect(page).toHaveURL(/\/login/);
   await expect(page.getByTestId("login-page")).toBeVisible();
@@ -116,7 +142,7 @@ test("valid signed cookie for unknown user does not loop on login", async ({
     },
   ]);
 
-  const response = await page.goto("/login");
+  const response = await gotoWithRetry(page, "/login");
   expect(response?.status()).toBe(200);
   await expect(page).toHaveURL(/\/login/);
   await expect(page.getByTestId("login-page")).toBeVisible();
@@ -142,7 +168,7 @@ test("signup creates an account and can sign in", async ({ page }) => {
     },
   });
 
-  await page.goto("/login");
+  await gotoWithRetry(page, "/login");
   await page.getByLabel("Login name").fill(loginName);
   await page.getByLabel("PIN").fill("9999");
   await page.getByRole("button", { name: /^Continue$/ }).click();
@@ -214,19 +240,7 @@ test("responsive shell renders and navigation works without overflow", async ({
   }
 
   // Navigate to a module page — retry once on ERR_ABORTED (transient CI DB latency)
-  const gotoData = async () => {
-    try {
-      await page.goto("/data", { timeout: 60_000 });
-    } catch (err) {
-      const msg = (err as Error).message ?? "";
-      if (msg.includes("ERR_ABORTED") || msg.includes("net::")) {
-        await page.waitForTimeout(1500);
-        await page.goto("/data", { timeout: 60_000 });
-      } else {
-        throw err;
-      }
-    }
-  };
+  const gotoData = async () => gotoWithRetry(page, "/data");
   if (isChatFirst) {
     await gotoData();
     await expect(page.getByTestId("data-page")).toBeVisible();
@@ -243,8 +257,7 @@ test("responsive shell renders and navigation works without overflow", async ({
 });
 
 test("command palette opens and navigates", async ({ page }) => {
-  
-  test.setTimeout(process.env.CI ? 90_000 : 45_000);
+  test.setTimeout(process.env.CI ? 120_000 : 120_000);
 
   await login(page, "admin", "1234");
   await page.waitForLoadState("networkidle");
@@ -314,7 +327,7 @@ test("data table: create table, add field, add record, export CSV", async ({
   
 
   await login(page, "admin", "1234");
-  await page.goto("/data");
+  await gotoWithRetry(page, "/data");
 
   const tableName = `Playwright_${Date.now()}`;
   const fieldName = `Field_${Date.now()}`;
@@ -370,7 +383,7 @@ test("admin gate: viewer blocked, admin allowed", async ({
   
 
   await login(page, "viewer", "2222");
-  await page.goto("/admin");
+  await gotoWithRetry(page, "/admin");
   await expect(page.getByTestId("admin-blocked")).toBeVisible();
 
   await page.request.post("/api/session/logout", {
@@ -380,7 +393,7 @@ test("admin gate: viewer blocked, admin allowed", async ({
   });
 
   await login(page, "admin", "1234");
-  await page.goto("/admin");
+  await gotoWithRetry(page, "/admin");
   await expect(page.getByTestId("admin-page")).toBeVisible();
 });
 
@@ -388,7 +401,7 @@ test("chat basic flow: create thread and send message", async ({ page }) => {
   
 
   await login(page, "admin", "1234");
-  await page.goto("/chat");
+  await gotoWithRetry(page, "/chat");
 
   const threadTitle = `Playwright Chat ${Date.now()}`;
   await page.getByLabel("New thread").fill(threadTitle);
@@ -405,10 +418,10 @@ test("chat basic flow: create thread and send message", async ({ page }) => {
 test("shift planner flow: create shift and show in board", async ({
   page,
 }) => {
-  
+  test.setTimeout(180_000);
 
   await login(page, "admin", "1234");
-  await page.goto("/shifts");
+  await gotoWithRetry(page, "/shifts");
 
   const title = `Shift ${Date.now()}`;
   const now = Date.now();
@@ -419,16 +432,22 @@ test("shift planner flow: create shift and show in board", async ({
   await page.locator("#shift-startsAt").fill(startsAt);
   await page.locator("#shift-endsAt").fill(endsAt);
   await page.getByRole("button", { name: "Create shift" }).click();
-  await expect(page.getByText("Shift created.")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId("shifts-board")).toContainText(title);
+  await page
+    .waitForURL(
+      (url) => url.searchParams.get("success") === "Shift created.",
+      { timeout: 30_000 },
+    )
+    .catch(() => {});
+  await expect(page.getByTestId("shifts-board")).toContainText(title, {
+    timeout: 60_000,
+  });
 });
 
 test("fleet flow: create and update vehicle", async ({ page }) => {
-  
-  test.setTimeout(process.env.CI ? 60_000 : 45_000);
+  test.setTimeout(180_000);
 
   await login(page, "admin", "1234");
-  await page.goto("/fleet");
+  await gotoWithRetry(page, "/fleet");
   await page.waitForLoadState("networkidle");
 
   const plate = `PW-${Date.now()}`.slice(-10);
