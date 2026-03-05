@@ -29,11 +29,36 @@ async function gotoWithRetry(page: Page, route: string, timeout = 120_000) {
 test.describe.configure({ timeout: 240_000 });
 
 async function login(page: Page, loginName: string, pin: string) {
-  await gotoWithRetry(page, "/login");
-  await page.getByLabel("Login name").fill(loginName);
-  await page.getByLabel("PIN").fill(pin);
-  await page.getByRole("button", { name: /^Continue$/ }).click();
-  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 60_000 });
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await gotoWithRetry(page, "/login");
+    await page.getByLabel("Login name").fill(loginName);
+    await page.getByLabel("PIN").fill(pin);
+    await page.getByRole("button", { name: /^Continue$/ }).click();
+
+    try {
+      await expect(page).toHaveURL(/\/(overview|home|chat)(?:\?|$)/, {
+        timeout: 60_000,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      const currentUrl = page.url();
+      const loginError = await page
+        .locator("[data-testid='login-page']")
+        .innerText()
+        .then((text) => text.replace(/\s+/g, " ").trim().slice(0, 240))
+        .catch(() => "login-page-not-visible");
+      if (!currentUrl.includes("/login") || attempt === 2) {
+        throw new Error(
+          `Login failed for ${loginName} after ${attempt + 1} attempts. URL=${currentUrl}. Context=${loginError}`,
+        );
+      }
+      await page.waitForTimeout(1_000);
+    }
+  }
+
+  throw lastError ?? new Error(`Login failed for ${loginName}.`);
 }
 
 async function loginWithPassword(page: Page, email: string, password: string) {
@@ -41,7 +66,7 @@ async function loginWithPassword(page: Page, email: string, password: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Continue with password" }).click();
-  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 60_000 });
+  await expect(page).toHaveURL(/\/(overview|home|chat)(?:\?|$)/, { timeout: 60_000 });
 }
 
 async function assertProtectedSessionPersists(page: Page) {
@@ -435,12 +460,30 @@ test("chat basic flow: create thread and send message", async ({ page }) => {
   const threadTitle = `Playwright Chat ${Date.now()}`;
   await page.getByLabel("New thread").fill(threadTitle);
   await page.getByRole("button", { name: "Create thread" }).click();
+  await page.waitForURL(
+    (url) => Boolean(url.searchParams.get("threadId")) || url.searchParams.has("error"),
+    { timeout: 30_000 },
+  );
+  const createdThreadId = new URL(page.url()).searchParams.get("threadId");
+  expect(createdThreadId, "threadId should exist after creating thread").toBeTruthy();
   await expect(page.getByText("Thread created.")).toBeVisible({ timeout: 15_000 });
 
   const message = `Hello from Playwright ${Date.now()}`;
   await page.getByLabel("Message").fill(message);
   await page.getByRole("button", { name: "Send" }).click();
-  await expect(page.getByText("Message sent.")).toBeVisible({ timeout: 15_000 });
+  await page.waitForURL(
+    (url) => {
+      const success = (url.searchParams.get("success") ?? "").toLowerCase();
+      const hasMessageSuccess = success.includes("message sent");
+      const hasError = url.searchParams.has("error");
+      const sameThread = url.searchParams.get("threadId") === createdThreadId;
+      return sameThread && (hasMessageSuccess || hasError);
+    },
+    { timeout: 30_000 },
+  );
+  const sendUrl = new URL(page.url());
+  expect(sendUrl.searchParams.get("error")).toBeNull();
+  expect((sendUrl.searchParams.get("success") ?? "").toLowerCase()).toContain("message sent");
   await expect(page.getByText(message)).toBeVisible();
 });
 

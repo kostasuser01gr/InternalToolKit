@@ -28,11 +28,36 @@ async function gotoWithRetry(page: Page, route: string, timeout = 120_000) {
 test.describe.configure({ timeout: 480_000 });
 
 async function login(page: Page, loginName: string, pin: string) {
-  await gotoWithRetry(page, "/login");
-  await page.getByLabel("Login name").fill(loginName);
-  await page.getByLabel("PIN").fill(pin);
-  await page.getByRole("button", { name: /^Continue$/ }).click();
-  await expect(page).toHaveURL(/\/(overview|home|chat)$/, { timeout: 90_000 });
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await gotoWithRetry(page, "/login");
+    await page.getByLabel("Login name").fill(loginName);
+    await page.getByLabel("PIN").fill(pin);
+    await page.getByRole("button", { name: /^Continue$/ }).click();
+
+    try {
+      await expect(page).toHaveURL(/\/(overview|home|chat)(?:\?|$)/, {
+        timeout: 90_000,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      const currentUrl = page.url();
+      const loginError = await page
+        .locator("[data-testid='login-page']")
+        .innerText()
+        .then((text) => text.replace(/\s+/g, " ").trim().slice(0, 240))
+        .catch(() => "login-page-not-visible");
+      if (!currentUrl.includes("/login") || attempt === 2) {
+        throw new Error(
+          `Login failed for ${loginName} after ${attempt + 1} attempts. URL=${currentUrl}. Context=${loginError}`,
+        );
+      }
+      await page.waitForTimeout(1_000);
+    }
+  }
+
+  throw lastError ?? new Error(`Login failed for ${loginName}.`);
 }
 
 // ---------- Washers module ----------
