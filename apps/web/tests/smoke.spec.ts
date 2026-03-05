@@ -390,25 +390,40 @@ test("data table: create table, add field, add record, export CSV", async ({
 
   await page.getByPlaceholder("Field name").fill(fieldName);
   await page.getByRole("button", { name: "Add field" }).click();
-  // URL reloads with success or error query params; avoid brittle exact string matching.
-  await page.waitForURL(
-    (url) => {
-      const success = url.searchParams.get("success")?.toLowerCase() ?? "";
-      return success.includes("field") || url.searchParams.has("error");
-    },
-    { timeout: 30000 },
-  );
+  // URL reloads with success/error query params. In CI this can complete before
+  // waitForURL attaches, so check current URL first and only then wait.
+  const hasFieldOutcomeInUrl = () => {
+    const url = new URL(page.url());
+    const success = url.searchParams.get("success")?.toLowerCase() ?? "";
+    return success.includes("field") || url.searchParams.has("error");
+  };
+  if (!hasFieldOutcomeInUrl()) {
+    await page.waitForURL(
+      (url) => {
+        const success = url.searchParams.get("success")?.toLowerCase() ?? "";
+        return success.includes("field") || url.searchParams.has("error");
+      },
+      { timeout: 30000 },
+    );
+  }
   await expect(page.getByRole("status")).toBeVisible({ timeout: 10000 });
 
   await page.getByLabel(fieldName).fill("hello world");
   await page.getByRole("button", { name: "Save record" }).click();
-  await page.waitForURL(
-    (url) => {
-      const success = url.searchParams.get("success")?.toLowerCase() ?? "";
-      return success.includes("record") || url.searchParams.has("error");
-    },
-    { timeout: 30000 },
-  );
+  const hasRecordOutcomeInUrl = () => {
+    const url = new URL(page.url());
+    const success = url.searchParams.get("success")?.toLowerCase() ?? "";
+    return success.includes("record") || url.searchParams.has("error");
+  };
+  if (!hasRecordOutcomeInUrl()) {
+    await page.waitForURL(
+      (url) => {
+        const success = url.searchParams.get("success")?.toLowerCase() ?? "";
+        return success.includes("record") || url.searchParams.has("error");
+      },
+      { timeout: 30000 },
+    );
+  }
   await expect(page.getByRole("status")).toBeVisible({ timeout: 10000 });
   await expect(page.getByText("hello world")).toBeVisible();
 
