@@ -342,6 +342,14 @@ test("command palette opens and navigates", async ({ page }) => {
   try {
     await expect(page).toHaveURL(/\/analytics(\?|$)/, { timeout: 30_000 });
   } catch {
+    // Shortcut handling ignores key events while typing in an input, so clear focus first.
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    });
+    await page.mouse.click(1, 1).catch(() => {});
+    await page.waitForTimeout(300);
     await page.keyboard.press("g");
     await page.waitForTimeout(600);
     await page.keyboard.press("a");
