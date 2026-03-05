@@ -500,6 +500,12 @@ async function actionOutcome(page: Page, candidate: ActionCandidate, route: stri
     };
   }
 
+  if (candidate.role === "link") {
+    await page
+      .waitForURL((url) => url.toString() !== beforeUrl, { timeout: 2_500 })
+      .catch(() => {});
+  }
+
   await page.waitForTimeout(500);
   page.removeListener("request", requestListener);
 
