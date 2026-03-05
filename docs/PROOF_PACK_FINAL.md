@@ -53,10 +53,30 @@ Report: `apps/web/test-results/system-scan-v2-report.json`
 - Error-boundary banner hits: `0`
 
 ## 5) CI/Deploy verification status
-- GitHub Actions run ID(s): _to be filled after push/watch_
-- Vercel production verification: _to be filled after deploy/log check_
+- GitHub Actions (commit `c79e4cbbb876399ef6dc064b422a32665476bd13`):
+  - CI: `22711491587` ✅
+  - Lighthouse CI: `22711491565` ✅
+  - CodeQL: `22711491562` ✅
+- Vercel production deploy:
+  - Inspect: `https://vercel.com/kostasuser01gr/internal-tool-kit-ops/99zMM3boxwAX2KrJMoa2bMLkpHUM`
+  - Deployment URL: `https://internal-tool-kit-fh15wye52-kostasuser01gr.vercel.app`
+  - Production alias: `https://internal-tool-kit-ops.vercel.app`
+  - `vercel logs --environment production --since 60m --level error`: no repeated errors found.
+- Route/API content checks:
+  - `/login` -> `200`, `text/html; charset=utf-8`
+  - `/api/health` -> `200`, `application/json` (degraded payload, no redirect/HTML)
 
-## 6) Re-run checklist
+## 6) Blocking env gap for production readiness
+- `vercel env ls` currently shows no configured variables.
+- Required ENV NAMES to fix degraded production runtime:
+  - `DATABASE_URL` (production + preview)
+  - `SESSION_SECRET` (production + preview)
+  - `DIRECT_URL` (production + preview, for migration/runtime consistency)
+  - `CRON_SECRET` (production + preview, for cron-protected endpoints)
+- Convex CLI checks are blocked by missing:
+  - `CONVEX_DEPLOYMENT`
+
+## 7) Re-run checklist
 - `pnpm -w lint && pnpm -w typecheck && pnpm -w test && pnpm --filter @internal-toolkit/web build`
 - `cd apps/web && pnpm exec playwright test tests/smoke.spec.ts tests/modules.spec.ts --project Desktop --project Mobile`
 - `cd apps/web && pnpm test:system-scan:v2`
