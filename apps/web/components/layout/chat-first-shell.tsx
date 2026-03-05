@@ -436,6 +436,8 @@ function ChatFirstShell({
               type="text"
               name="quickCommand"
               placeholder="Search or ask anything..."
+              data-global-search-input
+              suppressHydrationWarning
               className="focus-ring h-10 w-full rounded-2xl border border-[var(--border)] bg-white/8 pl-9 pr-18 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)]"
             />
             <button

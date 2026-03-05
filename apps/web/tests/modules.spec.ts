@@ -261,7 +261,7 @@ test("ops inbox page loads", async ({ page }) => {
 
 test("home quick access link navigates to automations", async ({ page }) => {
   await login(page, "admin", "1234");
-  await gotoWithRetry(page, "/home");
+  await gotoWithRetry(page, "/overview");
 
   const automationLink = page.getByRole("link", {
     name: /build and run automations/i,

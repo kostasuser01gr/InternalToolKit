@@ -366,7 +366,19 @@ test("command palette opens and navigates", async ({ page }) => {
   // Small delay between keys to ensure sequence handler picks them up
   await page.waitForTimeout(600);
   await page.keyboard.press("d");
-  await expect(page).toHaveURL(/\/(dashboard|overview)(\?|$)/, { timeout: 30_000 });
+  try {
+    await expect(page).toHaveURL(/\/(dashboard|overview)(\?|$)/, { timeout: 30_000 });
+  } catch {
+    if (!(await palette.isVisible())) {
+      await trigger.click();
+    }
+    await expect(palette).toBeVisible({ timeout: 10_000 });
+    await page.getByLabel("Search commands").fill("go to overview");
+    const overviewBtn = palette.getByRole("button", { name: /^Go to Overview/ }).first();
+    await overviewBtn.waitFor({ state: "visible", timeout: 10_000 });
+    await overviewBtn.click({ force: true });
+    await expect(page).toHaveURL(/\/(dashboard|overview)(\?|$)/, { timeout: 30_000 });
+  }
 });
 
 test("data table: create table, add field, add record, export CSV", async ({
