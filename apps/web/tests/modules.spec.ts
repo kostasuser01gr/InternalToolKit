@@ -248,13 +248,15 @@ test("calendar: apply date range", async ({ page }) => {
 test("notifications page loads", async ({ page }) => {
   await login(page, "admin", "1234");
   const response = await gotoWithRetry(page, "/notifications");
-  expect(response?.status()).toBeLessThan(500);
+  expect(response?.status() ?? 200).toBeLessThan(500);
+  await expect(page.getByRole("heading", { name: /notifications/i })).toBeVisible();
 });
 
 test("ops inbox page loads", async ({ page }) => {
   await login(page, "admin", "1234");
   const response = await gotoWithRetry(page, "/ops-inbox");
-  expect(response?.status()).toBeLessThan(500);
+  expect(response?.status() ?? 200).toBeLessThan(500);
+  await expect(page.getByRole("heading", { name: /ops inbox/i })).toBeVisible();
 });
 
 test("home quick access link navigates to automations", async ({ page }) => {
