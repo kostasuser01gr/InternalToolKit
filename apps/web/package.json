@@ -20,6 +20,7 @@
     "test:full-scan": "pnpm db:reset && playwright test tests/diagnostics/full-scan.spec.ts",
     "test:full-scan:v2": "pnpm db:reset && playwright test tests/diagnostics/full-scan-v2.spec.ts",
     "test:system-scan": "pnpm db:reset && playwright test tests/diagnostics/system-scan.spec.ts --project Desktop --project Mobile --project Tablet",
+    "test:system-scan:v2": "pnpm db:reset && SYSTEM_SCAN_REPORT_FILE=system-scan-v2-report.json playwright test tests/diagnostics/system-scan-v2.spec.ts --project Desktop --project Mobile",
     "test:a11y": "playwright test tests/a11y.spec.ts",
     "test:api": "playwright test tests/api-contracts.spec.ts",
     "test:api:v2": "playwright test tests/api-contracts-v2.spec.ts",

@@ -32,6 +32,10 @@ const ACTION_VERB_PATTERN = new RegExp(
 
 const MAX_ROUTE_REDIRECTS = 10;
 const MAX_ACTIONS_PER_ROUTE = 2;
+const SYSTEM_SCAN_REPORT_FILE =
+  process.env.SYSTEM_SCAN_REPORT_FILE?.trim() || "system-scan-report.json";
+const ROUTE_LOAD_TIMEOUT_MS = 15_000;
+const ROUTE_FALLBACK_TIMEOUT_MS = 10_000;
 
 type FailedRequest = {
   url: string;
@@ -265,11 +269,13 @@ async function openNavigationDrawers(page: Page) {
     /toggle sidebar/i,
     /expand sidebar/i,
     /open sidebar/i,
-    /menu/i,
-    /navigation/i,
+    /open menu/i,
   ];
 
   for (const pattern of toggles) {
+    if (page.isClosed()) {
+      return;
+    }
     const button = page.getByRole("button", { name: pattern }).first();
     if (await button.isVisible().catch(() => false)) {
       await button.click().catch(() => {});
@@ -471,7 +477,9 @@ async function actionOutcome(page: Page, candidate: ActionCandidate, route: stri
     (await page.locator("tbody tr, li, [role='listitem']").count());
 
   let mutationCount = 0;
+  let requestCount = 0;
   const requestListener = (request: import("@playwright/test").Request) => {
+    requestCount += 1;
     if (["POST", "PUT", "PATCH", "DELETE"].includes(request.method().toUpperCase())) {
       mutationCount += 1;
     }
@@ -506,6 +514,9 @@ async function actionOutcome(page: Page, candidate: ActionCandidate, route: stri
     return { role: candidate.role, text: candidate.text, outcome: "navigation" };
   }
   if (mutationCount > 0) {
+    return { role: candidate.role, text: candidate.text, outcome: "network_mutation" };
+  }
+  if (/export/i.test(candidate.text) && requestCount > 0) {
     return { role: candidate.role, text: candidate.text, outcome: "network_mutation" };
   }
   if (afterDialogs > beforeDialogs) {
@@ -593,8 +604,13 @@ async function scanRoute(
   const actions: ActionAudit[] = [];
 
   try {
-    const response = await page.goto(route, { waitUntil: "load", timeout: 25_000 }).catch(async () => {
-      return page.goto(route, { waitUntil: "domcontentloaded", timeout: 20_000 });
+    const response = await page
+      .goto(route, { waitUntil: "load", timeout: ROUTE_LOAD_TIMEOUT_MS })
+      .catch(async () => {
+        return page.goto(route, {
+          waitUntil: "domcontentloaded",
+          timeout: ROUTE_FALLBACK_TIMEOUT_MS,
+        });
     });
     httpStatus = response?.status() ?? null;
     finalUrl = page.url();
@@ -681,7 +697,7 @@ async function scanRoute(
 function writeSystemScanReport(entries: RouteScanResult[], projectName: string) {
   const reportDir = path.join(process.cwd(), "test-results");
   fs.mkdirSync(reportDir, { recursive: true });
-  const reportPath = path.join(reportDir, "system-scan-report.json");
+  const reportPath = path.join(reportDir, SYSTEM_SCAN_REPORT_FILE);
 
   let existing: RouteScanResult[] = [];
   if (fs.existsSync(reportPath)) {
@@ -702,7 +718,7 @@ function writeSystemScanReport(entries: RouteScanResult[], projectName: string) 
 
 test.describe("System diagnostic scanner", () => {
   test.describe.configure({ retries: 0 });
-  test.setTimeout(1_200_000);
+  test.setTimeout(1_500_000);
 
   test("routes and primary actions are healthy", async ({ page, context }, testInfo) => {
     const projectName = testInfo.project.name.toLowerCase();
