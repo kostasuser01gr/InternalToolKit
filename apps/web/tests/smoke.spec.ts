@@ -475,10 +475,16 @@ test("chat basic flow: create thread and send message", async ({ page }) => {
   const threadTitle = `Playwright Chat ${Date.now()}`;
   await page.getByLabel("New thread").fill(threadTitle);
   await page.getByRole("button", { name: "Create thread" }).click();
-  await page.waitForURL(
-    (url) => Boolean(url.searchParams.get("threadId")) || url.searchParams.has("error"),
-    { timeout: 30_000 },
-  );
+  const hasThreadOutcomeInUrl = () => {
+    const url = new URL(page.url());
+    return Boolean(url.searchParams.get("threadId")) || url.searchParams.has("error");
+  };
+  if (!hasThreadOutcomeInUrl()) {
+    await page.waitForURL(
+      (url) => Boolean(url.searchParams.get("threadId")) || url.searchParams.has("error"),
+      { timeout: 30_000 },
+    );
+  }
   const createdThreadId = new URL(page.url()).searchParams.get("threadId");
   expect(createdThreadId, "threadId should exist after creating thread").toBeTruthy();
   await expect(page.getByText("Thread created.")).toBeVisible({ timeout: 15_000 });
@@ -486,16 +492,26 @@ test("chat basic flow: create thread and send message", async ({ page }) => {
   const message = `Hello from Playwright ${Date.now()}`;
   await page.getByLabel("Message").fill(message);
   await page.getByRole("button", { name: "Send" }).click();
-  await page.waitForURL(
-    (url) => {
-      const success = (url.searchParams.get("success") ?? "").toLowerCase();
-      const hasMessageSuccess = success.includes("message sent");
-      const hasError = url.searchParams.has("error");
-      const sameThread = url.searchParams.get("threadId") === createdThreadId;
-      return sameThread && (hasMessageSuccess || hasError);
-    },
-    { timeout: 30_000 },
-  );
+  const hasMessageOutcomeInUrl = () => {
+    const url = new URL(page.url());
+    const success = (url.searchParams.get("success") ?? "").toLowerCase();
+    const hasMessageSuccess = success.includes("message sent");
+    const hasError = url.searchParams.has("error");
+    const sameThread = url.searchParams.get("threadId") === createdThreadId;
+    return sameThread && (hasMessageSuccess || hasError);
+  };
+  if (!hasMessageOutcomeInUrl()) {
+    await page.waitForURL(
+      (url) => {
+        const success = (url.searchParams.get("success") ?? "").toLowerCase();
+        const hasMessageSuccess = success.includes("message sent");
+        const hasError = url.searchParams.has("error");
+        const sameThread = url.searchParams.get("threadId") === createdThreadId;
+        return sameThread && (hasMessageSuccess || hasError);
+      },
+      { timeout: 30_000 },
+    );
+  }
   const sendUrl = new URL(page.url());
   expect(sendUrl.searchParams.get("error")).toBeNull();
   expect((sendUrl.searchParams.get("success") ?? "").toLowerCase()).toContain("message sent");
