@@ -15,7 +15,7 @@ import {
 } from "@internal-toolkit/shared";
 import { z } from "zod";
 
-type Env = {
+export type Env = {
   APP_VERSION?: string;
   ENVIRONMENT?: string;
   ALLOWED_ORIGINS?: string;
@@ -818,42 +818,46 @@ async function handleRequest(
   return jsonResponse(request, config, requestId, { ok: false, error: "Not Found" }, 404);
 }
 
+export async function processApiRequest(request: Request, env: Env) {
+  const requestId = getRequestId(request);
+  const startedAt = Date.now();
+  const pathname = new URL(request.url).pathname;
+
+  let response: Response | null = null;
+  try {
+    const config = getRuntimeConfig(env);
+    response = await handleRequest(request, config, requestId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const headers = new Headers({
+      "Content-Type": "application/json; charset=utf-8",
+      "X-Request-Id": requestId,
+    });
+    withSecurityHeaders(headers, request);
+    response = new Response(JSON.stringify({ ok: false, error: message }), {
+      status: 500,
+      headers,
+    });
+  } finally {
+    const durationMs = Date.now() - startedAt;
+    const status = response?.status ?? 500;
+    console.info(
+      JSON.stringify({
+        event: "api.request",
+        requestId,
+        method: request.method,
+        path: pathname,
+        status,
+        durationMs,
+      }),
+    );
+  }
+
+  return response ?? new Response("Unexpected runtime error", { status: 500 });
+}
+
 export default {
   async fetch(request, env) {
-    const requestId = getRequestId(request);
-    const startedAt = Date.now();
-    const pathname = new URL(request.url).pathname;
-
-    let response: Response | null = null;
-    try {
-      const config = getRuntimeConfig(env as Env);
-      response = await handleRequest(request, config, requestId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      const headers = new Headers({
-        "Content-Type": "application/json; charset=utf-8",
-        "X-Request-Id": requestId,
-      });
-      withSecurityHeaders(headers, request);
-      response = new Response(JSON.stringify({ ok: false, error: message }), {
-        status: 500,
-        headers,
-      });
-    } finally {
-      const durationMs = Date.now() - startedAt;
-      const status = response?.status ?? 500;
-      console.info(
-        JSON.stringify({
-          event: "api.request",
-          requestId,
-          method: request.method,
-          path: pathname,
-          status,
-          durationMs,
-        }),
-      );
-    }
-
-    return response ?? new Response("Unexpected runtime error", { status: 500 });
+    return processApiRequest(request, env as Env);
   },
 } satisfies ExportedHandler<Env>;

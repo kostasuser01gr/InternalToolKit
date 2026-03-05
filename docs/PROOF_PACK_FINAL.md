@@ -1,83 +1,98 @@
-# Proof Pack — Final Stabilization Pass
+# Proof Pack — Final Stabilization + Railway Backend Migration
 
 Date: 2026-03-05
 Repo: `kostasuser01gr/InternalToolKit`
 
-## 1) What was failing
-- CI run `22684653845` failed in `quality` job (`E2E smoke tests`).
-- Exact failures from logs:
-  - `apps/web/tests/smoke.spec.ts` chat flow expected `Message sent.` but did not reliably appear.
-  - Shared login helpers in `apps/web/tests/smoke.spec.ts` and `apps/web/tests/modules.spec.ts` intermittently remained on `/login`.
-  - `system-scan-v2` initially timed out on Mobile and flagged `/shifts` export as a false dead action.
-- Runtime server error observed during e2e logs:
-  - `Cookies can only be modified in a Server Action or Route Handler` from `apps/web/app/(app)/layout.tsx`.
+## 1) Scope Completed
+- Stability and diagnostics hardening verified locally and via Playwright.
+- Backend moved to Railway (`internal-toolkit-api`) with successful deployment.
+- Frontend remains on Vercel and now points API client base URL to Railway.
+- Convex compatibility preserved (`codegen` + prod deploy successful).
 
-## 2) Root-cause fixes applied
-- Deterministic login retries in e2e shared helpers.
-  - `apps/web/tests/smoke.spec.ts`
-  - `apps/web/tests/modules.spec.ts`
-- Chat smoke flow now validates thread creation + send outcome deterministically via URL/query semantics and message presence.
-  - `apps/web/tests/smoke.spec.ts`
-- Removed invalid cookie mutation from server component layout (eliminates runtime server exception).
-  - `apps/web/app/(app)/layout.tsx`
-- Scanner v2 implemented without duplicated scanner logic:
-  - Added report-file parameterization in scanner core.
-  - Added `system-scan-v2.spec.ts` wrapper.
-  - Added `test:system-scan:v2` script.
-  - Improved scanner runtime + action effect detection for export/download actions.
-  - Files:
-    - `apps/web/tests/diagnostics/system-scan.spec.ts`
-    - `apps/web/tests/diagnostics/system-scan-v2.spec.ts`
-    - `apps/web/package.json`
-- CI failure triage evidence doc added:
-  - `docs/CI_QUALITY_FAIL.md`
+## 2) Code and Config Changes
+- Added Node server entrypoint for API service hosting on Railway:
+  - `apps/api/src/server.ts`
+- Refactored API worker entry to expose shared request handler for Worker + Node server:
+  - `apps/api/src/index.ts`
+- Added Railway-compatible runtime dependencies/scripts:
+  - `apps/api/package.json`
+  - `apps/api/tsconfig.json`
+- Added monorepo-root Railway deployment config:
+  - `railway.toml`
+- Removed app-local Railway config to avoid duplicate deployment rules:
+  - removed `apps/api/railway.toml`
+- Updated lockfile after dependency changes:
+  - `pnpm-lock.yaml`
+- Baseline artifact updated:
+  - `docs/BASELINE_STATUS.md`
 
-## 3) Local verification run (post-fix)
-Commands run successfully:
+## 3) Local Verification (Passed)
+Executed successfully:
 - `pnpm -w lint`
 - `pnpm -w typecheck`
 - `pnpm -w test`
 - `pnpm --filter @internal-toolkit/web build`
-- `cd apps/web && pnpm exec playwright test tests/smoke.spec.ts tests/modules.spec.ts --project Desktop --project Mobile --reporter=line`
-- `cd apps/web && pnpm test:system-scan:v2`
-- `cd apps/web && pnpm test:api-system`
 
-## 4) System-scan-v2 result
-Report: `apps/web/test-results/system-scan-v2-report.json`
-- Total route entries: `64`
-- Projects covered: `desktop=32`, `mobile=32`
-- Failing routes: `0`
-- Dead actions: `0`
-- 500-route failures: `0`
-- Redirect loops: `0`
-- Error-boundary banner hits: `0`
+Playwright (explicit):
+- `cd apps/web && pnpm exec playwright test tests/smoke.spec.ts --project Desktop --reporter=line`
+- `cd apps/web && pnpm exec playwright test tests/modules.spec.ts --project Desktop --reporter=line`
+- `cd apps/web && pnpm exec playwright test tests/diagnostics/system-scan-v2.spec.ts --project Desktop --reporter=line`
+- `cd apps/web && pnpm exec playwright test tests/diagnostics/system-scan-v2.spec.ts --project Mobile --reporter=line`
+- `pnpm -C apps/web test:system-scan:v2`
 
-## 5) CI/Deploy verification status
-- GitHub Actions (commit `c79e4cbbb876399ef6dc064b422a32665476bd13`):
-  - CI: `22711491587` ✅
-  - Lighthouse CI: `22711491565` ✅
-  - CodeQL: `22711491562` ✅
-- Vercel production deploy:
-  - Inspect: `https://vercel.com/kostasuser01gr/internal-tool-kit-ops/99zMM3boxwAX2KrJMoa2bMLkpHUM`
-  - Deployment URL: `https://internal-tool-kit-fh15wye52-kostasuser01gr.vercel.app`
-  - Production alias: `https://internal-tool-kit-ops.vercel.app`
-  - `vercel logs --environment production --since 60m --level error`: no repeated errors found.
-- Route/API content checks:
-  - `/login` -> `200`, `text/html; charset=utf-8`
-  - `/api/health` -> `200`, `application/json` (degraded payload, no redirect/HTML)
+## 4) Diagnostics Report Result (system-scan-v2)
+Report file:
+- `apps/web/test-results/system-scan-v2-report.json`
 
-## 6) Blocking env gap for production readiness
-- `vercel env ls` currently shows no configured variables.
-- Required ENV NAMES to fix degraded production runtime:
-  - `DATABASE_URL` (production + preview)
-  - `SESSION_SECRET` (production + preview)
-  - `DIRECT_URL` (production + preview, for migration/runtime consistency)
-  - `CRON_SECRET` (production + preview, for cron-protected endpoints)
-- Convex CLI checks are blocked by missing:
-  - `CONVEX_DEPLOYMENT`
+Verified summary:
+- desktop routes: `32`
+- mobile routes: `32`
+- failing routes: `0`
+- dead actions: `0`
+- HTTP 500 findings: `0`
+- redirect loops: `0`
+- "Something went wrong" banners: `0`
+- hydration mismatch flags: `0`
 
-## 7) Re-run checklist
+## 5) Backend on Railway (Passed)
+Railway project/service:
+- Project: `internal-toolkit-api`
+- Service: `internal-toolkit-api`
+- Latest successful deployment: `011d20d8-d077-412b-b136-12be7560c4a1`
+- Public URL: `https://internal-toolkit-api-production.up.railway.app`
+
+Health verification:
+- `GET /health` returned `200` JSON payload with `ok: true`.
+
+## 6) Frontend on Vercel (Passed)
+- Added/verified `NEXT_PUBLIC_API_URL` for `preview` and `production` (name-only verification).
+- `vercel build --prod` passed.
+- Production deploy succeeded:
+  - `https://internal-tool-kit-g0hmp3goq-kostasuser01gr.vercel.app`
+  - alias: `https://internal-tool-kit-ops.vercel.app`
+- `vercel logs --environment production --since 60m --level error` showed no repeated errors.
+
+Runtime contract checks on production alias:
+- `/login` => `200` with `content-type: text/html; charset=utf-8`
+- `/api/health` => `200` with `content-type: application/json`
+
+## 7) Convex Verification (Passed)
+- `npx convex codegen` passed.
+- `npx convex deploy -y` passed.
+- Prod deployment target used by CLI: `beloved-monitor-46`.
+
+## 8) GitHub Actions Verification
+- Pre-change baseline green run IDs were:
+  - CI: `22723620913`
+  - CodeQL: `22723620902`
+  - Lighthouse CI: `22723620883`
+- This file will be updated with post-push run IDs after final push/watch cycle.
+
+## 9) Re-Verification Commands
 - `pnpm -w lint && pnpm -w typecheck && pnpm -w test && pnpm --filter @internal-toolkit/web build`
-- `cd apps/web && pnpm exec playwright test tests/smoke.spec.ts tests/modules.spec.ts --project Desktop --project Mobile`
+- `cd apps/web && pnpm exec playwright test tests/smoke.spec.ts --project Desktop --reporter=line`
+- `cd apps/web && pnpm exec playwright test tests/modules.spec.ts --project Desktop --reporter=line`
 - `cd apps/web && pnpm test:system-scan:v2`
-- `cd apps/web && pnpm test:api-system`
+- `curl -si https://internal-tool-kit-ops.vercel.app/login | head -n 20`
+- `curl -si https://internal-tool-kit-ops.vercel.app/api/health | head -n 20`
+- `curl -si https://internal-toolkit-api-production.up.railway.app/health | head -n 20`

@@ -6,8 +6,8 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-    "lib": ["ES2022", "WebWorker"],
-    "types": ["@cloudflare/workers-types"],
+    "lib": ["ES2022", "WebWorker", "DOM"],
+    "types": ["@cloudflare/workers-types", "node"],
     "skipLibCheck": true,
     "noEmit": true
   },
