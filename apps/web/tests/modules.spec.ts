@@ -257,6 +257,20 @@ test("ops inbox page loads", async ({ page }) => {
   expect(response?.status()).toBeLessThan(500);
 });
 
+test("home quick access link navigates to automations", async ({ page }) => {
+  await login(page, "admin", "1234");
+  await gotoWithRetry(page, "/home");
+
+  const automationLink = page.getByRole("link", {
+    name: /build and run automations/i,
+  });
+  await expect(automationLink).toBeVisible();
+  await automationLink.click();
+
+  await expect(page).toHaveURL(/\/automations(?:\?|$)/, { timeout: 20_000 });
+  await expect(page.getByTestId("automations-page")).toBeVisible();
+});
+
 // ---------- Cross-module navigation ----------
 
 test("all primary nav routes are reachable", async ({ page }) => {

@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CommandPalette } from "@/components/layout/command-palette";
 import { CreateSheet } from "@/components/layout/create-sheet";
@@ -57,6 +57,12 @@ const requestIdleCallback = typeof window !== "undefined" && window.requestIdleC
 const cancelIdleCallback = typeof window !== "undefined" && window.cancelIdleCallback
   ? window.cancelIdleCallback
   : (id: number) => clearTimeout(id);
+
+declare global {
+  interface Window {
+    __internalToolkitNavLatency?: Array<{ route: string; ms: number; at: number }>;
+  }
+}
 
 export type ShellConversation = {
   id: string;
@@ -132,6 +138,7 @@ function buildChatUrl(input: { threadId?: string; channelId?: string; quickComma
 function SidebarContent({
   pathname,
   onNavigate,
+  onPrefetchRoute,
   opsInboxCount,
   workspaceName,
   conversations,
@@ -139,6 +146,7 @@ function SidebarContent({
 }: {
   pathname: string;
   onNavigate: () => void;
+  onPrefetchRoute: (href: string) => void;
   opsInboxCount?: number | undefined;
   workspaceName: string;
   conversations: ShellConversation[];
@@ -146,6 +154,11 @@ function SidebarContent({
 }) {
   const pinned = conversations.filter((item) => item.isPinned).slice(0, 6);
   const recent = conversations.filter((item) => !item.isPinned).slice(0, 10);
+  const prefetchHandlers = (href: string) => ({
+    onMouseEnter: () => onPrefetchRoute(href),
+    onFocus: () => onPrefetchRoute(href),
+    onTouchStart: () => onPrefetchRoute(href),
+  });
 
   return (
     <div className="flex h-full flex-col">
@@ -153,6 +166,7 @@ function SidebarContent({
         <Link
           href={buildChatUrl({ newConversation: true })}
           onClick={onNavigate}
+          {...prefetchHandlers(buildChatUrl({ newConversation: true }))}
           className="focus-ring flex items-center justify-center gap-2 rounded-xl border border-[#9a6fff66] bg-[linear-gradient(120deg,rgba(154,111,255,0.28),rgba(115,194,255,0.16))] px-3 py-2.5 text-sm font-semibold text-[var(--text)] shadow-[0_12px_32px_rgba(73,46,140,0.35)]"
         >
           <Plus className="size-4" />
@@ -167,21 +181,25 @@ function SidebarContent({
             Pinned
           </p>
           <div className="space-y-0.5">
-            {(pinned.length > 0 ? pinned : defaultPinnedConversations).map((conv) => (
-              <Link
-                key={conv.id}
-                href={buildChatUrl({ threadId: conv.id })}
-                onClick={onNavigate}
-                className={cn(
-                  "focus-ring block truncate rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-muted)] hover:bg-white/8 hover:text-[var(--text)]",
-                  pathname.startsWith("/chat") && pathname.includes(`threadId=${conv.id}`)
-                    ? "bg-[#9a6fff20] text-[var(--text)]"
-                    : "",
-                )}
-              >
-                {conv.title}
-              </Link>
-            ))}
+            {(pinned.length > 0 ? pinned : defaultPinnedConversations).map((conv) => {
+              const href = buildChatUrl({ threadId: conv.id });
+              return (
+                <Link
+                  key={conv.id}
+                  href={href}
+                  onClick={onNavigate}
+                  {...prefetchHandlers(href)}
+                  className={cn(
+                    "focus-ring block truncate rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-muted)] hover:bg-white/8 hover:text-[var(--text)]",
+                    pathname.startsWith("/chat") && pathname.includes(`threadId=${conv.id}`)
+                      ? "bg-[#9a6fff20] text-[var(--text)]"
+                      : "",
+                  )}
+                >
+                  {conv.title}
+                </Link>
+              );
+            })}
           </div>
         </section>
 
@@ -190,16 +208,20 @@ function SidebarContent({
             Recent
           </p>
           <div className="space-y-0.5">
-            {recent.slice(0, 8).map((conv) => (
-              <Link
-                key={conv.id}
-                href={buildChatUrl({ threadId: conv.id })}
-                onClick={onNavigate}
-                className="focus-ring block truncate rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-muted)] hover:bg-white/8 hover:text-[var(--text)]"
-              >
-                {conv.title}
-              </Link>
-            ))}
+            {recent.slice(0, 8).map((conv) => {
+              const href = buildChatUrl({ threadId: conv.id });
+              return (
+                <Link
+                  key={conv.id}
+                  href={href}
+                  onClick={onNavigate}
+                  {...prefetchHandlers(href)}
+                  className="focus-ring block truncate rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-muted)] hover:bg-white/8 hover:text-[var(--text)]"
+                >
+                  {conv.title}
+                </Link>
+              );
+            })}
             {recent.length === 0 ? (
               <p className="px-2.5 py-1.5 text-xs text-[var(--text-muted)]">No recent threads yet.</p>
             ) : null}
@@ -220,6 +242,7 @@ function SidebarContent({
                   key={`${channel.id ?? channel.name}-${index}`}
                   href={href}
                   onClick={onNavigate}
+                  {...prefetchHandlers(href)}
                   className={cn(
                     "focus-ring block truncate rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-muted)] hover:bg-white/8 hover:text-[var(--text)]",
                     active ? "bg-[#9a6fff20] text-[var(--text)]" : "",
@@ -245,6 +268,7 @@ function SidebarContent({
                 key={href}
                 href={href}
                 onClick={onNavigate}
+                {...prefetchHandlers(href)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "focus-ring flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px]",
@@ -287,6 +311,7 @@ function ChatFirstShell({
 }: ChatFirstShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const navIntentRef = useRef<{ route: string; startedAt: number } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [tabletSidebarOpen, setTabletSidebarOpen] = useState(false);
@@ -301,6 +326,16 @@ function ChatFirstShell({
   );
 
   const toggleDrawer = useCallback(() => setDrawerOpen((v) => !v), []);
+  const prefetchRoute = useCallback(
+    (route: string) => {
+      if (route === pathname) {
+        return;
+      }
+      navIntentRef.current = { route, startedAt: performance.now() };
+      router.prefetch(route);
+    },
+    [pathname, router],
+  );
 
   // Prefetch core routes on idle for instant navigation.
   useEffect(() => {
@@ -319,11 +354,33 @@ function ChatFirstShell({
     ];
     const id = requestIdleCallback(() => {
       for (const route of coreRoutes) {
-        if (route !== pathname) router.prefetch(route);
+        prefetchRoute(route);
       }
     });
     return () => cancelIdleCallback(id);
-  }, [pathname, router]);
+  }, [prefetchRoute]);
+
+  // Dev-only nav latency diagnostics for shell transitions.
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    const intent = navIntentRef.current;
+    if (!intent) {
+      return;
+    }
+    const sample = {
+      route: intent.route,
+      ms: Math.round(performance.now() - intent.startedAt),
+      at: Date.now(),
+    };
+    const history = window.__internalToolkitNavLatency ?? [];
+    window.__internalToolkitNavLatency = [...history.slice(-29), sample];
+    navIntentRef.current = null;
+  }, [pathname]);
 
   const openCommandHint = useCallback(() => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true }));
@@ -358,7 +415,13 @@ function ChatFirstShell({
             <PanelRightOpen className="size-4" />
           </button>
 
-          <Link href="/chat" className="flex min-w-0 shrink-0 items-center gap-2">
+          <Link
+            href="/chat"
+            onMouseEnter={() => prefetchRoute("/chat")}
+            onFocus={() => prefetchRoute("/chat")}
+            onTouchStart={() => prefetchRoute("/chat")}
+            className="flex min-w-0 shrink-0 items-center gap-2"
+          >
             <span className="inline-flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#9a6fff] via-[#7b82ff] to-[#5ed0ff] text-[11px] font-bold text-white shadow-[0_0_28px_rgba(122,105,255,0.45)]">
               IO
             </span>
@@ -453,6 +516,9 @@ function ChatFirstShell({
             </button>
             <Link
               href={buildChatUrl({ newConversation: true })}
+              onMouseEnter={() => prefetchRoute(buildChatUrl({ newConversation: true }))}
+              onFocus={() => prefetchRoute(buildChatUrl({ newConversation: true }))}
+              onTouchStart={() => prefetchRoute(buildChatUrl({ newConversation: true }))}
               className="focus-ring inline-flex size-10 items-center justify-center rounded-xl border border-[#9a6fff66] bg-[#9a6fff2a] text-[#c9b7ff]"
             >
               <Plus className="size-4" />
@@ -464,6 +530,9 @@ function ChatFirstShell({
                 <Link
                   key={href}
                   href={href}
+                  onMouseEnter={() => prefetchRoute(href)}
+                  onFocus={() => prefetchRoute(href)}
+                  onTouchStart={() => prefetchRoute(href)}
                   className={cn(
                     "focus-ring inline-flex size-10 items-center justify-center rounded-xl text-[var(--text-muted)]",
                     active ? "bg-[#9a6fff26] text-[var(--text)]" : "hover:bg-white/7 hover:text-[var(--text)]",
@@ -487,6 +556,7 @@ function ChatFirstShell({
           <SidebarContent
             pathname={pathname}
             onNavigate={() => setTabletSidebarOpen(false)}
+            onPrefetchRoute={prefetchRoute}
             opsInboxCount={opsInboxCount}
             workspaceName={workspaceName}
             conversations={conversations}
@@ -503,6 +573,7 @@ function ChatFirstShell({
           <SidebarContent
             pathname={pathname}
             onNavigate={() => setMobileMenuOpen(false)}
+            onPrefetchRoute={prefetchRoute}
             opsInboxCount={opsInboxCount}
             workspaceName={workspaceName}
             conversations={conversations}
@@ -550,10 +621,10 @@ function ChatFirstShell({
               <section className="space-y-2">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">Quick Actions</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <Link href="/shifts" className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">New Shift</Link>
-                  <Link href="/fleet" className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">Fleet Event</Link>
-                  <Link href="/work-orders" className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">Work Order</Link>
-                  <Link href="/reports" className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">Report</Link>
+                  <Link href="/shifts" onMouseEnter={() => prefetchRoute("/shifts")} onFocus={() => prefetchRoute("/shifts")} onTouchStart={() => prefetchRoute("/shifts")} className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">New Shift</Link>
+                  <Link href="/fleet" onMouseEnter={() => prefetchRoute("/fleet")} onFocus={() => prefetchRoute("/fleet")} onTouchStart={() => prefetchRoute("/fleet")} className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">Fleet Event</Link>
+                  <Link href="/work-orders" onMouseEnter={() => prefetchRoute("/work-orders")} onFocus={() => prefetchRoute("/work-orders")} onTouchStart={() => prefetchRoute("/work-orders")} className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">Work Order</Link>
+                  <Link href="/reports" onMouseEnter={() => prefetchRoute("/reports")} onFocus={() => prefetchRoute("/reports")} onTouchStart={() => prefetchRoute("/reports")} className="focus-ring rounded-xl border border-[var(--border)] bg-white/6 p-3 text-center text-xs text-[var(--text-muted)] hover:text-[var(--text)]">Report</Link>
                 </div>
               </section>
 
@@ -581,6 +652,9 @@ function ChatFirstShell({
         <div className="mx-auto flex h-14 max-w-md items-center justify-around px-2">
           <Link
             href="/chat"
+            onMouseEnter={() => prefetchRoute("/chat")}
+            onFocus={() => prefetchRoute("/chat")}
+            onTouchStart={() => prefetchRoute("/chat")}
             className={cn(
               "flex flex-col items-center gap-0.5 px-2 py-1 text-[10px]",
               pathname.startsWith("/chat") ? "text-[#9a6fff]" : "text-[var(--text-muted)]",
@@ -591,6 +665,9 @@ function ChatFirstShell({
           </Link>
           <Link
             href="/dashboard"
+            onMouseEnter={() => prefetchRoute("/dashboard")}
+            onFocus={() => prefetchRoute("/dashboard")}
+            onTouchStart={() => prefetchRoute("/dashboard")}
             className={cn(
               "flex flex-col items-center gap-0.5 px-2 py-1 text-[10px]",
               pathname.startsWith("/dashboard") ? "text-[#9a6fff]" : "text-[var(--text-muted)]",
@@ -601,6 +678,9 @@ function ChatFirstShell({
           </Link>
           <Link
             href="/fleet"
+            onMouseEnter={() => prefetchRoute("/fleet")}
+            onFocus={() => prefetchRoute("/fleet")}
+            onTouchStart={() => prefetchRoute("/fleet")}
             className={cn(
               "flex flex-col items-center gap-0.5 px-2 py-1 text-[10px]",
               pathname.startsWith("/fleet") ? "text-[#9a6fff]" : "text-[var(--text-muted)]",
