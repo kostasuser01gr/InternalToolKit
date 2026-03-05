@@ -68,7 +68,7 @@ Health verification:
 - Added/verified `NEXT_PUBLIC_API_URL` for `preview` and `production` (name-only verification).
 - `vercel build --prod` passed.
 - Production deploy succeeded:
-  - `https://internal-tool-kit-g0hmp3goq-kostasuser01gr.vercel.app`
+  - `https://internal-tool-kit-mepmr5zxd-kostasuser01gr.vercel.app`
   - alias: `https://internal-tool-kit-ops.vercel.app`
 - `vercel logs --environment production --since 60m --level error` showed no repeated errors.
 
@@ -82,11 +82,16 @@ Runtime contract checks on production alias:
 - Prod deployment target used by CLI: `beloved-monitor-46`.
 
 ## 8) GitHub Actions Verification
-- Pre-change baseline green run IDs were:
-  - CI: `22723620913`
-  - CodeQL: `22723620902`
-  - Lighthouse CI: `22723620883`
-- This file will be updated with post-push run IDs after final push/watch cycle.
+- Latest push-run IDs on `main` (head `98c0391f737f2d0103b3eb4e79e2f33c6026244a`):
+  - CI: `22730190655` ✅
+  - CodeQL: `22730190595` ✅
+  - Lighthouse CI: `22730190645` ✅
+- Deploy Worker verification run on `main`:
+  - Deploy Worker: `22730125426` ✅ (`workflow_dispatch`)
+- Additional verification runs (manual, same head):
+  - CI: `22730125473` ✅
+  - CodeQL: `22730125413` ✅
+  - Lighthouse CI: `22730125436` ✅
 
 ## 9) Re-Verification Commands
 - `pnpm -w lint && pnpm -w typecheck && pnpm -w test && pnpm --filter @internal-toolkit/web build`
