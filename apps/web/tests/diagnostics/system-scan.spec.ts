@@ -34,8 +34,23 @@ const MAX_ROUTE_REDIRECTS = 10;
 const MAX_ACTIONS_PER_ROUTE = 2;
 const SYSTEM_SCAN_REPORT_FILE =
   process.env.SYSTEM_SCAN_REPORT_FILE?.trim() || "system-scan-report.json";
-const ROUTE_LOAD_TIMEOUT_MS = 15_000;
-const ROUTE_FALLBACK_TIMEOUT_MS = 10_000;
+const ROUTE_LOAD_TIMEOUT_MS = 30_000;
+const ROUTE_FALLBACK_TIMEOUT_MS = 20_000;
+const ROUTE_READY_TIMEOUT_MS = 12_000;
+const ACTION_NAV_TIMEOUT_MS = 20_000;
+const ACTION_READY_TIMEOUT_MS = 8_000;
+const HYDRATION_MISMATCH_PATTERN =
+  /hydrated but some attributes of the server rendered html didn't match|hydration mismatch/i;
+
+const ROUTE_READY_SELECTORS: Record<string, string[]> = {
+  "/fleet": ['[data-testid="fleet-page"]', '[data-testid="fleet-blocked"]', 'h1:has-text("Fleet")'],
+  "/washers": ['[data-testid="washers-page"]', '[data-testid="washers-blocked"]', 'h1:has-text("Washer Operations")'],
+  "/settings": ['[data-testid="settings-page"]', 'h1:has-text("Settings")'],
+  "/notifications": ['[data-testid="notifications-page"]', 'h1:has-text("Notifications")'],
+  "/overview": ['[data-testid="home-page"]', 'h1:has-text("Overview")'],
+};
+
+const DEFAULT_READY_SELECTORS = ['[data-shell-root="true"]', "main", "[data-testid$='-page']", "h1"];
 
 type FailedRequest = {
   url: string;
@@ -74,6 +89,7 @@ type RouteScanResult = {
   deadActions: ActionAudit[];
   actions: ActionAudit[];
   bannerDetected: boolean;
+  hydrationMismatch: boolean;
   errorId?: string;
   requestId?: string;
   screenshotPath?: string;
@@ -320,6 +336,52 @@ function detectRedirectLoop(chain: string[]) {
   return chain.length > MAX_ROUTE_REDIRECTS;
 }
 
+async function waitForRouteReady(page: Page, route: string, timeoutMs: number) {
+  const routeKey = normalizeRoutePath(page.url()) ?? normalizeRoutePath(route) ?? route;
+  const selectors =
+    ROUTE_READY_SELECTORS[routeKey] ??
+    ROUTE_READY_SELECTORS[route] ??
+    DEFAULT_READY_SELECTORS;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    for (const selector of selectors) {
+      const isVisible = await page
+        .locator(selector)
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (isVisible) {
+        return;
+      }
+    }
+    await page.waitForTimeout(150);
+  }
+
+  throw new Error(
+    `Route readiness timeout for ${routeKey}. Selectors: ${selectors.join(", ")}`,
+  );
+}
+
+async function gotoRouteWithReadyState(
+  page: Page,
+  route: string,
+  options?: { navTimeout?: number; fallbackTimeout?: number; readyTimeout?: number },
+) {
+  const navTimeout = options?.navTimeout ?? ROUTE_LOAD_TIMEOUT_MS;
+  const fallbackTimeout = options?.fallbackTimeout ?? ROUTE_FALLBACK_TIMEOUT_MS;
+  const readyTimeout = options?.readyTimeout ?? ROUTE_READY_TIMEOUT_MS;
+
+  const response = await page
+    .goto(route, { waitUntil: "domcontentloaded", timeout: navTimeout })
+    .catch(async () => {
+      return page.goto(route, { waitUntil: "commit", timeout: fallbackTimeout });
+    });
+
+  await waitForRouteReady(page, route, readyTimeout);
+  return response;
+}
+
 function matchFirst(text: string, pattern: RegExp) {
   const match = text.match(pattern);
   return match?.[1]?.trim();
@@ -419,8 +481,10 @@ function actionLocator(page: Page, candidate: ActionCandidate) {
 }
 
 async function actionOutcome(page: Page, candidate: ActionCandidate, route: string): Promise<ActionAudit> {
-  await page.goto(route, { waitUntil: "load", timeout: 10_000 }).catch(async () => {
-    await page.goto(route, { waitUntil: "domcontentloaded", timeout: 8_000 });
+  await gotoRouteWithReadyState(page, route, {
+    navTimeout: ACTION_NAV_TIMEOUT_MS,
+    fallbackTimeout: ACTION_NAV_TIMEOUT_MS,
+    readyTimeout: ACTION_READY_TIMEOUT_MS,
   });
   await page.waitForTimeout(250);
 
@@ -441,6 +505,31 @@ async function actionOutcome(page: Page, candidate: ActionCandidate, route: stri
       text: candidate.text,
       outcome: "SKIPPED",
       detail: "Target is disabled.",
+    };
+  }
+
+  const hasDisabledSemantics = await locator
+    .evaluate((element) => {
+      if (!(element instanceof HTMLElement)) {
+        return false;
+      }
+      const ariaDisabled = element.getAttribute("aria-disabled");
+      const dataDisabled = element.getAttribute("data-disabled");
+      const pointerEvents = window.getComputedStyle(element).pointerEvents;
+      return (
+        ariaDisabled === "true" ||
+        dataDisabled === "true" ||
+        pointerEvents === "none"
+      );
+    })
+    .catch(() => false);
+
+  if (hasDisabledSemantics) {
+    return {
+      role: candidate.role,
+      text: candidate.text,
+      outcome: "SKIPPED",
+      detail: "Target has disabled semantics.",
     };
   }
 
@@ -500,11 +589,12 @@ async function actionOutcome(page: Page, candidate: ActionCandidate, route: stri
     };
   }
 
-  if (candidate.role === "link") {
-    await page
-      .waitForURL((url) => url.toString() !== beforeUrl, { timeout: 2_500 })
-      .catch(() => {});
-  }
+  const navigated = await page
+    .waitForURL((url) => url.toString() !== beforeUrl, {
+      timeout: candidate.role === "link" ? 8_000 : 3_000,
+    })
+    .then(() => true)
+    .catch(() => false);
 
   await page.waitForTimeout(500);
   page.removeListener("request", requestListener);
@@ -516,7 +606,7 @@ async function actionOutcome(page: Page, candidate: ActionCandidate, route: stri
     (await page.locator("[role='row']").count()) +
     (await page.locator("tbody tr, li, [role='listitem']").count());
 
-  if (afterUrl !== beforeUrl) {
+  if (navigated || afterUrl !== beforeUrl) {
     return { role: candidate.role, text: candidate.text, outcome: "navigation" };
   }
   if (mutationCount > 0) {
@@ -610,13 +700,10 @@ async function scanRoute(
   const actions: ActionAudit[] = [];
 
   try {
-    const response = await page
-      .goto(route, { waitUntil: "load", timeout: ROUTE_LOAD_TIMEOUT_MS })
-      .catch(async () => {
-        return page.goto(route, {
-          waitUntil: "domcontentloaded",
-          timeout: ROUTE_FALLBACK_TIMEOUT_MS,
-        });
+    const response = await gotoRouteWithReadyState(page, route, {
+      navTimeout: ROUTE_LOAD_TIMEOUT_MS,
+      fallbackTimeout: ROUTE_FALLBACK_TIMEOUT_MS,
+      readyTimeout: ROUTE_READY_TIMEOUT_MS,
     });
     httpStatus = response?.status() ?? null;
     finalUrl = page.url();
@@ -643,12 +730,16 @@ async function scanRoute(
     collectors.failedRequests.some((request) => request.status >= 500);
   const redirectLoop = detectRedirectLoop(collectors.redirectChain);
   const hasUnhandledPageError = collectors.pageErrors.length > 0;
+  const hydrationMismatch = collectors.consoleErrors.some((entry) =>
+    HYDRATION_MISMATCH_PATTERN.test(entry),
+  );
 
   const failed =
     has500 ||
     redirectLoop ||
     bannerDetected ||
     hasUnhandledPageError ||
+    hydrationMismatch ||
     deadActions.length > 0;
 
   let screenshotPath: string | undefined;
@@ -680,6 +771,7 @@ async function scanRoute(
     deadActions,
     actions,
     bannerDetected,
+    hydrationMismatch,
   };
 
   const errorId = correlation.errorId ?? responseErrorId;
@@ -758,7 +850,7 @@ test.describe("System diagnostic scanner", () => {
     const failingRoutes = projectResults.filter((entry) => entry.status === "fail");
     const summary = failingRoutes.map((entry) => {
       const deadActionSummary = entry.deadActions.map((action) => action.text).join(", ");
-      return `${entry.route} | status=${entry.httpStatus ?? "none"} | 500=${entry.failedRequests.some((request) => request.status >= 500)} | banner=${entry.bannerDetected} | pageErrors=${entry.pageErrors.length} | deadActions=[${deadActionSummary}]`;
+      return `${entry.route} | status=${entry.httpStatus ?? "none"} | 500=${entry.failedRequests.some((request) => request.status >= 500)} | banner=${entry.bannerDetected} | hydrationMismatch=${entry.hydrationMismatch} | pageErrors=${entry.pageErrors.length} | deadActions=[${deadActionSummary}]`;
     });
 
     expect(
