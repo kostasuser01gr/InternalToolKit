@@ -38,7 +38,7 @@ This repository intentionally uses pnpm's default script restrictions.
 ### `Origin not allowed`
 - Update `ALLOWED_ORIGINS` with your real web domains (comma-separated).
 - Example:
-  - `http://127.0.0.1:3000`
+  - `http://127.0.0.1:<web-port>`
   - `https://<your-vercel-domain>`
 
 ### Worker deploy skipped in GitHub Actions
@@ -87,9 +87,9 @@ This repository intentionally uses pnpm's default script restrictions.
 
 ### Web app
 ```bash
-pnpm -C apps/web dev
+PORT="${PORT:-5000}" pnpm -C apps/web dev:deploy
 ```
-Open `http://127.0.0.1:3000`.
+Open `http://127.0.0.1:$PORT`.
 
 ### API worker
 ```bash

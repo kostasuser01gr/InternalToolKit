@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:deploy": "next dev -H 0.0.0.0 -p ${PORT:-5000}",
     "build": "prisma generate && next build",
     "start": "next start",
+    "start:deploy": "next start -H 0.0.0.0 -p ${PORT:-5000}",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "typecheck": "prisma generate && tsc --noEmit",

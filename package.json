@@ -8,6 +8,8 @@
     "dev:web": "pnpm --filter @internal-toolkit/web dev",
     "dev:api": "pnpm --filter @internal-toolkit/api dev",
     "build": "pnpm --filter @internal-toolkit/shared build && pnpm --filter @internal-toolkit/api build && pnpm --filter @internal-toolkit/web build",
+    "build:deploy": "pnpm --filter @internal-toolkit/web build",
+    "start:deploy": "pnpm --filter @internal-toolkit/web start:deploy",
     "lint": "pnpm --filter @internal-toolkit/shared lint && pnpm --filter @internal-toolkit/api lint && pnpm --filter @internal-toolkit/web lint",
     "typecheck": "pnpm --filter @internal-toolkit/shared typecheck && pnpm --filter @internal-toolkit/api typecheck && pnpm --filter @internal-toolkit/web typecheck",
     "test:unit": "pnpm --filter @internal-toolkit/web test:unit",
