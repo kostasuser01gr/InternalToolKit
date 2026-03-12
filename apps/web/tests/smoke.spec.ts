@@ -338,22 +338,34 @@ test("command palette opens and navigates", async ({ page }) => {
     }
   }).catch(() => {});
   // Use a non-anchored pattern: analytics page may append workspaceId query param.
-  // If click dispatch is dropped under heavy CI load, fall back to global shortcut g -> a.
+  // If click dispatch is dropped under heavy CI load, retry via palette Enter first,
+  // then fall back to global shortcut g -> a.
   try {
     await expect(page).toHaveURL(/\/analytics(\?|$)/, { timeout: 30_000 });
   } catch {
-    // Shortcut handling ignores key events while typing in an input, so clear focus first.
-    await page.evaluate(() => {
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-    });
-    await page.mouse.click(1, 1).catch(() => {});
-    await page.waitForTimeout(300);
-    await page.keyboard.press("g");
-    await page.waitForTimeout(600);
-    await page.keyboard.press("a");
-    await expect(page).toHaveURL(/\/analytics(\?|$)/, { timeout: 30_000 });
+    if (!(await palette.isVisible())) {
+      await trigger.click();
+    }
+    await expect(palette).toBeVisible({ timeout: 10_000 });
+    const searchInput = page.getByLabel("Search commands");
+    await searchInput.fill("go to analytics");
+    await searchInput.press("Enter");
+    try {
+      await expect(page).toHaveURL(/\/analytics(\?|$)/, { timeout: 15_000 });
+    } catch {
+      // Shortcut handling ignores key events while typing in an input, so clear focus first.
+      await page.evaluate(() => {
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      });
+      await page.mouse.click(1, 1).catch(() => {});
+      await page.waitForTimeout(300);
+      await page.keyboard.press("g");
+      await page.waitForTimeout(600);
+      await page.keyboard.press("a");
+      await expect(page).toHaveURL(/\/analytics(\?|$)/, { timeout: 30_000 });
+    }
   }
 
   // Wait for analytics page to fully load and hydrate before keyboard shortcut
