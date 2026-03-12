@@ -297,7 +297,7 @@ pnpm dev
 ```
 
 **Default local endpoints:**
-- Web: `http://127.0.0.1:3000`
+- Web: `http://127.0.0.1:$PORT` (use `PORT=5000` for Replit)
 
 **Seed users** (after `pnpm test:e2e` or `db:reset`):
 | Login | PIN | Role |
